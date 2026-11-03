@@ -1,0 +1,85 @@
+name: ci
+
+"on":
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Lockfile required
+        run: test -s package-lock.json && test -s package.json
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Formatting
+        run: npm run format:check
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Integration tests
+        run: npm run test:integration
+      - name: Security tests
+        run: npm run test:security
+      - name: Internationalization key parity
+        run: npm run test:i18n
+      - name: Deterministic location replay
+        run: npm run test:location-replay
+      - name: Expo config validates
+        run: npx expo config --json > /dev/null
+      - name: Dependency audit
+        run: npm audit --audit-level=high
+
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Read pinned Supabase CLI version
+        id: sbver
+        run: |
+          test -s supabase/.cli-version || { echo "supabase/.cli-version missing (Milestone 01 must create it)"; exit 1; }
+          v="$(tr -d '[:space:]' < supabase/.cli-version)"
+          [ "$v" != "latest" ] || { echo "floating version not allowed"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Install Supabase CLI (pinned)
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ steps.sbver.outputs.version }}
+      - name: Verify Docker is available
+        run: docker info
+      - name: Start local Supabase service
+        run: supabase start
+      - name: Apply local migrations
+        run: supabase db reset --local
+      - name: Run pgTAP, RLS and SQL database tests
+        run: supabase test db
+      - name: Clean up
+        if: always()
+        run: supabase stop --no-backup || true
+
+# Skeleton intentionally FAILS if code/scripts or migrations are absent.
+# Milestone 01 must make all required jobs actually runnable, not delete tests
+# or replace them with `echo`. Physical EAS signing and store submission are
+# human-gated release workflows in Milestone 13, not fake Linux CI passes.
