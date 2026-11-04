@@ -16,8 +16,8 @@
 | 08 | Kiosk, foreman, manual and visitor fallbacks | done (NOT VERIFIED items) | [#8](https://github.com/mahersidiq/Sitemuster/pull/8) | squash-merged under #48 after CI green and the automated review (`41a0307`) |
 | 09 | Mobile superintendent dashboard and map | done (NOT VERIFIED items) | [#9](https://github.com/mahersidiq/Sitemuster/pull/9) | squash-merged under #48 after CI green and the automated review (`1016894`) |
 | 10 | Daily reports, foreman confirmation and worker CSV | done (NOT VERIFIED items) | [#10](https://github.com/mahersidiq/Sitemuster/pull/10) | squash-merged under #48 after CI green and the automated review (`c50426f`) |
-| 11 | Active Muster Mode | in review | (PR pending) | |
-| 12 | Security, privacy, resilience and operator CLI | not started | | |
+| 11 | Active Muster Mode | done (NOT VERIFIED items) | [#11](https://github.com/mahersidiq/Sitemuster/pull/11) | squash-merged under #48 after CI green and the automated review (`10516cf`) |
+| 12 | Security, privacy, resilience and operator CLI | in review | (PR pending) | |
 | 13 | Native release preparation, review demo and field pilot | not started | | |
 
 ## Milestone 01 — Clean repository, locked stack and CI
@@ -477,7 +477,89 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 
 **Decisions added:** #114 muster command, #115 snapshot, #116 alerts, #117 muster badge scans, #118 late records and corrections, #119 operations contract, #120 status rules, #121 alert I'M SAFE needs unlock, #122 phone muster screen.
 
-**Next step:** open the Milestone 11 PR, watch CI, address the automated review, merge, then start Milestone 12 (security, privacy, resilience and operator CLI) on `milestone-12-security`.
+**Merged:** PR #11 squash-merged as `10516cf` after GitHub Actions runs 41837104252 and 41839892463 were green and both automated-review findings were fixed.
+
+## Milestone 12 — Security, privacy, resilience and operator CLI
+
+**What was built**
+- **Legal approval gates** (decisions #123, #124):
+  - production requires the current English **and** Spanish versions of each notice to be approved (same version and scope), both for worker consent and for starting a muster (`LEGAL_NOTICE_NOT_APPROVED`);
+  - approvals happen only through the operator CLI, bound to the exact text hash and the named human reviewer, forward-only and immutable;
+  - the muster safety-limitations and account-deletion notices ship as EN/ES drafts (`docs/legal/drafts/`).
+- **Consent** (decision #125):
+  - per-project location off/on (**Profile → Location and consent**); the phone's binding ends at once while the kiosk and foreman keep working;
+  - a materially changed notice must be read and accepted again before location resumes;
+  - minor corrections ask no one.
+- **Account deletion** (decisions #126–#128, #137):
+  - the app checks a fresh sign-in, plus the authenticator for staff who have one;
+  - at once: the phone, badges, push tokens, kiosks, memberships, enrollments and consents are revoked, and every session is signed out;
+  - signing in again in the meantime shows only "Your account is being deleted" (EN/ES);
+  - the hourly job removes the identity after 24 h (≤ 30 days). Attendance is deleted, unless a documented contract-retention basis keeps it pseudonymized; legal holds postpone; muster records stay as safety records.
+- **Operator CLI** (`npm run operator`, decision #129):
+  - sign-in: email code plus authenticator, anon key only;
+  - every call needs a reason, is rate-limited and is audited;
+  - commands: health, org lookup, revoke device, resend invite, legal list/approve/retire, retention holds, staff MFA reset, security flags;
+  - never coordinates, contacts, rosters or attendance.
+- **Privacy maintenance**, hourly (decisions #130, #134):
+  - deletes raw fixes after 24 h;
+  - expires orientation sessions and deletes their QR secrets;
+  - deletes revoked badge keys and push tokens after 24 h;
+  - flags then purges rate-limit buckets;
+  - processes account deletions.
+- **Rate limits** (decisions #131, #132):
+  - invitations, push tokens and muster starts by trigger;
+  - report exports (the worker's hours/CSV and staff report generation);
+  - phone activation, which is also refused once deletion was requested;
+  - the full inventory with a sync test in `docs/security/rate-limits.md`.
+- **Security flags** (decision #133): reaching a limit is flagged as evidence (never edited or auto-deleted while open). The operator reviews flags from the CLI and sees them in `health`.
+- **Secrets audit** (`docs/security/secrets-audit.md`, decisions #134, #135):
+  - every secret-like column is inventoried by a pgTAP test;
+  - Edge Function logs all go through the scrubber;
+  - the crash-report scrubber now also removes orientation QR codes, push tokens, authenticator links and secrets, and one-time codes under a `code` key;
+  - no pepper needed for device tokens.
+- **Observability:** `docs/ops/observability.md` (health check fields, jobs, logs, alerts, incidents).
+- **Penetration tests** (decision #136):
+  - pgTAP `031_cross_tenant_pen` sweeps every client-callable RPC and every API-readable table/view as GC B's owner and superintendent, B's foreman and worker, an outsider, the operator and anon, using tenant A's real ids;
+  - positive controls and malformed-call detection keep the sweep honest;
+  - a backend test aims every tenant-scoped Edge Function at A from GC B with MFA;
+  - phone, staff and kiosk revocation take effect on the next request.
+- **Load tests** (`docs/perf/load-report.md`, decision #138): 100 / 1,000 / 10,000 simulated workers (plus 10,000 over 20 sites) through the real ingest function, with the production live sync watching. CI runs the 100-worker case on every PR.
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db` on a fresh reset: **25 files, 892** pgTAP tests.
+  - New `029_security_privacy` (73): operator MFA, reason, audit and no PII; bilingual approval gate; material vs minor renewal; location off/on; deletion flows; holds; maintenance; rate limits.
+  - New `030_secrets_rate_limits` (44): secrets inventory and privileges; flags, never erased; export, report and activation limits; deletion-pending access; secrets purge; operator flag review.
+  - New `031_cross_tenant_pen` (19): about 85 RPCs × 6 attackers, every table and view, controls.
+  - Updated: `001` allowlist and `021` approval needing a reviewer.
+- Backend end-to-end on the local stack: **18 files, 135**:
+  - `privacy.test.ts` (3): deletion end to end, MFA_REQUIRED for staff, operator RPC audit;
+  - `operator-cli.test.ts` (1): the real CLI with email code and TOTP;
+  - `pen-edge.test.ts` (4): GC B against every tenant-scoped Edge Function, and revocation applying at once.
+- Load: the 100-worker smoke passes. Full results are in the load report (correct at every size; dashboard update p95 1.4 / 2.0 / 3.0 s for 100 / 1,000 / 10,000 on one site).
+- Vitest:
+  - unit 46 files / 384, including the CLI (5), account-delete core (4), report budget and activation 429;
+  - integration 3 / 51;
+  - security 10 / 94, including Edge logging, the rate-limit inventory and wider crash scrubbing;
+  - i18n 6 / 26, including the legal drafts;
+  - replay 2 / 184.
+- Jest mobile-unit **29**, mobile-integration **91**, including privacy flows (6): location off/on, renewal in Spanish, worker and staff deletion, the deletion-pending screen, Spanish.
+- typecheck, ESLint + shellcheck, Prettier: pass.
+- Web-render screenshots `docs/screenshots/m12` (8, EN + ES) against the local stack, through the real `account-delete` function and the operator approval RPC.
+
+**NOT VERIFIED (Milestone 12)**
+- **Legal (LEGAL):** every EN/ES notice is still a draft (worker location, muster safety limitations, account deletion and retention). Production refuses consent and muster starts until counsel approves both languages through the CLI (HUMAN_CHECKLIST §9).
+- **Hosted (SB, OP):**
+  - the migrations and functions on staging/production;
+  - the hourly job on a hosted database;
+  - the operator account and CLI against hosted Auth (§3c);
+  - the load scenario against hosted staging (`docs/perf/load-report.md`).
+- **Sentry (SE):** a real crash event checked for scrubbing; alert rules (§6).
+- **Twilio (TW):** SMS Pumping Protection, geo permissions and usage alerts (§4).
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the "Real-device privacy and account deletion check" in HUMAN_CHECKLIST.
+
+**Decisions added:** #123–#138.
+
+**Next step:** open the Milestone 12 PR, watch CI, address the automated review, merge, then start Milestone 13 (native release preparation, review demo and field pilot) on `milestone-13-release`.
 
 ## Environment notes for future sessions (Linux build agent)
 

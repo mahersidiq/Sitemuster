@@ -462,3 +462,133 @@ Reason: spec 12 "Interactive notification action can respond where supported"; s
 - **Report.** The closed report is shown on the phone and shared as plain text through the native share sheet (no PDF in V1).
 
 Reason: spec 12 "counts label local/unverified vs server authoritative"; "Basic V1 screen/shareable textual summary"; decision #106.
+
+## Milestone 12 — security, privacy, operator CLI
+
+**123.** Production needs both languages approved. A legal text counts as approved only when the current English and Spanish versions of that document are both APPROVED, with the same version number and scope (project or global). This gate applies at two moments:
+- **Worker consent.** `assert_notice_acceptable` refuses a draft or single-language notice with `LEGAL_NOTICE_NOT_APPROVED`.
+- **Starting a muster.** The trigger `muster_legal_gate` requires the muster safety-limitations notice.
+
+Development and staging may run on drafts, which the app labels "draft". The account-deletion and muster texts ship as drafts (`docs/legal/drafts/`) with their hashes in `TRANSLATION_REVIEW.md`. Reason: CLAUDE.md "Legal translations cannot ship until human-approved"; spec 09 "`TRANSLATION_REVIEW.md` approval blocks production"; acceptance "EN/ES approval gate enforced; absence of approved legal text blocks production".
+
+**124.** A legal approval is recorded only through the operator CLI (`legal-approve`, decision #129). It binds to the exact text: the SHA-256 of the content must match. It names the human reviewer (name and role, plus an optional reference). Rules:
+- Review moves forward only: draft → approved → retired.
+- Approved text and its reviewer fields can never change (`legal_notice_review_guard`).
+- Every approval and retirement is audited.
+
+Nobody can approve from the app, and nothing approves itself. Reason: CLAUDE.md bans machine-approved Spanish consent; the sign-off must be traceable to a person.
+
+**125.** Consent stays versioned and can be withdrawn.
+- **Switching location off.** A worker can switch location off per project at any time (`set_my_location_consent`). This sets `location_withdrawn_at`, and the phone's binding for that project ends in the same transaction, so nothing more is accepted from it. The notice acknowledgement stays, so kiosk, foreman and manual attendance keep working. Switching back on needs no new acceptance unless a renewal is due.
+- **Material notice changes.** When a new version marked `material_change` is approved, every earlier consent for it gets `renewal_required_at`. Location stops until the worker reads and accepts the new text (`renew_my_consent`). The old consent is kept as history (`withdrawal_reason = 'REPLACED'`).
+- **Minor corrections.** A non-material correction asks no one again.
+
+Reason: spec 09 "If consent revoked, no continued GPS uploads. Kiosk/foreman alternative stays available"; versioned project-specific consent.
+
+**126.** In-app account deletion goes through the `account-delete` Edge Function.
+
+Checks before anything happens:
+- the typed confirmation `DELETE_MY_ACCOUNT`;
+- a fresh sign-in (authenticated in the last 15 minutes, otherwise `REAUTHENTICATION_REQUIRED`);
+- the authenticator when the account has one (`MFA_REQUIRED`);
+- at most 5 requests a day.
+
+It is refused for platform operators. It is also refused for an organization's founding or last owner until ownership is transferred (`ORG_OWNER_TRANSFER_REQUIRED`).
+
+At once, in one transaction:
+- the phone is revoked: upload credential, badge key and push tokens;
+- the person's kiosks are revoked;
+- staff and organization memberships end;
+- enrollments end and consents are withdrawn (`ACCOUNT_DELETED`);
+- `tenant_access_allowed()` turns false for the person;
+- then every session is signed out (global logout).
+
+Reason: spec 09 "initiate in-app account deletion. Immediate revoke auth/device tokens"; easy-to-find deletion (worker profile → privacy, and the staff account screen).
+
+**127.** Identity removal runs from the hourly job, normally 24 hours after the request and never later than 30 days.
+- **Removed.** The sign-in account is deleted. The worker profile becomes "Deleted worker #xxxxxxxx", with no phone, email, emergency contact or preferences.
+- **Attendance** is deleted, unless a documented `CONTRACT_RETENTION` basis covers that organization or project. Then it is kept against the pseudonymous profile.
+- **Legal holds.** A `LEGAL_HOLD` postpones the removal until it is released.
+- **Muster records** stay as safety records under the pseudonymous profile.
+
+Pseudonymous records are still treated as personal data. Reason: spec 09 "identifying profile/contact removed <=30d unless lawfully held. Attendance retained and pseudonymized only with legal/contract basis; otherwise delete".
+
+**128.** Retention holds (`LEGAL_HOLD`, `CONTRACT_RETENTION`) are set and released only through the operator CLI. Each needs an organization, an optional project, a written basis and a reason, and every change is audited. No customer screen sets them in V1. Reason: a hold overrides deletion, so it must be deliberate, documented and rare.
+
+**129.** The platform operator role exists only in the database and the private CLI (`npm run operator`).
+- **Sign-in.** The operator signs in as themselves with an email code and an authenticator (aal2), using only the public anon key. No service key exists on the operator's computer.
+- **Every call** needs an active operator, aal2, a 3–500-character reason and the per-operator limit of 60 a minute. It writes an append-only `platform_operator_actions` row.
+- **Commands:**
+  - health, org lookup (metadata and counts only);
+  - revoke a phone, re-arm an invitation;
+  - list, approve and retire legal texts;
+  - set and release retention holds;
+  - reset a staff member's authenticators after an out-of-band identity check (never an operator's);
+  - list and review security flags (decision #133).
+- **Never.** No command returns coordinates, emergency contacts, roster names, phone numbers or attendance.
+
+Reason: spec 09 "Platform operator restrictions"; spec 02 column A; decision #60 (MFA reset).
+
+**130.** An hourly privacy job (`sitemuster-privacy-maintenance`, at :17) runs in every environment:
+- it deletes raw location fixes 24 hours after receipt (partitioned);
+- it flags reached rate limits, then deletes buckets older than 2 days;
+- it deletes coordinate-free quarantine rows after 30 days;
+- it deletes expired QR, badge and push secrets (decision #134);
+- it processes due account deletions.
+
+Reason: spec 09 retention rules; acceptance "24h purge".
+
+**131.** Rate limits on writes that have no Edge Function in front, enforced by insert triggers per signed-in person:
+- invitations: 30 an hour;
+- push-token registrations: 20 an hour;
+- muster starts: 20 an hour.
+
+Reason: spec 09 "Rate-limit … invites"; triggers cover every path that inserts.
+
+**132.** The rest of spec 09's rate limits:
+- **Report exports.** The worker's own hours, which feed the CSV export, are limited to 300 an hour per worker. Staff and foreman report generation (`daily-reports`, checked before anything is generated) is limited to 240 an hour per person.
+- **Phone activation.** 10 an hour per person.
+- **SMS codes.** Before sign-in there is no device or organization to count against. Codes are therefore limited per number, per IP and per project by Supabase Auth, plus Twilio fraud protection (human setup), instead of "by device and organization".
+- **Inventory.** `docs/security/rate-limits.md` lists every limit. A test fails when the doc and the migrations disagree.
+
+Reason: spec 09 "Rate-limit enrollment, SMS OTP, badge issue/scan, invites, operator functions, attendance ingestion and report exports"; safest workable reading of the SMS rule.
+
+**133.** Reaching a rate limit raises a security flag; nothing is erased automatically.
+- **Raising flags.** The hourly job and every operator health check copy saturated buckets into `app_private.security_flags` before old buckets are deleted.
+- **Open flags** cannot be edited or deleted, and they never block anyone by themselves.
+- **Review.** The operator lists flags and records a review with a note through the CLI. Reviewed flags are deleted 400 days after review.
+- **Content.** Flags hold pseudonymous ids and counts only.
+- **Alerts.** The daily health check is the alert channel until a paging service is chosen, together with Sentry, Supabase and Twilio usage alerts (human setup).
+
+Reason: spec 09 "On suspicious activity, flag and alert, do not automatically erase evidence".
+
+**134.** Secrets hygiene (from the M12 secrets audit, `docs/security/secrets-audit.md`):
+- **Orientation sessions** that ran past their 120 minutes are expired by the hourly job, and their rotating key and printed code are deleted. Before this, an unclosed session kept them.
+- **Revoked badge keys and push tokens** are deleted 24 hours after revocation.
+- **Expired orientation join passes** are deleted after 7 days.
+- **Phone activation** is refused once account deletion was requested.
+- **Edge Function logs** all pass through the shared scrubber (`_shared/log.ts`, enforced by a test).
+- **Crash reports** now also remove the rotating orientation QR code, Expo push tokens, authenticator links and secrets, and one-time codes stored under a `code` key.
+
+Reason: spec 09 "short-lived credentials", "Do not include GPS data in Sentry, HTTP error logs…".
+
+**135.** No pepper for device upload tokens. The tokens are 256-bit random values, so their plain SHA-256 cannot be guessed offline. A keyed hash would add a secret to manage, rotate and lose, without making them safer. `DEVICE_CREDENTIAL_PEPPER` in `HUMAN_CHECKLIST.md` is marked not needed. Reason: spec 09 "SHA-256 hash server-side"; keeping secrets few.
+
+**136.** Cross-tenant penetration testing runs on every CI build.
+- **Database sweep** (pgTAP `031_cross_tenant_pen`). It calls every function a signed-in client may execute, and reads every table and view the API exposes, as six people from another tenant: GC B's owner and superintendent, B's foreman and worker, a signed-in outsider and the platform operator. It also checks that anonymous callers can execute and read nothing. Calls use tenant A's real ids (organization, project, workers, phone, kiosk, muster, report, invitation, badge, visit, correction, orientation session).
+- **Pass condition.** A call passes when it is refused, or when it returns nothing of A's and leaves A's data unchanged.
+- **Self-checks.** Malformed calls count as failures, and positive controls prove the sweep catches a leaky reader, a leaky writer and an open table. New functions and tables are covered automatically.
+- **Edge Functions.** A backend test aims every tenant-scoped Edge Function at A from GC B with MFA.
+- **Revocation.** Further backend tests show that revoking a phone, a staff member or a kiosk takes effect on the very next request.
+
+Reason: spec 09 "Cross-project leakage … are no-go"; acceptance "Security/RLS/Edge tests green; operator denied coords; revoke immediate".
+
+**137.** Signing in again while the account is being deleted shows only that. `get_my_access` reports `account_deletion_pending` and no worker profile. The app goes straight to "Your account is being deleted" (EN/ES) with a sign-out button, with no authenticator step first: nothing is open to the person anyway. Worker and staff screens stay closed even if a stale answer still carried roles. The server already refuses every tenant call to such a person (`tenant_access_allowed()`, decision #126). Reason: otherwise someone who signs in again in the 24-hour window meets empty or failing screens and may think the deletion did not work.
+
+**138.** Load-test findings (`docs/perf/load-report.md`).
+- **Correctness.** Exact at 100, 1,000 and 10,000 simulated workers.
+- **Site counts.** Each attendance commit recomputes its site's counts for the Broadcast message, so the cost per arrival grows with the size of one site. Throughput halved with 10,000 workers on one site and was unchanged with 10,000 spread over 20 sites.
+- **No change in V1.** Pilot sites are ≤ 150 workers, and the Broadcast contract of Milestone 09 stays stable.
+- **Before any single site exceeds about 2,000 workers with full on-site tracking**, the counts in the message must be coalesced (at most one count per site per second, or none). The app already refetches on every message and never shows message counts, which can be slightly stale under concurrency, as the load test showed.
+
+Reason: spec 10 performance reporting; no guarantee beyond what was run.
