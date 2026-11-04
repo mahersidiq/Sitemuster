@@ -17,8 +17,8 @@
 | 09 | Mobile superintendent dashboard and map | done (NOT VERIFIED items) | [#9](https://github.com/mahersidiq/Sitemuster/pull/9) | squash-merged under #48 after CI green and the automated review (`1016894`) |
 | 10 | Daily reports, foreman confirmation and worker CSV | done (NOT VERIFIED items) | [#10](https://github.com/mahersidiq/Sitemuster/pull/10) | squash-merged under #48 after CI green and the automated review (`c50426f`) |
 | 11 | Active Muster Mode | done (NOT VERIFIED items) | [#11](https://github.com/mahersidiq/Sitemuster/pull/11) | squash-merged under #48 after CI green and the automated review (`10516cf`) |
-| 12 | Security, privacy, resilience and operator CLI | in review | (PR pending) | |
-| 13 | Native release preparation, review demo and field pilot | not started | | |
+| 12 | Security, privacy, resilience and operator CLI | done (NOT VERIFIED items) | [#12](https://github.com/mahersidiq/Sitemuster/pull/12) | squash-merged under #48 after CI green and the automated review (`67f235c`) |
+| 13 | Native release preparation, review demo and field pilot | in review — `FIELD_PILOT_PENDING` | (PR pending) | release gates open: see `docs/release/release-readiness.md` |
 
 ## Milestone 01 — Clean repository, locked stack and CI
 
@@ -566,7 +566,44 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 
 **Decisions added:** #123–#139.
 
-**Next step:** open the Milestone 12 PR, watch CI, address the automated review, merge, then start Milestone 13 (native release preparation, review demo and field pilot) on `milestone-13-release`.
+**Merged:** PR #12 squash-merged as `67f235c` after GitHub Actions run 41867436025 (head `624687a`) was green and all three automated-review findings were fixed (decision #139).
+
+## Milestone 13 — Native release preparation, review demo and field pilot
+
+**What was built**
+- **Reviewer demo** (decisions #140–#143, `docs/release/reviewer-demo.md`):
+  - a private server-side allowlist (`app_private.demo_organizations`), seeded only by the database owner with `app_private.seed_reviewer_demo` (production notice gate applies; dedicated reviewer accounts; one active demo; `retire_reviewer_demo`);
+  - eight synthetic no-phone people with synthetic phone records that can never get an upload key;
+  - `demo-simulate` Edge Function: `begin_demo_simulation` with the caller's JWT (MFA, may correct attendance, active demo, synthetic person), then server-built records through the production ingest pipeline; `DEMO_WAIT` when the 10-minute rule would run time backwards; rate limit `demo_simulation_hour` 120/h; audited;
+  - app: DEMO banner on the project, dashboard and map (EN/ES), a worker demo banner, the simulation screen (`app/project/[id]/demo.tsx`), shown only when the server lists the project as a demo.
+- **Store permissions** (decision #148): an in-app location disclosure before every system prompt (Play prominent disclosure, EN/ES); the localized Android 11+ "Allow all the time" rationale passed to the SDK; storage, microphone and production overlay permissions removed; Android backup off; an iOS privacy manifest.
+- **Native builds** (decisions #144–#147, `docs/release/native-builds.md`): `eas.json` (development / preview = staging / production; EAS CLI 25.3.0; Node 22.23.4; remote build numbers; committed code only; Play submission only as an internal draft); the Transistorsoft native SDKs pinned (Android 4.7.8, iOS 4.8.3) by `plugins/with-pinned-native-sdks.js`; the brand-clearance build gate `SITEMUSTER_CLEARED_APP_ID`; release gates run on the EAS build server; no over-the-air updates.
+- **Release pipelines** (decision #149): `.github/workflows/release.yml` (EAS build, optional TestFlight / Play internal-draft submission) and `deploy-backend.yml` (forward-only `supabase db push`, `functions deploy`) — manual only, CI-green commit only, production only from `main`, GitHub environments `staging` / `production`, fail closed without credentials.
+- **Staging vs production secrets**: `docs/release/environments.md`, with a drift test over every name the code reads.
+- **Privacy capture checker** (decision #152): `npm run privacy:capture-check -- <capture.har> --site <lat>,<lng>,<radius>` for the real-device sign-off.
+- **Release documents** (`docs/release/`): store submission requirements, Apple Review notes, Google Play background-location video script, release-candidate phone test checklist (every native-only scenario of spec 07 and the spec 03 device matrix), 30-workday field pilot protocol with log templates and the unsigned sign-off, rollback and incident runbooks, release readiness board (decision #150), release guide.
+- **Maestro** first-launch smoke flows (EN/ES, `.maestro/`, decision #151), not executed here.
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db` on a fresh reset: **26 files, 943** pgTAP tests. New `032_reviewer_demo` (41); `031_cross_tenant_pen` (21) now also sweeps every function, table and view as the reviewer account; `001` allowlists updated.
+- Backend end-to-end on the local stack: **19 files, 137**, including the new `demo.test.ts` (2): a simulated arrival and departure through the real Edge Function with the dashboard and map following; no reach into a real project, a real person or another tenant (fingerprint unchanged).
+- Load smoke (100 workers): passed.
+- Vitest: unit 48 files / 409 (demo core 13, capture checker 11, tracking rationale), integration 3 / 51, security 14 / 140 (release pipeline 20, release documents 14, environment inventory 5, Maestro flows 2, app config 21), i18n 6 / 26, replay 2 / 184.
+- Jest: mobile-unit 30 (location disclosure), mobile-integration 97 (demo flows 6).
+- typecheck, ESLint + shellcheck, Prettier, `npx expo config --json`, `npm audit --audit-level=high` (0 high/critical), `actionlint` on all workflows: pass.
+- `expo prebuild --no-install` with production settings (scratch copy): iOS and Android projects generated; checked the pinned SDK versions, the privacy manifest, the removed permissions, `allowBackup=false`, the production bundle id.
+- Web-render screenshots `docs/screenshots/m13` (8, EN + ES) against the local stack, through the real `demo-simulate` function.
+
+**NOT VERIFIED (Milestone 13)**
+- **EAS builds and store submission** (EX, AP, GP): no Expo, Apple or Google account here; the release and deploy workflows have never run.
+- **Hosted backend** (SB): the Milestone 13 migration and `demo-simulate` on staging/production; the reviewer demo seeded on production.
+- **Brand clearance, legal approval, privacy policy and deletion pages, Transistorsoft license** (BRAND, LEGAL, TS): BLOCKED on the owner and counsel.
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the phone test checklist, the location privacy network capture, the Play background-location video, the Maestro flows.
+- **Field pilot**: `FIELD_PILOT_PENDING` — not run, not signed; SiteMuster is **not ready for public release** (`docs/release/release-readiness.md`).
+
+**Decisions added:** #140–#152.
+
+**Next step:** open the Milestone 13 PR, watch CI, address the automated review, merge. Milestone 13 is the last milestone: then give the owner the final report (what works, what is mocked, the ordered accounts/keys list, the real-phone tests, the top risks).
 
 ## Environment notes for future sessions (Linux build agent)
 

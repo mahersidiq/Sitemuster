@@ -9,6 +9,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
   - **Autonomy mode (decision #48) adjustment:** while autonomy mode is active, protect `main` with "Require a pull request before merging" and "Require status checks to pass" selecting the two `ci` jobs **`code-quality`** and **`database`**, block force pushes and deletions, but do **not** require an approving review (Claude Code cannot approve its own PR and must never bypass protection). Re-enable required reviews when autonomy mode ends. Claude Code squash-merges only when every #48 condition holds.
 - [ ] Give Claude Code repository access via the GitHub CLI (`gh auth login`) on your machine or the Claude GitHub app; never provide a personal access token in prompt.
 - [ ] Create GitHub Environments `staging` and `production`, with restricted deployment approvals; use secrets per environment.
+  - **Milestone 13 release workflows** read these per environment (names only; values never in the repository, `docs/release/environments.md` §2): secrets `EXPO_TOKEN`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`; variables `EAS_PROJECT_ID`, `EXPO_OWNER`, `SUPABASE_PROJECT_REF`. Give `production` the owner as required reviewer. Without them the **release** and **deploy-backend** workflows stop with "not configured" and change nothing.
 - [ ] Configure repository Actions enabled and allow standard checkout/setup-node; verify workflow can run Ubuntu/Docker.
 - [ ] Preserve `.github/workflows/ci.yml` from specification package and check CI logs on each PR.
 
@@ -20,6 +21,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Add `EXPO_TOKEN` in **GitHub Actions secret** (short-scope service token; never in app). If EAS GitHub integration does not need it for a workflow, do not generate unnecessary token.
 - [ ] Record `EAS_PROJECT_ID` and `EXPO_OWNER` as repository/EAS nonsecret variables. Claude Code stores exact settings in environment-specific config.
 - [ ] Run owner-assisted EAS dev build and test on physical iPhone/Android when prerequisites ready; Expo Go is insufficient for native Transistorsoft behavior.
+- [ ] Milestone 13: put the app's variables into the three EAS environments exactly as `docs/release/environments.md` §1 lists them (`development`, `preview` = staging, `production`), with the visibility shown there (the Transistorsoft license and the Sentry auth token as **Secret**). Then build with GitHub → Actions → **release** (`docs/release/native-builds.md`). The EAS CLI version is pinned (25.3.0); use `npx eas-cli@25.3.0` for any command you run yourself.
 - [ ] Muster alerts (Milestone 11): set the non-secret build variable `EAS_PROJECT_ID` for every EAS environment. The app needs it to get an Expo push token; without it the phone shows "Muster alerts are not set up in this build" and registers nothing.
 - [ ] Muster alerts: let EAS manage the push credentials: an Apple Push Notifications key for iOS (`eas credentials` → iOS → Push Notifications) and an FCM V1 service account key for Android (`eas credentials` → Android → FCM V1). Keep them in EAS only, never in the repository or the app.
 - [ ] Optional: turn on "Enhanced push security" in the Expo project, create an Expo access token for push, and store it as the Edge Function secret `EXPO_ACCESS_TOKEN` on staging and production (`supabase secrets set EXPO_ACCESS_TOKEN=… --project-ref <ref>`). Without enhanced security leave it unset.
@@ -29,9 +31,9 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Create Supabase organization with paid Pro plan and **two separate projects**: `sitemuster-staging` and `sitemuster-production` (not one project per construction jobsite).
 - [ ] Turn on backups, choose documented region, RLS, monitoring, appropriate access controls; store disaster-recovery access with owner.
 - [ ] Collect public (nonsecret) each project URL and publishable/anon key. Map to EAS environments `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`. They may exist in mobile bundles **only with correct RLS**.
-- [ ] Record `SUPABASE_PROJECT_REF_STAGING`, `SUPABASE_PROJECT_REF_PRODUCTION` as GitHub environment variables.
-- [ ] Create `SUPABASE_ACCESS_TOKEN` in protected GitHub Actions **secret** for migration deploy jobs, restricted to required projects; include appropriate deployment approval before touching prod.
-- [ ] Store `SUPABASE_DB_PASSWORD_STAGING` / `SUPABASE_DB_PASSWORD_PRODUCTION` ONLY in protected CI/environment secret store if automation absolutely requires a DB password; never in mobile.
+- [ ] Record each project's ref as the GitHub **environment** variable `SUPABASE_PROJECT_REF` (environment `staging` → the staging ref, environment `production` → the production ref). Milestone 13's **deploy-backend** workflow reads it from the environment you choose.
+- [ ] Create `SUPABASE_ACCESS_TOKEN` as a GitHub **environment secret** in both environments, restricted to the required projects where possible; the `production` environment's required reviewer approves every production deploy.
+- [ ] Store the database password as the GitHub **environment secret** `SUPABASE_DB_PASSWORD` (staging value in `staging`, production value in `production`) — the deploy workflow needs it for `supabase db push`; never in mobile, never in the repository.
 - [ ] Supabase Edge Functions private environment secrets: `SUPABASE_SERVICE_ROLE_KEY` (backend only), (`DEVICE_CREDENTIAL_PEPPER` is **not used** — do not create it; decision #135), `BADGE_SECRET_ENCRYPTION_KEY` (32-byte random key used to encrypt per-device badge secrets at rest), `GOOGLE_PLACES_SERVER_KEY` (created Step 5), `GOOGLE_GEOCODING_SERVER_KEY` (Step 5). Supabase supplies project-specific URLs/keys; do not mix staging/prod secrets.
 - [ ] Edge Function secret `SITEMUSTER_ENV`: set `staging` on the staging project and `production` on the production project (`supabase secrets set SITEMUSTER_ENV=staging --project-ref <staging-ref>`). **Never** set `development` on a hosted project — that value alone switches address search to the labelled fake adapter (decision #63). Without the Google secrets below, hosted address search answers "not set up" instead of using fake data.
 - [ ] Deploy the Edge Functions from a clean checkout after `npm ci` (their import maps point at the locked `node_modules`): `supabase functions deploy address-search address-resolve --project-ref <ref>`; JWT verification stays **on** for both (see `supabase/config.toml`).
@@ -46,6 +48,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Deploy the Milestone 11 functions: `supabase functions deploy muster-start muster-close --project-ref <ref>`, and redeploy `ingest-operations` (muster checks). JWT verification stays **on** for both. Staging and production use the Expo Push Service (decision #116); a development value of `SITEMUSTER_ENV` would use the fake adapter, so check the secret is `staging` / `production`.
 - [ ] Deploy the Milestone 12 function and redeploy the changed ones: `supabase functions deploy account-delete daily-reports device-activate device-renew ingest-location-batch ingest-operations muster-start muster-close report-confirm --project-ref <ref>`. JWT verification stays **on** for `account-delete` (and every other function except `ingest-location-batch` and `device-renew`). `account-delete` needs no new secret.
 - [ ] After deploying the Milestone 12 migrations, confirm the hourly job `sitemuster-privacy-maintenance` (at minute 17) is listed by `select jobname, schedule, active from cron.job;` and its runs succeed. It runs in every environment: it deletes raw fixes, expired QR/badge/push secrets and old rate-limit buckets (after flagging), and processes account deletions.
+- [ ] Milestone 13: deploy with GitHub → Actions → **deploy-backend** → `staging`, check the app, then `production` (forward-only `supabase db push`, then every Edge Function with the JWT settings of `supabase/config.toml`; it never resets a database). It includes the new `demo-simulate` function (JWT verification on). Set the Edge Function secrets yourself per project (`supabase secrets set …`, `docs/release/environments.md` §3): they never pass through GitHub.
 - [ ] Give each project its emergency contact (decision #114): invite the safety manager to the project with the **Safety manager** role, or (as an organization admin) invite another person with **Emergency role** turned on. Only they can start and close a muster, always with the authenticator app.
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] After deploying the Milestone 06 migrations, open *Database → Cron* (or run `select jobname, schedule, active from cron.job;` in the SQL editor) and confirm the job `sitemuster-attendance-sweep` runs every minute and its recent runs succeed. It applies the attendance time rules (unknown after 20 min, end-of-shift close-out, 24/7 review, visitor close-out) and only works when the environment marker above is `staging` or `production` — on a database marked `development` it deliberately does nothing. The migration enables the `pg_cron` and `btree_gist` extensions; if the deploy reports a permission error for either, enable it under *Database → Extensions* and deploy again.
@@ -115,6 +118,7 @@ The operator role is the only support access in V1 (no web admin). It can never 
 - [ ] After name clearance (Step 9), register final iOS bundle ID; working development ID is `com.sitemuster.app.dev` and production ID reserved as `com.sitemuster.app` **until cleared**.
 - [ ] Configure signing/provisioning via EAS credentials. If using App Store Connect API, protect `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_API_PRIVATE_KEY` in EAS/GitHub secret storage; private `.p8` file never in repository.
 - [ ] Prepare reviewer demo account, App Review notes, iOS Always/Precise Location justification and background location usage descriptions; conduct real iPhone tracking/privacy tests and capture review evidence.
+  - Milestone 13: seed the reviewer demo (§11), paste `docs/release/apple-review-notes.md` into App Review Information, fill the App Privacy label from `docs/release/store-submission.md` §1 with counsel, and answer the export-compliance questions with counsel (the facts are listed there). After the App Store Connect app record exists, add its numeric id as `ascAppId` under `submit.production.ios` in `eas.json` (small PR).
 
 ## 8. Google Play Console (`GP`)
 
@@ -123,11 +127,14 @@ The operator role is the only support access in V1 (no web admin). It can never 
 - [ ] If automated store distribution used, create restricted Play Console service account JSON and store as encrypted EAS/GitHub secret `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (do not commit file).
 - [ ] Prepare Android background location declaration, permission flow demo video (actual device), foreground service location disclosure, Android 13 notification permission and privacy policy.
 - [ ] Complete Play-specific closed-test requirements for account/app category where applicable; do not assume immediate public release.
+- [ ] Milestone 13: record the background-location video on a real Android phone following `docs/release/play-background-location-video.md`; fill Data safety, foreground-service and App access from `docs/release/store-submission.md` §2. Before each submission read the final merged manifest of the built AAB and check every permission is listed there or blocked.
 
 ## 9. Final brand + legal consent (`BRAND`, `LEGAL`)
 
 - [ ] Search USPTO, app stores, state businesses and domain conflicts for **SiteMuster**; clear business/consumer brand with qualified legal review.
 - [ ] Only after clearance, lock final display name, iOS bundle identifier, Android applicationId and domain. Update development identifier if changed; document migration impact for installed test builds.
+- [ ] Then set the EAS **production** environment variable `SITEMUSTER_CLEARED_APP_ID` to the cleared production id (`com.sitemuster.app`, plain text). Production builds are refused until it matches (decision #145). If the identifiers change, follow `docs/release/native-builds.md` "Changing the app identifiers".
+- [ ] Publish two simple public pages on the company's domain (V1 builds no website; any static host works): the counsel-approved **privacy policy**, and an **account deletion** page that explains the in-app path and gives a contact address (Google Play requires a web link). Both URLs go into App Store Connect and Play Console.
 - [ ] Engage bilingual legal reviewer to approve English+Spanish worker location disclosures, GC custom notice template, data-processing terms, employer/union/contract implications and state monitoring notices. Enter review evidence into `docs/legal/TRANSLATION_REVIEW.md` WITHOUT uploading personal signatures or secrets.
 - [ ] Provide project-specific standard privacy policy, in-app deletion instructions and retention basis. Production consent is blocked until both language versions approved.
 - [ ] Have counsel review **both** languages of each draft, as it is in the database: the worker location notice, the muster safety limitations (`docs/legal/drafts/MUSTER_SAFETY_LIMITATIONS_*_V1.md`) and the account deletion and retention notice (`ACCOUNT_DELETION_RETENTION_*_V1.md`). Record the review in `docs/legal/TRANSLATION_REVIEW.md` (reviewer name, role, date, reference; no signatures).
@@ -151,6 +158,22 @@ The operator role is the only support access in V1 (no web admin). It can never 
 - [ ] Store `TS_IOS_LICENSE_KEY` and `TS_ANDROID_LICENSE_KEY` in secure EAS environment/secret store or supported native build secret injection; never in prompts or published spec ZIP.
 - [ ] Verify native location SDK compiles on the selected pinned Expo SDK with config plugins; run real iOS/Android background, reboot, force-stop, offsite-payload and battery tests. License is not a substitute for OS permission or actual verification.
 - [ ] Store the Android license as the EAS **production** environment secret `TS_ANDROID_LICENSE_KEY` (build-time only, never `EXPO_PUBLIC_`). `app.config.ts` refuses a production build without it (fail closed). Development builds run without a license (Transistorsoft DEBUG builds). SDK v5 needs no iOS key in this app's configuration; keep any iOS key Transistorsoft issues in the same secret store.
+
+## 11. Reviewer demo for App Review and Play review (`DEMO`) — Milestone 13
+
+Needs the production backend with the Milestone 13 migrations and the legal notices approved in both languages (§9). Full steps: `docs/release/reviewer-demo.md`.
+- [ ] Choose two phone numbers that belong to nobody (fictional 555-0100 … 555-0199 range) and add them, each with its own random fixed 6-digit code, under production *Authentication → Providers → Phone → Test phone numbers and OTPs*. Never a real person's number.
+- [ ] Create the demo owner (your own mailbox), reviewer A (first test number + an e-mail on your mailbox, confirmed) and reviewer B (second test number) under *Authentication → Users*.
+- [ ] In the production SQL editor: `select app_private.seed_reviewer_demo('<demo owner id>', '<reviewer A id>', '<reviewer B id>');`.
+- [ ] Sign in once as reviewer A on the production build and set up the authenticator; keep the setup key for the store forms only.
+- [ ] Enter the credentials only in App Store Connect (App Review Information) and Play Console (App access), with `docs/release/apple-review-notes.md`.
+- [ ] When the demo is no longer needed: `select app_private.retire_reviewer_demo('<demo organization id>');`, delete the reviewer accounts and remove the test numbers.
+
+## 12. Release candidate phone tests and field pilot — Milestone 13
+
+- [ ] Run `docs/release/phone-test-checklist.md` on the release build (iPhone + two Android phones, one Samsung or Xiaomi), including the location privacy sign-off below. Status until then: `NOT_EXECUTED_PHYSICAL_DEVICE`.
+- [ ] Optional on a device or simulator with a preview build: `maestro test .maestro/` (first-launch smoke flows in English and Spanish).
+- [ ] Run the 30-workday field pilot (`docs/release/field-pilot-protocol.md`) and sign `docs/release/pilot/pilot-sign-off.md`. Status until then: `FIELD_PILOT_PENDING`; do not describe SiteMuster as ready for public release (`docs/release/release-readiness.md`).
 
 ### Real-device kiosk, crew and visitor check (Milestone 08)
 
@@ -220,6 +243,7 @@ Until this is recorded, production phones run **TRACKING_LIMITED**: only coordin
 - [ ] Build a development or staging build (`com.sitemuster.app.dev`) pointing at **staging**, on one real iPhone and one real Android phone. Sign in as a test worker approved on a test project, accept the notice and set up the phone from the badge.
 - [ ] Route the phone's traffic through an intercepting proxy you control (for example mitmproxy or Charles with its certificate installed on the test phone only) and record every request to `/functions/v1/ingest-location-batch` and `/functions/v1/device-renew`.
 - [ ] Walk this route, with the app in the background and later swiped away: start ≥ 2 km from the site, arrive, stay ≥ 15 minutes (including 5+ minutes standing still), walk out past the site edge, and drive ≥ 2 km away. Repeat once in airplane mode for the middle part, then reconnect.
+- [ ] Export the capture as a HAR file and run `npm run privacy:capture-check -- <capture.har> --site <site latitude>,<site longitude>,<site radius in metres>` (decision #152). It must print PASS; it never prints coordinates or tokens, so its output can go into the sign-off notes. Then still read the bodies yourself:
 - [ ] Check every captured upload body:
   - **geofence** records contain no `latitude`/`longitude`/`coords`;
   - every **location** record lies inside the site circle plus 50 m;
@@ -233,7 +257,7 @@ Until this is recorded, production phones run **TRACKING_LIMITED**: only coordin
 
 ## Checklist-to-milestone map
 
-`01 GH`; `02 SB/local CI`; `03 SB+TW+EM`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL+OP+TW+EX`; `13 GH+EX+SB+EM+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+physical devices`.
+`01 GH`; `02 SB/local CI`; `03 SB+TW+EM`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL+OP+TW+EX`; `13 GH+EX+SB+EM+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+DEMO (§11)+physical devices and pilot (§12)`.
 
 ## No-account development rules
 
