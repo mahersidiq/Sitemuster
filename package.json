@@ -26,6 +26,7 @@
     "test": "npm run test:unit && npm run test:integration && npm run test:security && npm run test:i18n && npm run test:location-replay",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "test:backend": "vitest run --project backend",
+    "test:load": "vitest run --project load",
     "operator": "node scripts/operator/cli.mts"
   },
   "dependencies": {
