@@ -3,6 +3,7 @@ import { iso } from '../../../packages/shared/src/attendance/time.ts';
 import { toPgHex } from '../_shared/badge-crypto.ts';
 import { deviceAuthFromJson, handleIngest } from '../_shared/ingest-core.ts';
 import { postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt=false for THIS function only (supabase/config.toml): the device bearer secret is
 // verified here, and every database call is scoped to the ids derived from it (decision #39).
@@ -35,7 +36,7 @@ Deno.serve((req) =>
     // every invocation's status is already in the platform's function logs.
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   }),

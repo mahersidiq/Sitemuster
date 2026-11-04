@@ -151,6 +151,16 @@ describe('muster-start', () => {
       'LABEL_REQUIRED',
     ]);
     expect((await call(handleMusterStart, world().deps, start(), null)).status).toBe(401);
+    const legal = world();
+    legal.denied = false;
+    legal.deps.start = async () => {
+      throw new MusterRpcError(400, 'LEGAL_NOTICE_NOT_APPROVED');
+    };
+    const gated = await call(handleMusterStart, legal.deps, start());
+    expect([gated.status, (gated.body.error as { code: string }).code]).toEqual([
+      409,
+      'LEGAL_NOTICE_NOT_APPROVED',
+    ]);
   });
 });
 

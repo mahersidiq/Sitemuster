@@ -39,6 +39,16 @@ export default defineConfig({
           fileParallelism: false,
         },
       },
+      {
+        // Load test against a local Supabase stack: LOAD_WORKERS=100|1000|10000 (spec 10).
+        test: {
+          ...shared,
+          name: 'load',
+          include: ['tests/load/**/*.test.ts'],
+          testTimeout: 3_600_000,
+          fileParallelism: false,
+        },
+      },
     ],
   },
 });

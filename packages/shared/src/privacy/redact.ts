@@ -29,7 +29,13 @@ const SENSITIVE_KEY_PATTERNS: readonly RegExp[] = [
   /ip_address|^ip$/i,
   /credential/i,
   /session_json|refresh/i,
+  /totp|mfa_secret|factor_secret/i,
+  /installation_(id|hash)|hardware_hash/i,
+  /static_code|rotating|^qr|_qr$|qr_|payload$/i,
 ];
+
+/** Keys whose short numeric values are one-time codes ({ code: '123456' }, { pin: 1234 }). */
+const OTP_VALUE_KEY = /^(code|pin|verification_code|mfa_code|sms_code|email_code)$/i;
 
 const STRING_PATTERNS: readonly [RegExp, string][] = [
   // JSON Web Tokens
@@ -39,6 +45,19 @@ const STRING_PATTERNS: readonly [RegExp, string][] = [
   // Offline badge payloads (replayable within the step window)
   [/SMB1\.[0-9a-f-]{36}\.[0-9a-f-]{36}\.\d{8,12}\.[A-Za-z0-9_-]{22}/g, '[REDACTED_BADGE]'],
   [/SMP1\.[A-Za-z0-9_-]{22,64}/g, '[REDACTED_BADGE]'],
+  // Orientation QR codes: rotating (60 s) and printed (valid while the session is open)
+  [/SMO1\.[0-9a-f-]{36}\.\d{1,12}\.[A-Za-z0-9_-]{22}/g, '[REDACTED_QR]'],
+  [/SMS1\.[0-9a-f-]{36}\.[A-Za-z0-9_-]{43}/g, '[REDACTED_QR]'],
+  // Push tokens (Expo; native FCM/APNs tokens are caught by the long-secret rule below)
+  [/Expo(?:nent)?PushToken\[[^\]\s]{1,200}\]/g, '[REDACTED_PUSH_TOKEN]'],
+  // Authenticator enrolment links and their base32 secrets
+  [/otpauth:\/\/[^\s"'<>]+/gi, '[REDACTED_OTPAUTH]'],
+  [/\b[A-Z2-7]{32}\b/g, '[REDACTED_SECRET]'],
+  // Credentials in query strings or form bodies (access_token=…, apikey=…)
+  [
+    /\b(access_token|refresh_token|id_token|provider_token|token|apikey|api_key|secret|password)=([^&\s"']+)/gi,
+    '$1=[REDACTED]',
+  ],
   // Email addresses
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[REDACTED_EMAIL]'],
   // Latitude/longitude pairs such as "29.7604,-95.3698" or "29.7604 -95.3698"
@@ -88,7 +107,8 @@ export function redact(value: unknown, depth = 0, seen: WeakSet<object> = new We
   if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1, seen));
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = isSensitiveKey(key) ? REDACTED : redact(child, depth + 1, seen);
+    const otpLike = OTP_VALUE_KEY.test(key) && /^\d{4,8}$/.test(String(child));
+    out[key] = isSensitiveKey(key) || otpLike ? REDACTED : redact(child, depth + 1, seen);
   }
   return out;
 }

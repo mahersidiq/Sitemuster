@@ -71,6 +71,7 @@ interface World {
   actor: string;
   inputsLoaded: number;
   failStore: boolean;
+  budgetLeft: number;
   daily: DailyReportsDeps;
   confirm: ReportConfirmDeps;
 }
@@ -83,6 +84,7 @@ function world(now = '2026-11-07T08:00:00Z'): World {
     actor: SUPER,
     inputsLoaded: 0,
     failStore: false,
+    budgetLeft: 1000,
   } as World;
   w.reports = new MemoryReports(async (projectId) => {
     w.inputsLoaded += 1;
@@ -143,6 +145,7 @@ function world(now = '2026-11-07T08:00:00Z'): World {
   w.daily = {
     now: () => w.clock.now,
     requestId: '00000000-0000-4000-8000-000000000001',
+    budget: async () => w.budgetLeft-- > 0,
     context: async (projectId) => context(projectId),
     foremanProjects: async () => (w.actor === FOREMAN ? [PROJECT] : []),
     gaps: async () => ['2026-11-06'],
@@ -254,6 +257,17 @@ describe('daily-reports', () => {
     expect(result.status).toBe(403);
     expect(result.body.error.code).toBe('FORBIDDEN');
     expect(w.inputsLoaded).toBe(0);
+  });
+
+  it('a caller over their hourly report budget is refused before anything is generated', async () => {
+    const w = world();
+    w.sessions.push(session({}));
+    w.budgetLeft = 0;
+    const result = await list(w);
+    expect(result.status).toBe(429);
+    expect(result.body.error.code).toBe('RATE_LIMITED');
+    expect(w.inputsLoaded).toBe(0);
+    expect(w.reports.reports).toHaveLength(0);
   });
 
   it('a report generated after its deadline is stored NOT_CONFIRMED, never approved', async () => {

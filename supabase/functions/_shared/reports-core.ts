@@ -56,6 +56,11 @@ export function reportContextFromJson(value: unknown): ReportContext | null {
 export interface DailyReportsDeps {
   now(): number;
   requestId?: string;
+  /**
+   * `consume_report_budget` with the caller's JWT: false once the person used their hourly report
+   * budget (spec 09 "rate-limit … report exports"; decision #132). Checked before any generation.
+   */
+  budget(): Promise<boolean>;
   /** `report_context` with the caller's JWT; null when they have no report role on the project. */
   context(projectId: string): Promise<ReportContext | null>;
   /** Projects where the caller is a verified foreman (`my_foreman_projects`, caller's JWT). */
@@ -111,6 +116,18 @@ export async function handleDailyReports(req: Request, deps: DailyReportsDeps): 
   const request = parsed.data;
   const now = iso(deps.now());
   try {
+    if (!(await deps.budget())) {
+      log({ outcome: 'refused', status: 429, action: request.action });
+      return apiError(
+        429,
+        'RATE_LIMITED',
+        requestId,
+        'Too many report requests. Try again later.',
+        {
+          'retry-after': '600',
+        },
+      );
+    }
     if (request.action === 'pending') {
       // Generate what is missing for the caller's projects, then read their own pending reports.
       for (const projectId of await deps.foremanProjects()) {

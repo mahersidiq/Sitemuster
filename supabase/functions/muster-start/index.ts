@@ -8,6 +8,7 @@ import {
 } from '../_shared/muster-core.ts';
 import { callRpc, postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
 import { pushProviderFor } from '../_shared/push.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). `start_muster` runs WITH THE CALLER'S OWN JWT: the
 // database checks the designated safety role (with MFA) and freezes the snapshot. The service role
@@ -51,7 +52,7 @@ Deno.serve((req) => {
     push,
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   });

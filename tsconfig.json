@@ -21,6 +21,7 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "scripts/**/*.ts",
+    "scripts/**/*.mts",
     "supabase/functions/_shared/**/*.ts",
     "app.config.ts",
     "vitest.config.mts"

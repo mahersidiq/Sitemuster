@@ -91,6 +91,9 @@ const STATUS: Record<string, [number, ApiErrorCode]> = {
   REASON_TOO_LONG: [422, 'REASON_TOO_LONG'],
   ACKNOWLEDGE_INCOMPLETE_REQUIRED: [422, 'ACKNOWLEDGE_INCOMPLETE_REQUIRED'],
   PROJECT_NOT_ACTIVE: [409, 'PROJECT_NOT_ACTIVE'],
+  // Production refuses a muster until its safety limitations are approved in EN and ES (#123).
+  LEGAL_NOTICE_NOT_APPROVED: [409, 'LEGAL_NOTICE_NOT_APPROVED'],
+  RATE_LIMITED: [429, 'RATE_LIMITED'],
 };
 
 function failure(

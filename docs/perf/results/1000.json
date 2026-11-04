@@ -1,0 +1,92 @@
+{
+  "workers": 1000,
+  "concurrency": 50,
+  "recorded_at": "2026-11-04T15:07:25.410Z",
+  "hardware": {
+    "cpus": 4,
+    "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "memory_gb": 16
+  },
+  "seed_ms": 1191,
+  "arrival_burst": {
+    "requests": 1000,
+    "events": 3000,
+    "wall_ms": 17454,
+    "requests_per_second": 57.3,
+    "events_per_second": 171.9,
+    "peak_requests_per_second": 65,
+    "status_counts": {
+      "200": 1000
+    },
+    "latency": {
+      "count": 1000,
+      "p50_ms": 799,
+      "p95_ms": 1515,
+      "p99_ms": 2077,
+      "max_ms": 2865
+    }
+  },
+  "counts": {
+    "open_sessions": 1000,
+    "accepted_receipts": 3000,
+    "dashboard_estimated_onsite": 1000,
+    "open_sessions_after_resend": 1000,
+    "muster_snapshot_workers": 1000
+  },
+  "broadcast": {
+    "messages_received": 1001,
+    "dashboard_refetches": 11,
+    "last_message_count_was_stale": true,
+    "queue_lag": {
+      "count": 1000,
+      "p50_ms": 10,
+      "p95_ms": 28,
+      "p99_ms": 43,
+      "max_ms": 68
+    },
+    "dashboard_update_latency": {
+      "count": 1000,
+      "p50_ms": 1039,
+      "p95_ms": 1975,
+      "p99_ms": 2221,
+      "max_ms": 2463
+    },
+    "uploads_with_measured_visibility": 1000,
+    "full_count_visible_after_last_upload_ms": 520
+  },
+  "reads_at_full_size": {
+    "project_dashboard": {
+      "count": 10,
+      "p50_ms": 40,
+      "p95_ms": 71,
+      "p99_ms": 71,
+      "max_ms": 71
+    },
+    "workforce_roster": {
+      "count": 10,
+      "p50_ms": 75,
+      "p95_ms": 95,
+      "p99_ms": 95,
+      "max_ms": 95
+    },
+    "muster_board": {
+      "count": 5,
+      "p50_ms": 42,
+      "p95_ms": 54,
+      "p99_ms": 54,
+      "max_ms": 54
+    }
+  },
+  "muster_start_ms": 222,
+  "resend": {
+    "requests": 100,
+    "all_duplicate": true,
+    "latency": {
+      "count": 100,
+      "p50_ms": 189,
+      "p95_ms": 323,
+      "p99_ms": 417,
+      "max_ms": 444
+    }
+  }
+}

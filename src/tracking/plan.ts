@@ -38,6 +38,9 @@ export const NOT_MONITORED_REASONS = [
   'EMPLOYER_NOT_VERIFIED',
   'PROJECT_NOT_ACTIVE',
   'CONSENT_MISSING',
+  // Milestone 12: switched off by the worker; the site notice changed and must be accepted again.
+  'LOCATION_WITHDRAWN',
+  'CONSENT_RENEWAL_REQUIRED',
   'NO_DEVICE',
   'NOT_BOUND',
 ] as const;

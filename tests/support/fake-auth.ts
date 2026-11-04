@@ -98,6 +98,14 @@ export class FakeAuthGateway implements AuthGateway {
     return this.session ? this.accessFor(this.session.destination).user_id : null;
   }
 
+  async sessionContact() {
+    const destination = this.session?.destination ?? null;
+    return {
+      phone: destination?.startsWith('+') ? destination : null,
+      email: destination?.includes('@') ? destination : null,
+    };
+  }
+
   /** Test hook: hold the next access lookup until the returned function is called. */
   holdNextFetch(): () => void {
     let release: () => void = () => undefined;
@@ -209,6 +217,7 @@ export function access(overrides: Partial<Access>): Access {
     email_verified: false,
     phone_verified: true,
     is_platform_operator: false,
+    account_deletion_pending: false,
     worker_profile_id: null,
     is_foreman: false,
     org_roles: [],

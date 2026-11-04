@@ -32,7 +32,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Record `SUPABASE_PROJECT_REF_STAGING`, `SUPABASE_PROJECT_REF_PRODUCTION` as GitHub environment variables.
 - [ ] Create `SUPABASE_ACCESS_TOKEN` in protected GitHub Actions **secret** for migration deploy jobs, restricted to required projects; include appropriate deployment approval before touching prod.
 - [ ] Store `SUPABASE_DB_PASSWORD_STAGING` / `SUPABASE_DB_PASSWORD_PRODUCTION` ONLY in protected CI/environment secret store if automation absolutely requires a DB password; never in mobile.
-- [ ] Supabase Edge Functions private environment secrets: `SUPABASE_SERVICE_ROLE_KEY` (backend only), `DEVICE_CREDENTIAL_PEPPER` (if implementation uses keyed hash enhancement), `BADGE_SECRET_ENCRYPTION_KEY` (32-byte random key used to encrypt per-device badge secrets at rest), `GOOGLE_PLACES_SERVER_KEY` (created Step 5), `GOOGLE_GEOCODING_SERVER_KEY` (Step 5). Supabase supplies project-specific URLs/keys; do not mix staging/prod secrets.
+- [ ] Supabase Edge Functions private environment secrets: `SUPABASE_SERVICE_ROLE_KEY` (backend only), (`DEVICE_CREDENTIAL_PEPPER` is **not used** — do not create it; decision #135), `BADGE_SECRET_ENCRYPTION_KEY` (32-byte random key used to encrypt per-device badge secrets at rest), `GOOGLE_PLACES_SERVER_KEY` (created Step 5), `GOOGLE_GEOCODING_SERVER_KEY` (Step 5). Supabase supplies project-specific URLs/keys; do not mix staging/prod secrets.
 - [ ] Edge Function secret `SITEMUSTER_ENV`: set `staging` on the staging project and `production` on the production project (`supabase secrets set SITEMUSTER_ENV=staging --project-ref <staging-ref>`). **Never** set `development` on a hosted project — that value alone switches address search to the labelled fake adapter (decision #63). Without the Google secrets below, hosted address search answers "not set up" instead of using fake data.
 - [ ] Deploy the Edge Functions from a clean checkout after `npm ci` (their import maps point at the locked `node_modules`): `supabase functions deploy address-search address-resolve --project-ref <ref>`; JWT verification stays **on** for both (see `supabase/config.toml`).
 - [ ] Edge Function secret `BADGE_SECRET_ENCRYPTION_KEY`: generate a separate value for staging and production with `openssl rand -base64 32` and set it with `supabase secrets set BADGE_SECRET_ENCRYPTION_KEY=… --project-ref <ref>`. Keep a sealed copy with the owner: losing it means every worker must re-activate their phone. `device-activate` refuses to run without it and refuses the development key (decision #71).
@@ -44,6 +44,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Deploy the Milestone 10 functions: `supabase functions deploy daily-reports report-confirm --project-ref <ref>`. JWT verification stays **on** for both (`supabase/config.toml`). They need no new secret: reports are generated when someone opens a finished day, so no service key is stored in the database (decision #108).
 - [ ] After deploying the Milestone 10 migration, confirm the job `sitemuster-report-deadline-sweep` (every 5 minutes) is listed by `select jobname, schedule, active from cron.job;` and its recent runs succeed. It marks unanswered reports NOT_CONFIRMED after 12:00 on the next workday; like the attendance sweep it does nothing on a database marked `development`.
 - [ ] Deploy the Milestone 11 functions: `supabase functions deploy muster-start muster-close --project-ref <ref>`, and redeploy `ingest-operations` (muster checks). JWT verification stays **on** for both. Staging and production use the Expo Push Service (decision #116); a development value of `SITEMUSTER_ENV` would use the fake adapter, so check the secret is `staging` / `production`.
+- [ ] Deploy the Milestone 12 function and redeploy the changed ones: `supabase functions deploy account-delete daily-reports device-activate device-renew ingest-location-batch ingest-operations muster-start muster-close report-confirm --project-ref <ref>`. JWT verification stays **on** for `account-delete` (and every other function except `ingest-location-batch` and `device-renew`). `account-delete` needs no new secret.
+- [ ] After deploying the Milestone 12 migrations, confirm the hourly job `sitemuster-privacy-maintenance` (at minute 17) is listed by `select jobname, schedule, active from cron.job;` and its runs succeed. It runs in every environment: it deletes raw fixes, expired QR/badge/push secrets and old rate-limit buckets (after flagging), and processes account deletions.
 - [ ] Give each project its emergency contact (decision #114): invite the safety manager to the project with the **Safety manager** role, or (as an organization admin) invite another person with **Emergency role** turned on. Only they can start and close a muster, always with the authenticator app.
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] After deploying the Milestone 06 migrations, open *Database → Cron* (or run `select jobname, schedule, active from cron.job;` in the SQL editor) and confirm the job `sitemuster-attendance-sweep` runs every minute and its recent runs succeed. It applies the attendance time rules (unknown after 20 min, end-of-shift close-out, 24/7 review, visitor close-out) and only works when the environment marker above is `staging` or `production` — on a database marked `development` it deliberately does nothing. The migration enables the `pg_cron` and `btree_gist` extensions; if the deploy reports a permission error for either, enable it under *Database → Extensions* and deploy again.
@@ -59,6 +61,25 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] In each Supabase project open *Authentication → Emails → SMTP settings* and enter the provider's SMTP host, port, user and sender address; store the SMTP password only there (never in Git, CI or the app).
 - [ ] Raise the project's email rate limit to match staff sign-in volume, then send yourself a staff sign-in code on staging and confirm it arrives within a minute in English and Spanish.
 
+## 3c. Platform operator and daily health check (`OP`) — Milestone 12
+
+The operator role is the only support access in V1 (no web admin). It can never see locations, contacts, rosters or attendance (decision #129).
+- [ ] Choose who acts as platform operator (start with the owner). Create their staff account in the app on that project (email code), then turn on the authenticator app when asked. An operator must have one.
+- [ ] Grant the role in each project's SQL editor (Supabase dashboard; never through the repository): `insert into app_private.platform_operators (user_id) select id from auth.users where email = '<operator email>';`. To remove it: `update app_private.platform_operators set active = false where user_id = (select id from auth.users where email = '<operator email>');`.
+- [ ] On the operator's own trusted computer, in a clean checkout after `npm ci`, set three **public** values (never a service key): `SITEMUSTER_SUPABASE_URL`, `SITEMUSTER_SUPABASE_ANON_KEY` and `SITEMUSTER_OPERATOR_EMAIL`. Then run:
+
+  ```bash
+  npm run operator -- health --reason "first health check"
+  ```
+
+  It asks for the email code, then the authenticator code. Every command needs `--reason`, and every call is recorded with it.
+- [ ] Every day, run `health`, then act on anything `docs/ops/observability.md` §1 lists:
+  - a failed job;
+  - an old account deletion;
+  - open security flags: list them with `npm run operator -- flags --reason "…"`, and record what you found with `npm run operator -- flag-review <flag id> --note "<what you found>" --reason "…"`;
+  - overdue secrets.
+- [ ] Keep the incident response and breach notification process, with its contacts, outside this repository (spec 09). For a lost or stolen phone, run `npm run operator -- revoke-device <device id> --reason "<ticket>"`. For a staff member who lost every authenticator, run `mfa-reset <user id>`, and only after checking their identity outside the app.
+
 ## 4. Twilio and A2P 10DLC (`TW`)
 
 - [ ] Create Twilio account, set billing and SMS sending number or Messaging Service, configure Supabase Phone Auth SMS provider with Twilio.
@@ -66,6 +87,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Store `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` in Supabase Auth/provider configuration or backend secret store, **not GitHub repo or mobile app**. If supplied to CI, use protected GitHub Secrets only for dedicated integration checks.
 - [ ] Test >=200 sign-ins per hour orientation capacity in controlled staging, OTP 6 digits/10 minutes, resend 60 seconds, provider costs/usage alerts, throttling and fraud protection.
 - [ ] Use mock SMS adapter in development until provider is active; production signup cannot accept a mocked successful OTP.
+- [ ] Turn on Twilio **SMS Pumping Protection** (Fraud Guard) for the Messaging Service, limit **Geo permissions** for SMS to the United States (add another country only when you hire there), and set a **usage trigger** that emails you at your monthly SMS budget. The app's own limits are per number, per IP and per project (`docs/security/rate-limits.md`, decision #132).
 
 ## 5. Google Cloud (`GC`)
 
@@ -84,6 +106,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] `EXPO_PUBLIC_SENTRY_DSN` is public DSN configured through EAS (not secret authentication). Store `SENTRY_AUTH_TOKEN` only in EAS/GitHub protected secrets for source-map uploads.
 - [ ] Configure scrubbing: no raw GPS coordinates, emergency contacts, OTP, bearer tokens, full session JSON or screenshots exposing worker PII.
 - [ ] Verify a synthetic crash appears in Sentry staging; do not upload synthetic/real personnel data in crash traces.
+- [ ] Open that crash in Sentry and confirm it shows no coordinates, phone numbers, emails, codes, tokens, badge or QR payloads, screenshots or view hierarchy (`docs/security/secrets-audit.md`). Status until then: NOT VERIFIED.
+- [ ] Add two Sentry alert rules for production: email the owner on every **new issue**, and on a **spike** in crash count. This, the daily operator health check (§3c) and the Supabase/Twilio usage alerts are the V1 alerting (decision #133; `docs/ops/observability.md`).
 
 ## 7. Apple Developer (`AP`)
 
@@ -106,6 +130,19 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Only after clearance, lock final display name, iOS bundle identifier, Android applicationId and domain. Update development identifier if changed; document migration impact for installed test builds.
 - [ ] Engage bilingual legal reviewer to approve English+Spanish worker location disclosures, GC custom notice template, data-processing terms, employer/union/contract implications and state monitoring notices. Enter review evidence into `docs/legal/TRANSLATION_REVIEW.md` WITHOUT uploading personal signatures or secrets.
 - [ ] Provide project-specific standard privacy policy, in-app deletion instructions and retention basis. Production consent is blocked until both language versions approved.
+- [ ] Have counsel review **both** languages of each draft, as it is in the database: the worker location notice, the muster safety limitations (`docs/legal/drafts/MUSTER_SAFETY_LIMITATIONS_*_V1.md`) and the account deletion and retention notice (`ACCOUNT_DELETION_RETENTION_*_V1.md`). Record the review in `docs/legal/TRANSLATION_REVIEW.md` (reviewer name, role, date, reference; no signatures).
+- [ ] Record each approval in the production database with the operator CLI (§3c). It binds to the exact text, so copy the hash shown by `legal-list`:
+
+  ```bash
+  npm run operator -- legal-list --reason "legal review <ref>"
+  ```
+
+  ```bash
+  npm run operator -- legal-approve <notice id> --hash <sha256> --reviewer-name "<name>" --reviewer-role "<role>" --reference "<ref>" --reason "counsel sign-off <ref>"
+  ```
+
+  Approve the English **and** the Spanish version: production refuses worker consent and muster starts until both are approved (decision #123). A later text change is a new version. Mark it "material" if workers must accept it again.
+- [ ] If counsel asks to keep records (litigation, or a contract that requires attendance to be kept), set a retention hold. A legal hold postpones account deletion; contract retention keeps attendance pseudonymized when someone deletes their account (decisions #127–#128). Use `npm run operator -- hold-set <organization id> --kind LEGAL_HOLD --basis "<case or contract>" --reason "<ticket>"`, and `hold-release <hold id>` when it ends.
 
 ## 10. Transistorsoft (`TS`) — LAST, after brand IDs locked
 
@@ -165,6 +202,17 @@ Needs an EAS development build with `EAS_PROJECT_ID` and push credentials (§2),
 - [ ] After closing: **Add a correction** for one person → it appears under "Added after closing" with your name; the report above it is unchanged.
 - [ ] Sign out on one worker phone and start another drill. → That phone gets no alert.
 
+### Real-device privacy and account deletion check (Milestone 12)
+
+Needs a staging project, one worker phone (development build) and one staff account with an authenticator. Status: `NOT_EXECUTED_PHYSICAL_DEVICE`.
+- [ ] Worker: **Profile → Location and consent** → switch location **off** for the project. → "Location is off for this project. Nothing is sent from your phone for it." The superintendent's dashboard stops counting the worker by GPS, and the kiosk still accepts the worker's badge.
+- [ ] Switch it back **on**. → The phone resumes; the status card shows the project as monitored again.
+- [ ] Approve a new **material** version of the worker notice on staging (§9). → The worker's Privacy screen shows the new text with **Accept**; location stays off until accepted, then resumes.
+- [ ] Worker: **Profile → Delete my account** → read the notice (marked draft on staging) → tick the box → **Continue** → enter the new SMS code → **Delete my account now**. → "Your account is being deleted…"; tapping **Done** signs out. Signing in again with the same number the same day shows only "Your account is being deleted" (decision #137). After the deletion is processed (next day), the same number starts a new, empty account: no projects, no badge.
+- [ ] Right after the deletion: the old phone's badge is refused at the kiosk, and the superintendent no longer sees the worker as on site from that phone.
+- [ ] Staff member with an authenticator: **Account → Delete my account** asks for the email code **and** the authenticator code. A founding organization owner is told to transfer ownership first.
+- [ ] Next day, the operator's `health` shows `account_deletions.pending` back at 0.
+
 ### Real-device location privacy sign-off (release gate, decision #90)
 
 Until this is recorded, production phones run **TRACKING_LIMITED**: only coordinate-free arrive/leave notes are sent, GPS never confirms arrival on its own, and workers are counted through the kiosk or their foreman. Repeat it for **each platform and each app version** that changes tracking code.
@@ -185,7 +233,7 @@ Until this is recorded, production phones run **TRACKING_LIMITED**: only coordin
 
 ## Checklist-to-milestone map
 
-`01 GH`; `02 SB/local CI`; `03 SB+TW+EM`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL`; `13 GH+EX+SB+EM+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+physical devices`.
+`01 GH`; `02 SB/local CI`; `03 SB+TW+EM`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL+OP+TW+EX`; `13 GH+EX+SB+EM+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+physical devices`.
 
 ## No-account development rules
 

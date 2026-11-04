@@ -1,7 +1,10 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import type { Locale } from '@sitemuster/shared';
+
 import { useApi } from '../state/auth';
 import { errorCode } from './errors';
+import type { GlobalLegalDocument } from './types';
 
 /**
  * When the latest attempt was refused (access revoked or session ended), previously loaded data
@@ -50,6 +53,9 @@ export const queryKeys = {
   myMusters: ['my-musters'] as const,
   foremanMusters: ['foreman-musters'] as const,
   foremanMuster: (musterId: string) => ['foreman-muster', musterId] as const,
+  // Milestone 12
+  myConsents: ['my-consents'] as const,
+  legalDocument: (type: string, locale: string) => ['legal-document', type, locale] as const,
 };
 
 export function useOrganizations() {
@@ -301,4 +307,20 @@ export function useForemanMuster(musterId: string) {
       refetchInterval: MUSTER_REFRESH_MS,
     }),
   );
+}
+
+// Milestone 12: the worker's consents per project and the global legal texts.
+export function useMyConsents() {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({ queryKey: queryKeys.myConsents, queryFn: () => api.myConsents() }),
+  );
+}
+
+export function useLegalDocument(type: GlobalLegalDocument, locale: Locale) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.legalDocument(type, locale),
+    queryFn: () => api.legalDocument(type, locale),
+  });
 }

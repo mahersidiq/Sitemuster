@@ -100,6 +100,9 @@ export async function handleDeviceActivate(req: Request, deps: DeviceDeps): Prom
       return apiError(422, 'WORKER_PROFILE_REQUIRED', requestId, 'Join a project first.');
     }
     if (result.code === 'FORBIDDEN') return apiError(403, 'FORBIDDEN', requestId, 'Not allowed.');
+    if (result.code === 'RATE_LIMITED') {
+      return apiError(429, 'RATE_LIMITED', requestId, 'Too many activations. Try again later.');
+    }
     return apiError(503, 'TEMPORARILY_UNAVAILABLE', requestId, 'Try again shortly.');
   }
   const data = result.data as {

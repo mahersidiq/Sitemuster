@@ -17,7 +17,7 @@ Claude Code can draft policy/disclosure texts but CANNOT approve legal translati
 
 Statuses are exact enum `DRAFT_REQUIRES_HUMAN_REVIEW`, `REVIEWED`, `APPROVED`, `RETIRED`; only `APPROVED` can be published for production. At approval record `document_id`, `sha256_content`, `reviewer_id`, `reviewer_role`, `reviewed_at`, `approved_at`, `published_at`, `version`, `locale`, and legal scope in private admin record, not in this public template. Rejection returns to DRAFT with correction notes. For every material custom text change generate new document version and re-review both languages.
 
-## Drafts currently in the repository (Milestone 05)
+## Drafts currently in the repository (Milestones 05 and 12)
 
 Seeded into `legal_notice_versions` by migration `20261104130000_m05_orientation_badges.sql` with status `DRAFT_REQUIRES_HUMAN_REVIEW`. Production refuses acceptance (`CONSENT_NOTICE_NOT_APPROVED`); development and staging show a DRAFT label. The SHA-256 is computed by the database over the stored text (the file content without its final newline) and is checked by `tests/i18n/legal-drafts.test.ts`.
 
@@ -25,6 +25,10 @@ Seeded into `legal_notice_versions` by migration `20261104130000_m05_orientation
 |---|---|---|---|
 | `WORKER_LOCATION_DISCLOSURE_EN_V1` | `docs/legal/drafts/WORKER_LOCATION_DISCLOSURE_EN_V1.md` | `97c5edd0db681a158c888165050c022564c0d0d4d36599275f9f7c0810cc0dd3` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
 | `WORKER_LOCATION_DISCLOSURE_ES_V1` | `docs/legal/drafts/WORKER_LOCATION_DISCLOSURE_ES_V1.md` | `6c9ce509de9bf01fd699ab83c9f81e0ebf11a542ab233f77583ff5cf2d3d893d` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+| `MUSTER_SAFETY_LIMITATIONS_EN_V1` | `docs/legal/drafts/MUSTER_SAFETY_LIMITATIONS_EN_V1.md` | `5b8311442246ebcbe7c1e7837a930d5ffc11f6cc52b295fc7b276d83f9a8a36c` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+| `MUSTER_SAFETY_LIMITATIONS_ES_V1` | `docs/legal/drafts/MUSTER_SAFETY_LIMITATIONS_ES_V1.md` | `5deb16d084cc85c5bfe685c73aee41540897e6f573bb9c696dff98e1aa632e42` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+| `ACCOUNT_DELETION_RETENTION_EN_V1` | `docs/legal/drafts/ACCOUNT_DELETION_RETENTION_EN_V1.md` | `78b78796ea67e34813dfc91819d44ee735291580027d8582513d6c8318773568` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+| `ACCOUNT_DELETION_RETENTION_ES_V1` | `docs/legal/drafts/ACCOUNT_DELETION_RETENTION_ES_V1.md` | `288f0659d85ad1e768dee763fdaa78776d137f753260f18091c101e367b77203` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
 
 Approving a reviewed text means inserting it as a NEW version, or setting `review_status = 'APPROVED'` with `approved_by`/`approved_at` on the exact reviewed row, through the private operator workflow — never editing the stored text (the database forbids it).
 

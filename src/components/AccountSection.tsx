@@ -42,6 +42,12 @@ export function AccountSection() {
         </>
       ) : null}
       <SignOutButton />
+      <AppButton
+        variant="secondary"
+        label={t('account.delete.open')}
+        onPress={() => router.push('/account/delete')}
+        testID="open-delete-account"
+      />
     </View>
   );
 }

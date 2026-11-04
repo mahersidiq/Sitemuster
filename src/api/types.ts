@@ -9,6 +9,7 @@ import type {
   Locale,
   ProjectStaffRole,
   ProjectStatus,
+  AccountDeleteResponse,
   MusterCloseResponse,
   MusterCounts,
   MusterStartResponse,
@@ -442,6 +443,33 @@ export interface SiteMusterApi {
   }): Promise<void>;
   /** Sign-out: this person's alerts stop on this phone. */
   revokeMyPushTokens(installationId: string): Promise<void>;
+  // Milestone 12: privacy (location per project, renewal, account deletion) and legal texts.
+  myConsents(): Promise<MyConsent[]>;
+  setLocationConsent(projectId: string, enabled: boolean): Promise<void>;
+  renewConsent(projectId: string, noticeId: string): Promise<void>;
+  legalDocument(type: GlobalLegalDocument, locale: Locale): Promise<Notice>;
+  /** Needs a sign-in from the last 15 minutes (and the authenticator when enrolled). */
+  deleteAccount(): Promise<AccountDeleteResponse>;
+}
+
+// Milestone 12 — privacy.
+
+export type GlobalLegalDocument = 'ACCOUNT_DELETION_RETENTION' | 'MUSTER_SAFETY_LIMITATIONS';
+
+export interface MyConsent {
+  project_id: string;
+  project_name: string;
+  consent_id: string;
+  locale: Locale;
+  method: 'DIGITAL' | 'SUPERVISED';
+  accepted_at: string;
+  notice_version_id: string;
+  notice_version: number;
+  /** Location tracking for this project (off when switched off or a renewal is needed). */
+  location_enabled: boolean;
+  renewal_required: boolean;
+  /** The updated notice to accept when a renewal is needed. */
+  renewal_notice: Notice | null;
 }
 
 // Milestone 11 — Active Muster Mode.

@@ -2,7 +2,7 @@
 -- PENDING (never approval), notice gating, bulk approval ≤ 100, employer confirmation, supervised
 -- no-phone profiles, printed badges, device activation and badge-step replay protection.
 begin;
-select plan(87);
+select plan(88);
 select tests.seed_world();
 
 select tests.create_user('99000000-0000-4000-8000-0000000000b1', null, '15550001111');
@@ -111,7 +111,17 @@ select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana W
   '22023', 'CONSENT_NOTICE_NOT_APPROVED', 'production refuses acceptance of a draft notice');
 select is((public.preview_orientation(current_setting('t.rot'), 'en-US') ->> 'notice_acceptable')::boolean, false, 'preview tells the app the notice cannot be accepted yet');
 select tests.as_postgres();
-update public.legal_notice_versions set review_status = 'APPROVED', approved_at = now() where id = tests.id('n_en');
+update public.legal_notice_versions
+   set review_status = 'APPROVED', approved_at = now(), reviewer_name = 'Test Counsel', reviewer_role = 'Employment counsel'
+ where id = tests.id('n_en');
+-- Decision #123: production also needs the Spanish text of the same version approved.
+select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.join_rot'), tests.id('n_en')),
+  '22023', 'CONSENT_NOTICE_NOT_APPROVED', 'production refuses the English notice while its Spanish version is still a draft');
+select tests.as_postgres();
+update public.legal_notice_versions
+   set review_status = 'APPROVED', approved_at = now(), reviewer_name = 'Test Counsel', reviewer_role = 'Bilingual counsel'
+ where id = (app_private.current_notice(tests.id('p_a1'), 'es-US')).id;
 select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
 select lives_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.join_rot'), tests.id('n_en')),
   'an approved notice is accepted in production');
