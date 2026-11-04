@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import type { Locale } from '@sitemuster/shared';
 
 import { errorMessageKey } from '../../../src/api/errors';
-import { queryKeys, useProject } from '../../../src/api/hooks';
+import { queryKeys, useProject, hideOnAuthError } from '../../../src/api/hooks';
 import type { WorkerDetailsInput } from '../../../src/api/types';
 import { AppButton } from '../../../src/components/AppButton';
 import { Banner } from '../../../src/components/Banner';
@@ -45,14 +45,18 @@ function AddWorker() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const project = useProject(id);
   const [workerLocale, setWorkerLocale] = useState<Locale>('es-US');
-  const notice = useQuery({
-    queryKey: ['project-notice', id, workerLocale],
-    queryFn: () => api.getProjectNotice(id, workerLocale),
-  });
-  const roster = useQuery({
-    queryKey: queryKeys.roster(id),
-    queryFn: () => api.listEnrollments(id),
-  });
+  const notice = hideOnAuthError(
+    useQuery({
+      queryKey: ['project-notice', id, workerLocale],
+      queryFn: () => api.getProjectNotice(id, workerLocale),
+    }),
+  );
+  const roster = hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.roster(id),
+      queryFn: () => api.listEnrollments(id),
+    }),
+  );
   const companies = Array.from(
     new Map(
       (roster.data ?? [])

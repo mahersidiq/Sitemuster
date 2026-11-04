@@ -18,6 +18,8 @@ export interface TotpEnrollment {
 /** Everything the app needs from the authentication backend (tests use a typed double). */
 export interface AuthGateway {
   hasSession(): Promise<boolean>;
+  /** The signed-in user's id from the locally stored session (works offline), or null. */
+  sessionUserId(): Promise<string | null>;
   onChange(listener: () => void): () => void;
   requestPhoneCode(phoneE164: string): Promise<AuthResult>;
   verifyPhoneCode(phoneE164: string, code: string): Promise<AuthResult>;
@@ -47,6 +49,11 @@ function failure(error: {
 
 export class SupabaseAuthGateway implements AuthGateway {
   constructor(private readonly client: SupabaseClient) {}
+
+  async sessionUserId(): Promise<string | null> {
+    const { data } = await this.client.auth.getSession();
+    return data.session?.user.id ?? null;
+  }
 
   async hasSession(): Promise<boolean> {
     const { data } = await this.client.auth.getSession();

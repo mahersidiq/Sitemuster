@@ -13,7 +13,7 @@ import {
 } from '@sitemuster/shared';
 
 import { errorMessageKey } from '../../../src/api/errors';
-import { queryKeys } from '../../../src/api/hooks';
+import { queryKeys, hideOnAuthError } from '../../../src/api/hooks';
 import type { OrientationSessionInfo } from '../../../src/api/types';
 import { AppButton } from '../../../src/components/AppButton';
 import { Banner } from '../../../src/components/Banner';
@@ -55,13 +55,15 @@ function Orientation() {
   const pngRef = useRef<(() => Promise<string>) | null>(null);
   const now = useNow(1000);
 
-  const session = useQuery({
-    queryKey: ['orientation-open', id],
-    queryFn: async (): Promise<OrientationSessionInfo | null> => {
-      const open = (await api.listOrientationSessions(id)).find((s) => s.open);
-      return open ? api.getOrientationSession(open.session_id) : null;
-    },
-  });
+  const session = hideOnAuthError(
+    useQuery({
+      queryKey: ['orientation-open', id],
+      queryFn: async (): Promise<OrientationSessionInfo | null> => {
+        const open = (await api.listOrientationSessions(id)).find((s) => s.open);
+        return open ? api.getOrientationSession(open.session_id) : null;
+      },
+    }),
+  );
 
   const start = async () => {
     setBusy(true);

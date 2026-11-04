@@ -154,7 +154,9 @@
 - Legal: the EN/ES disclosures are AI drafts — human bilingual legal approval required before production (TRANSLATION_REVIEW.md); production refuses them until then.
 - Kiosk-side redemption of badges is wired in Milestone 08 (the verifier and redemption function are built and tested now).
 
-**Decisions added:** #69 orientation/approval authority and session secrets, #70 environment marker (unmarked = production), #71 service-role-only device activation/redemption + installation hash, #72 rate limits count failed code attempts, #73 QR formats and join data rules, #74 on-phone credential storage, printed badges and PNG sharing (`expo-file-system`), #75 consent supersession and supervised acknowledgements.
+**Fixes from the automated review of merged PRs #1–#4 (decision #76), each with a regression test:** JSON/keyed coordinate scrubbing in crash reports; foreman grants scoped to the granting company; last-owner protection serialized per organization (two-connection race test); sign-out race, user-bound offline access cache and foreground re-check of stale access; delegated PMs cannot invite SUPER/SAFETY; platform operators keep no delegated-PM powers; revoked project data is hidden and authorization refusals are not retried. Process change: each PR's automated review is now read and its real findings fixed before merging.
+
+**Decisions added:** #69 orientation/approval authority and session secrets, #70 environment marker (unmarked = production), #71 service-role-only device activation/redemption + installation hash, #72 rate limits count failed code attempts, #73 QR formats and join data rules, #74 on-phone credential storage, printed badges and PNG sharing (`expo-file-system`), #75 consent supersession and supervised acknowledgements, #76 review-finding fixes.
 
 **Next step:** after Milestone 05 merges, start Milestone 06 (attendance state machine and deterministic replay, ≥ 55 fixtures) on `milestone-06-attendance-engine`.
 

@@ -11,7 +11,7 @@ import { Banner } from './Banner';
 /** Account actions for Profile (worker) and More (staff): stale-access notice and sign out. */
 export function AccountSection() {
   const { t } = useTranslation();
-  const { state, signOut } = useAuth();
+  const { state, signOut, refresh } = useAuth();
   const { previewRole, exitPreview } = useSession();
   if (previewRole) {
     return (
@@ -29,7 +29,17 @@ export function AccountSection() {
   if (state.status !== 'signed_in') return null;
   return (
     <View style={styles.container}>
-      {state.accessIsStale ? <Banner text={t('access.staleNotice')} testID="stale-access" /> : null}
+      {state.accessIsStale ? (
+        <>
+          <Banner text={t('access.staleNotice')} testID="stale-access" />
+          <AppButton
+            variant="secondary"
+            label={t('access.retry')}
+            onPress={() => void refresh()}
+            testID="refresh-access"
+          />
+        </>
+      ) : null}
       <AppButton
         variant="secondary"
         label={t('access.signOut')}

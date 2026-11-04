@@ -10,16 +10,19 @@ import { AppButton } from './AppButton';
 import { Banner } from './Banner';
 import { TextField } from './TextField';
 import { Heading } from './Typography';
+import { hideOnAuthError } from '../api/hooks';
 
 /** The worker's own emergency contact (only emergency-role staff on their projects can read it). */
 export function EmergencyContactSection() {
   const { t } = useTranslation();
   const api = useApi();
   const queryClient = useQueryClient();
-  const contact = useQuery({
-    queryKey: ['my-emergency-contact'],
-    queryFn: () => api.getMyEmergencyContact(),
-  });
+  const contact = hideOnAuthError(
+    useQuery({
+      queryKey: ['my-emergency-contact'],
+      queryFn: () => api.getMyEmergencyContact(),
+    }),
+  );
   const [draft, setDraft] = useState<{ name: string; phone: string; relationship: string } | null>(
     null,
   );

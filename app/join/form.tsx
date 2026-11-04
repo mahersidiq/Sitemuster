@@ -5,7 +5,7 @@ import { StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { errorMessageKey } from '../../src/api/errors';
-import { queryKeys } from '../../src/api/hooks';
+import { queryKeys, hideOnAuthError } from '../../src/api/hooks';
 import type { WorkerDetailsInput } from '../../src/api/types';
 import { AppButton } from '../../src/components/AppButton';
 import { Banner } from '../../src/components/Banner';
@@ -46,14 +46,16 @@ function JoinForm() {
   const { activeLocale } = useLanguage();
   const queryClient = useQueryClient();
   const { code } = useLocalSearchParams<{ code: string }>();
-  const preview = useQuery({
-    queryKey: ['orientation-preview', code, activeLocale],
-    queryFn: () => {
-      if (!api) throw new Error('no api');
-      return api.previewOrientation(code, activeLocale);
-    },
-    retry: false,
-  });
+  const preview = hideOnAuthError(
+    useQuery({
+      queryKey: ['orientation-preview', code, activeLocale],
+      queryFn: () => {
+        if (!api) throw new Error('no api');
+        return api.previewOrientation(code, activeLocale);
+      },
+      retry: false,
+    }),
+  );
   const [step, setStep] = useState<Step>('details');
   const [details, setDetails] = useState<WorkerDetailsInput>(EMPTY_DETAILS);
   const [prefilled, setPrefilled] = useState(false);

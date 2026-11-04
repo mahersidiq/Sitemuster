@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { AppState } from 'react-native';
 import {
   createContext,
   useCallback,
@@ -45,28 +46,50 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
   const queryClient = useQueryClient();
   const { activeLocale } = useLanguage();
   const savedLocale = useRef<string | null>(null);
+  // Bumped on sign-out: a refresh that started before it must not write storage or state after it.
+  const generation = useRef(0);
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   const refresh = useCallback(async () => {
     if (!backend) {
       setState({ status: 'unavailable' });
       return;
     }
+    const started = generation.current;
+    const superseded = () => started !== generation.current;
     const { gateway, storage } = backend;
     const hasSession = await gateway.hasSession();
+    if (superseded()) return;
     if (!hasSession) {
+      // A cached summary must never be reused for whoever signs in next on this phone.
+      await storage.removeItem(ACCESS_CACHE_KEY);
+      if (superseded()) return;
       setState({ status: 'signed_out' });
       return;
     }
+    const sessionUserId = await gateway.sessionUserId();
     const assurance = await gateway.assurance();
+    if (superseded()) return;
     let access: Access;
     let stale = false;
     try {
       access = await gateway.fetchAccess();
+      if (superseded()) return;
       await storage.setItem(ACCESS_CACHE_KEY, JSON.stringify(access));
     } catch (error) {
+      if (superseded()) return;
       const cached = await storage.getItem(ACCESS_CACHE_KEY);
-      const parsed = cached ? AccessSchema.safeParse(JSON.parse(cached)) : null;
-      if (!parsed?.success) {
+      let parsed: ReturnType<typeof AccessSchema.safeParse> | null = null;
+      try {
+        parsed = cached ? AccessSchema.safeParse(JSON.parse(cached)) : null;
+      } catch {
+        parsed = null;
+      }
+      // Only this signed-in user's own summary may be used offline (review finding on PR #3).
+      if (!parsed?.success || parsed.data.user_id !== sessionUserId) {
         console.warn(
           'auth: access lookup failed and no cached access is available',
           error instanceof Error ? error.message : 'unknown',
@@ -78,6 +101,7 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
       stale = true;
     }
     const factorIds = stale ? [] : await gateway.verifiedTotpFactorIds();
+    if (superseded()) return;
     const next = deriveAuthState({
       hasSession,
       access,
@@ -96,6 +120,24 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
     });
   }, [backend, refresh]);
 
+  // Coming back to the foreground retries an offline or stale access check (review finding on
+  // PR #3): connectivity usually returns while the app is in the background.
+  useEffect(() => {
+    if (!backend) return undefined;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      const current = stateRef.current;
+      if (
+        current.status === 'offline' ||
+        (current.status === 'signed_in' && current.accessIsStale)
+      ) {
+        void refresh();
+      }
+    });
+    // Jest's React Native preset returns no subscription; real devices always do.
+    return () => subscription?.remove();
+  }, [backend, refresh]);
+
   // Persist the chosen UI language to the server profile once signed in (and on every change).
   useEffect(() => {
     if (!backend || state.status !== 'signed_in' || state.accessIsStale) return;
@@ -112,6 +154,7 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
 
   const signOut = useCallback(async () => {
     if (!backend) return;
+    generation.current += 1;
     await backend.gateway.signOut();
     await backend.storage.wipe();
     // The badge secret and upload token belong to this worker only (decision #74).
