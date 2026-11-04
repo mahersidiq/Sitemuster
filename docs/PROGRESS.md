@@ -6,7 +6,7 @@
 
 | # | Milestone | Status | PR | Notes |
 |---|---|---|---|---|
-| 01 | Clean repository, locked stack and CI | in review | see PR list | NOT VERIFIED items below |
+| 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
 | 02 | Database, RLS and role matrix | not started | | |
 | 03 | Authentication, MFA and English/Spanish | not started | | |
 | 04 | GC organizations, projects, shifts and circles | not started | | |
@@ -38,7 +38,7 @@
 - `npx expo config --json`: pass. `npm audit --audit-level=high`: pass (moderate/low dev-tooling advisories only).
 - Supabase local stack (Docker) `supabase start` + `supabase db reset --local` + `supabase test db`: 4/4 pgTAP pass.
 - `expo prebuild --no-install` with all planned native plugins (scratch copy): iOS + Android projects generated.
-- GitHub Actions: see the PR (recorded there after the run).
+- GitHub Actions run 41744884117: `code-quality` success (all 11 check steps), `database` success (`supabase test db`: Files=1, Tests=4, PASS). Audit: 41 advisories, 0 high/critical.
 
 **NOT VERIFIED (Milestone 01)**
 - Native binary compile and launch on a physical iPhone/Android (needs Expo/EAS account — HUMAN_CHECKLIST §2): `NOT_EXECUTED_PHYSICAL_DEVICE`.
