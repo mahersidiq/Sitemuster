@@ -71,6 +71,9 @@ describe('project API (app client → PostgREST → Postgres)', () => {
       can_assign_staff: true,
       can_run_orientation: true,
       can_view_roster: true,
+      can_operate_kiosk: false,
+      can_run_visitor_desk: false,
+      can_correct_attendance: true,
     });
     expect(v1.staff.map((s) => s.role)).toEqual(['PM']);
 
@@ -180,6 +183,9 @@ describe('project API (app client → PostgREST → Postgres)', () => {
       can_assign_staff: false,
       can_run_orientation: true,
       can_view_roster: true,
+      can_operate_kiosk: false,
+      can_run_visitor_desk: false,
+      can_correct_attendance: true,
     });
     expect(seen.invitations).toEqual([]);
     await expect(invitee.acceptInvitation(invitation?.invitation_id ?? '')).rejects.toMatchObject({

@@ -2,7 +2,7 @@
 -- kiosk registration/revocation, the service-role helpers behind ingest-operations, and the
 -- read functions for the fallback screens (docs/spec/02, 04, 11; decisions #98–#103).
 begin;
-select plan(58);
+select plan(59);
 select tests.seed_world();
 select set_config('t.p_a1', tests.id('p_a1')::text, true);
 select set_config('t.p_b1', tests.id('p_b1')::text, true);
@@ -168,9 +168,17 @@ select is(
   (select jsonb_agg(x order by x ->> 'worker_id') from jsonb_array_elements(public.edge_operation_workers(
      current_setting('t.p_a1')::uuid, array[current_setting('t.w_a1')::uuid, current_setting('t.w_b1')::uuid])) x),
   (select jsonb_agg(x order by x ->> 'worker_id') from jsonb_array_elements(jsonb_build_array(
-     jsonb_build_object('worker_id', current_setting('t.w_a1'), 'enrolled', true, 'approved', true, 'company_id', current_setting('t.c_a')),
-     jsonb_build_object('worker_id', current_setting('t.w_b1'), 'enrolled', false, 'approved', false, 'company_id', null))) x),
+     jsonb_build_object('worker_id', current_setting('t.w_a1'), 'enrolled', true, 'approved', true, 'eligible', true, 'company_id', current_setting('t.c_a')),
+     jsonb_build_object('worker_id', current_setting('t.w_b1'), 'enrolled', false, 'approved', false, 'eligible', false, 'company_id', null))) x),
   'enrollment facts are per project: a project B worker is not enrolled on project A');
+select is(
+  (select jsonb_object_agg(x ->> 'worker_id', (x -> 'eligible')::boolean) from jsonb_array_elements(public.edge_operation_workers(
+     current_setting('t.p_a1')::uuid, array[current_setting('t.w_a1')::uuid, current_setting('t.w_a2')::uuid,
+                                             current_setting('t.w_managed')::uuid, current_setting('t.w_fa')::uuid])) x),
+  (select jsonb_object_agg(w, (public.edge_attendance_load(current_setting('t.p_a1')::uuid, w, '{}', '{}') -> 'eligibility' ->> 'eligible')::boolean)
+     from unnest(array[current_setting('t.w_a1')::uuid, current_setting('t.w_a2')::uuid,
+                       current_setting('t.w_managed')::uuid, current_setting('t.w_fa')::uuid]) w),
+  'kiosk eligibility is the reconciler''s attendance rule (decision #56) for every seeded worker');
 select is(public.edge_visitor_register(current_setting('t.p_a1')::uuid, '7e000000-0000-4000-8000-000000000001',
   'Ivy Inspector', 'City of Houston', current_setting('t.u_a_super')::uuid, 'Framing inspection', current_setting('t.u_a_attendant')::uuid),
   'ok', 'a new visitor is created with the id the kiosk chose');

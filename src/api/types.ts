@@ -70,6 +70,10 @@ export interface ProjectDetail {
     can_assign_staff: boolean;
     can_run_orientation?: boolean;
     can_view_roster?: boolean;
+    /** Milestone 08 fallback screens (the server re-checks every operation). */
+    can_operate_kiosk?: boolean;
+    can_run_visitor_desk?: boolean;
+    can_correct_attendance?: boolean;
   };
 }
 

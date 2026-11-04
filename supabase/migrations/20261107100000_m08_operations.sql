@@ -238,7 +238,10 @@ as $$
    limit 1
 $$;
 
--- Enrollment facts for named workers on one project (the reconciler still decides eligibility).
+-- Enrollment facts for named workers on one project. `eligible` is the attendance rule of
+-- decision #56 (approved enrollment, verified employer when a company is claimed, an active
+-- acknowledgement of the project notice), the same rule edge_attendance_load applies; a kiosk
+-- checks it before a badge step is consumed (pgTAP asserts both agree).
 create function public.edge_operation_workers(p_project_id uuid, p_worker_ids uuid[])
 returns jsonb
 language sql
@@ -249,10 +252,14 @@ as $$
   select coalesce(jsonb_agg(jsonb_build_object(
            'worker_id', w.id, 'enrolled', e.id is not null,
            'approved', coalesce(e.enrollment_status = 'APPROVED', false),
+           'eligible', coalesce(e.enrollment_status = 'APPROVED', false)
+                       and (e.subcontractor_id is null or e.employer_status = 'VERIFIED')
+                       and exists (select 1 from public.tracking_consents c
+                                    where c.worker_id = w.id and c.project_id = p_project_id and c.withdrawn_at is null),
            'company_id', e.subcontractor_id)), '[]'::jsonb)
     from unnest(coalesce(p_worker_ids, '{}')) as w(id)
     left join lateral (
-      select x.id, x.enrollment_status, x.subcontractor_id from public.worker_enrollments x
+      select x.id, x.enrollment_status, x.employer_status, x.subcontractor_id from public.worker_enrollments x
        where x.project_id = p_project_id and x.worker_id = w.id
        order by (x.enrollment_status = 'APPROVED') desc, x.created_at desc limit 1) e on true
 $$;
@@ -291,6 +298,31 @@ begin
   on conflict (id) do nothing;
   return 'ok';
 end;
+$$;
+
+-- Project status, time zone and configuration versions for visitor visits (same JSON shape as the
+-- `project` and `configs` keys of edge_attendance_load, so one codec reads both).
+create function public.edge_visitor_context(p_project uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+set timezone = 'UTC'
+as $$
+  select jsonb_build_object(
+    'project', jsonb_build_object('id', p.id, 'status', p.status, 'timezone', p.iana_timezone),
+    'configs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'configVersionId', v.id, 'projectId', v.project_id, 'versionNumber', v.version_number,
+               'effectiveAt', v.effective_at, 'settings', v.settings_json,
+               'center', jsonb_build_object('lat', extensions.st_y(g.center::extensions.geometry),
+                                            'lng', extensions.st_x(g.center::extensions.geometry)),
+               'radiusM', g.radius_m, 'exitHysteresisM', g.exit_hysteresis_m) order by v.version_number)
+        from public.project_tracking_config_versions v
+        join public.project_geofences g on g.config_version_id = v.id
+       where v.project_id = p.id), '[]'::jsonb))
+    from public.projects p where p.id = p_project
 $$;
 
 create function public.edge_operation_rate_limit(p_actor uuid, p_events integer)
@@ -477,7 +509,7 @@ revoke all on function
   public.edge_record_operation_receipts(uuid, jsonb), public.edge_printed_badge_worker(bytea),
   public.edge_operation_workers(uuid, uuid[]),
   public.edge_visitor_register(uuid, uuid, text, text, uuid, text, uuid),
-  public.edge_operation_rate_limit(uuid, integer),
+  public.edge_visitor_context(uuid), public.edge_operation_rate_limit(uuid, integer),
   public.my_foreman_projects(), public.foreman_crew(uuid, uuid), public.open_visitor_visits(uuid),
   public.worker_attendance_sessions(uuid, uuid)
   from public, anon, authenticated, service_role;
@@ -487,7 +519,7 @@ grant execute on function
   public.edge_record_operation_receipts(uuid, jsonb), public.edge_printed_badge_worker(bytea),
   public.edge_operation_workers(uuid, uuid[]),
   public.edge_visitor_register(uuid, uuid, text, text, uuid, text, uuid),
-  public.edge_operation_rate_limit(uuid, integer)
+  public.edge_visitor_context(uuid), public.edge_operation_rate_limit(uuid, integer)
   to service_role;
 
 grant execute on function

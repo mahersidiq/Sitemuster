@@ -129,7 +129,8 @@ select is(
         'edge_insert_location_receipts', 'edge_kiosk_device', 'edge_location_receipt_lookup',
         'edge_operation_rate_limit', 'edge_operation_receipts', 'edge_operation_workers',
         'edge_printed_badge_worker', 'edge_record_location_terminals', 'edge_record_operation_receipts',
-        'edge_redeem_badge_step', 'edge_visitor_commit', 'edge_visitor_load', 'edge_visitor_register',
+        'edge_redeem_badge_step', 'edge_visitor_commit', 'edge_visitor_context', 'edge_visitor_load',
+        'edge_visitor_register',
         'edge_worker_open_session_projects'],
   'device activation and credentials, badge redemption, location and operations ingestion and the attendance reconciler are callable only by the Edge Functions (service_role)'
 );

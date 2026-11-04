@@ -430,6 +430,9 @@ export class FakeSiteMusterApi implements SiteMusterApi {
         can_assign_staff: canAssign,
         can_run_orientation: this.canRunOrientation(p.id),
         can_view_roster: this.canViewRoster(p.id),
+        can_operate_kiosk: this.projectRole(p.id) === 'ATTENDANT',
+        can_run_visitor_desk: this.projectRole(p.id) === 'ATTENDANT',
+        can_correct_attendance: this.canCorrectAttendance(p.id),
       },
     };
   }
@@ -730,6 +733,17 @@ export class FakeSiteMusterApi implements SiteMusterApi {
 
   private canViewRoster(projectId: string) {
     return this.canRunOrientation(projectId) || this.projectRole(projectId) === 'ATTENDANT';
+  }
+
+  /** Mirrors can_correct_attendance: the organization OWNER or assigned PM/SUPER (MFA). */
+  private canCorrectAttendance(projectId: string) {
+    const project = this.world.projects.find((p) => p.id === projectId);
+    if (!project) return false;
+    const role = this.projectRole(projectId);
+    const owner = this.world.access.org_roles.some(
+      (r) => r.organization_id === project.organizationId && r.role === 'OWNER',
+    );
+    return owner || role === 'PM' || role === 'SUPER';
   }
 
   private myWorker() {

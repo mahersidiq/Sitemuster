@@ -12,6 +12,8 @@ import {
   distanceMeters,
   type Evidence,
   HOUR,
+  IngestOperationsResponseSchema,
+  type OperationResult,
   iso,
   type ItemResult,
   type LocationTraceFixture,
@@ -30,8 +32,8 @@ import {
 } from '@sitemuster/shared';
 
 import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 
-import { verifyDynamicBadge } from '../../../supabase/functions/_shared/badge-core';
 import {
   developmentBadgeKey,
   encryptBadgeSecret,
@@ -40,12 +42,18 @@ import {
   type DeviceAuthResult,
   handleIngest,
 } from '../../../supabase/functions/_shared/ingest-core';
+import {
+  handleOperations,
+  type OperationsDeps,
+  type StoredReceipt,
+} from '../../../supabase/functions/_shared/operations-core';
 import type { Eligibility, ServerBackend } from './backend';
 
 /**
  * LocationTraceReplayHarness (docs/spec/10-testing.md). Replays one fixture against the production
- * attendance code: the SDK-record normalizer, the badge verifier, the pure engine, the reconciler
- * and a server backend (memory or the real database). The phone, kiosks and foreman are simulated
+ * attendance code: the location ingest handler, the operations handler (kiosk, foreman, manual,
+ * visitor — Milestone 08), the pure engine, the reconciler and a server backend (memory or the
+ * real database). The phone, kiosks and foreman are simulated
  * from the spec (native queue, privacy egress gate, region budget, credentials, offline outbox);
  * their real native behaviour is a physical-device test (NOT_EXECUTED_PHYSICAL_DEVICE).
  * Time and randomness are frozen per fixture: no real clocks, no sleeps.
@@ -200,7 +208,11 @@ export class ReplayHarness {
     { workerId: string; active: boolean; ciphertext: Uint8Array }
   >();
   private readonly redemptions = new Map<string, string>();
-  private readonly outboxReceipts = new Map<string, ItemResult>();
+  /** ingest-operations receipts (the production handler reads and writes them through deps). */
+  private readonly outboxReceipts = new Map<string, StoredReceipt>();
+  private readonly visitorProjects = new Map<string, string>();
+  private projectStatus = 'ACTIVE';
+  private readonly companyId: string;
   private readonly scanPayloads = new Map<string, string>();
   private readonly results = new Map<string, ItemResult>();
   private readonly sentCoordinates = new Set<string>();
@@ -227,6 +239,7 @@ export class ReplayHarness {
     this.attendantId = this.rng.uuid();
     this.foremanId = this.rng.uuid();
     this.superId = this.rng.uuid();
+    this.companyId = deriveUuid('replay-company', fixture.id);
     this.project = { id: fixture.project.id, bound: true, versions: [], identifiers: new Map() };
   }
 
@@ -645,97 +658,160 @@ export class ReplayHarness {
     for (const result of outcome.values()) this.record(result);
   }
 
+  /**
+   * The production ingest-operations handler, as one signed-in role of the fixture world. Its
+   * permission context mirrors operation_context: the attendant runs the kiosk and visitor desk,
+   * the foreman signs their own company's crew, the superintendent corrects attendance.
+   */
+  private operationsDeps(role: 'ATTENDANT' | 'FOREMAN' | 'SUPER'): OperationsDeps {
+    const actorId =
+      role === 'ATTENDANT' ? this.attendantId : role === 'FOREMAN' ? this.foremanId : this.superId;
+    const own = (projectId: string) => projectId === this.project.id;
+    return {
+      now: () => this.now,
+      badgeKey: this.badgeKey,
+      context: async (projectId) => ({
+        userId: actorId,
+        projectId: own(projectId) ? projectId : null,
+        projectStatus: own(projectId) ? this.projectStatus : null,
+        kiosk: role === 'ATTENDANT' && own(projectId) ? 'ALL' : null,
+        visitors: role === 'ATTENDANT' && own(projectId),
+        correct: role === 'SUPER' && own(projectId),
+        foremanCompanyIds: role === 'FOREMAN' && own(projectId) ? [this.companyId] : [],
+      }),
+      rateLimit: async () => true,
+      receipts: async (uuids) =>
+        uuids.flatMap((id) => {
+          const receipt = this.outboxReceipts.get(id);
+          return receipt ? [receipt] : [];
+        }),
+      recordReceipts: async (_requestId, rows) => {
+        for (const row of rows) {
+          if (this.outboxReceipts.has(row.event_uuid)) continue;
+          this.outboxReceipts.set(row.event_uuid, {
+            eventUuid: row.event_uuid,
+            actorId: row.actor_id,
+            projectId: row.project_id,
+            status: row.status,
+            reason: row.reason,
+            workerId: row.worker_id,
+            children: row.children,
+            review: row.review,
+          });
+        }
+      },
+      kiosk: async (kioskDeviceId) => {
+        const kiosk = [...this.kiosks.values()].find((k) => k.id === kioskDeviceId);
+        return kiosk ? { id: kiosk.id, projectId: this.project.id } : null;
+      },
+      loadBadgeDevice: async (deviceId) => {
+        const device = this.devices.get(deviceId);
+        return device
+          ? { active: device.active, workerId: device.workerId, ciphertext: device.ciphertext }
+          : null;
+      },
+      redeemBadgeStep: async ({ projectId, deviceId, timeStep, eventUuid }) => {
+        const k = `${projectId}|${deviceId}|${timeStep}`;
+        const owner = this.redemptions.get(k);
+        if (owner === undefined) {
+          this.redemptions.set(k, eventUuid);
+          return 'accepted';
+        }
+        return owner === eventUuid ? 'duplicate' : 'replay';
+      },
+      printedBadge: async (hashHex) => {
+        const worker = [...this.workers.values()].find(
+          (w) =>
+            w.printedCode &&
+            bytesToHex(sha256(new TextEncoder().encode(w.printedCode))) === hashHex,
+        );
+        return worker ? { workerId: worker.id, active: true } : null;
+      },
+      workers: async (projectId, ids) =>
+        ids.map((id) => {
+          const sim = [...this.workers.values()].find((w) => w.id === id);
+          const enrolled = !!sim && own(projectId);
+          return {
+            workerId: id,
+            enrolled,
+            approved: enrolled && sim.eligibility.enrollment_status === 'APPROVED',
+            eligible: enrolled && this.eligibilityOf(sim).eligible,
+            companyId: enrolled ? this.companyId : null,
+          };
+        }),
+      registerVisitor: async ({ projectId, visitorId }) => {
+        const owner = this.visitorProjects.get(visitorId);
+        if (owner && owner !== projectId) return 'VISITOR_ID_CONFLICT';
+        this.visitorProjects.set(visitorId, projectId);
+        return 'ok';
+      },
+      applyVisitor: (input) =>
+        this.backend.visitorEvent({
+          eventUuid: input.eventUuid,
+          projectId: input.projectId,
+          visitorKey: input.visitorKey,
+          direction: input.direction,
+          observedAt: input.observedAt,
+        }),
+      store: this.backend.store,
+    };
+  }
+
+  /** Posts operations through the production handler; null when nothing was acknowledged. */
+  private async operate(
+    role: 'ATTENDANT' | 'FOREMAN' | 'SUPER',
+    events: Record<string, unknown>[],
+    clockOffsetMs = 0,
+  ): Promise<OperationResult[] | null> {
+    const response = await handleOperations(
+      new Request('https://replay.test/functions/v1/ingest-operations', {
+        method: 'POST',
+        headers: { authorization: 'Bearer replay', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          schema_version: 1,
+          client_sent_at: iso(this.now + clockOffsetMs),
+          events,
+        }),
+      }),
+      this.operationsDeps(role),
+    );
+    if (response.status !== 200) return null;
+    const results = IngestOperationsResponseSchema.parse(await response.json()).results;
+    for (const result of results) {
+      this.record({
+        eventUuid: result.event_uuid,
+        status: result.status,
+        reason: result.reason,
+        review: result.review ?? false,
+      });
+      for (const child of result.children ?? []) {
+        this.record({
+          eventUuid: child.child_event_uuid,
+          status: child.status,
+          reason: child.reason,
+          review: false,
+        });
+      }
+    }
+    return results;
+  }
+
   private async syncKiosk(kiosk: KioskSim): Promise<void> {
     if (!kiosk.online || kiosk.outbox.length === 0) return;
-    const receivedAt = this.now;
-    const clientSentAt = this.now + kiosk.offsetMs;
-    // The kiosk clock offset is measured from the request (client send time vs server receipt).
-    const offset = clientSentAt - receivedAt;
-    const skewed = Math.abs(offset) > TRACKING_DEFAULTS.max_device_clock_skew_seconds * 1000;
-    const evidence: Evidence[] = [];
-    for (const op of kiosk.outbox) {
-      const previous = this.outboxReceipts.get(op.uuid);
-      if (previous) {
-        this.record({ eventUuid: op.uuid, status: 'duplicate', reason: null, review: false });
-        continue;
-      }
-      let workerId: string | null = null;
-      let rejection: string | null = null;
-      if (op.kind === 'DYNAMIC_APP') {
-        const verdict = await verifyDynamicBadge(
-          // A wrong kiosk clock is corrected by the measured offset before the ±1 step check; the
-          // scan is then recorded for review only (never silently verified, decision #84).
-          {
-            payload: op.payload,
-            projectId: this.project.id,
-            observedAt: new Date(ms(op.observedAt) - (skewed ? offset : 0)),
-          },
-          {
-            key: this.badgeKey,
-            loadDevice: async (deviceId) => {
-              const device = this.devices.get(deviceId);
-              return device
-                ? {
-                    active: device.active,
-                    workerId: device.workerId,
-                    ciphertext: device.ciphertext,
-                  }
-                : null;
-            },
-            isApproved: async (worker) => {
-              const sim = [...this.workers.values()].find((w) => w.id === worker);
-              return !!sim && this.eligibilityOf(sim).eligible;
-            },
-            redeem: async (projectId, deviceId, step) => {
-              const k = `${projectId}|${deviceId}|${step}`;
-              const owner = this.redemptions.get(k);
-              if (owner === undefined) {
-                this.redemptions.set(k, op.uuid);
-                return 'accepted';
-              }
-              return owner === op.uuid ? 'duplicate' : 'replay';
-            },
-          },
-        );
-        if (verdict.status === 'rejected') rejection = verdict.reason;
-        else workerId = verdict.workerId;
-      } else {
-        const worker = [...this.workers.values()].find((w) => w.printedCode === op.payload);
-        if (worker) workerId = worker.id;
-        else rejection = 'BADGE_INVALID';
-      }
-      if (rejection || !workerId) {
-        const result: ItemResult = {
-          eventUuid: op.uuid,
-          status: 'rejected',
-          reason: rejection ?? 'BADGE_INVALID',
-          review: false,
-        };
-        this.outboxReceipts.set(op.uuid, result);
-        this.record(result);
-        continue;
-      }
-      evidence.push({
-        kind: 'WITNESSED',
-        eventUuid: op.uuid,
-        projectId: this.project.id,
-        workerId,
-        observedAt: op.observedAt,
-        receivedAt: iso(receivedAt),
-        source: op.kind === 'DYNAMIC_APP' ? 'KIOSK_DYNAMIC_BADGE' : 'KIOSK_PRINTED_BADGE',
+    const events = kiosk.outbox.map((op) => ({
+      event_uuid: op.uuid,
+      project_id: this.project.id,
+      operation_type: op.direction === 'ENTRY' ? 'KIOSK_ENTRY' : 'KIOSK_EXIT',
+      observed_at: op.observedAt,
+      payload: {
+        badge_payload: op.payload,
+        badge_kind: op.kind,
+        kiosk_device_id: kiosk.id,
         direction: op.direction,
-        actorId: this.attendantId,
-        kioskDeviceId: kiosk.id,
-        method: null,
-        reviewReason: skewed ? 'KIOSK_CLOCK_SKEW' : null,
-      });
-    }
-    kiosk.outbox = [];
-    const outcome = await reconcile(this.backend.store, evidence, iso(receivedAt));
-    for (const [uuid, result] of outcome) {
-      this.record(result);
-      this.outboxReceipts.set(uuid, result);
-    }
+      },
+    }));
+    // The kiosk clock offset travels as the request's send time (decision #84).
+    if ((await this.operate('ATTENDANT', events, kiosk.offsetMs)) !== null) kiosk.outbox = [];
   }
 
   /** Keeps the first terminal result per event; later duplicates are only counted. */
@@ -1053,39 +1129,22 @@ export class ReplayHarness {
         for (const kiosk of this.kiosks.values()) await this.syncKiosk(kiosk);
         break;
       case 'FOREMAN_ENTRY': {
-        const opUuid = uuid();
         const keys = input.workers ?? ['A'];
-        if (this.outboxReceipts.has(opUuid)) {
-          this.record({ eventUuid: opUuid, status: 'duplicate', reason: null, review: false });
-          break;
-        }
-        const evidence: Evidence[] = keys.map((key) => {
-          const worker = this.workerByKey(key);
-          return {
-            kind: 'WITNESSED' as const,
-            eventUuid:
-              keys.length === 1 ? opUuid : deriveUuid('foreman-member', `${opUuid}|${worker.id}`),
-            projectId: this.project.id,
-            workerId: worker.id,
-            observedAt: input.at_utc,
-            receivedAt: input.at_utc,
-            source: 'FOREMAN' as const,
-            direction: input.direction,
-            actorId: this.foremanId,
-            kioskDeviceId: null,
-            method: input.method ?? 'PHYSICAL_CONFIRMATION',
-            reviewReason: null,
-          };
-        });
-        await this.applyServer(evidence);
-        const summary: ItemResult = {
-          eventUuid: opUuid,
-          status: 'accepted',
-          reason: null,
-          review: false,
-        };
-        this.outboxReceipts.set(opUuid, summary);
-        this.record(summary);
+        await this.operate('FOREMAN', [
+          {
+            event_uuid: uuid(),
+            project_id: this.project.id,
+            operation_type:
+              input.direction === 'ENTRY' ? 'FOREMAN_BULK_ENTRY' : 'FOREMAN_BULK_EXIT',
+            observed_at: input.at_utc,
+            payload: {
+              subcontractor_id: this.companyId,
+              worker_ids: keys.map((key) => this.workerByKey(key).id),
+              direction: input.direction,
+              verification_method: input.method ?? 'PHYSICAL_CONFIRMATION',
+            },
+          },
+        ]);
         break;
       }
       case 'KIOSK_SCAN': {
@@ -1126,19 +1185,22 @@ export class ReplayHarness {
         break;
       case 'MANUAL_ATTENDANCE': {
         const worker = this.workerByKey(input.worker);
-        await this.applyServer([
+        const sessionId = await this.sessionRef(worker, input.session);
+        await this.operate('SUPER', [
           {
-            kind: 'MANUAL',
-            eventUuid: uuid(),
-            projectId: this.project.id,
-            workerId: worker.id,
-            observedAt: input.at_utc,
-            receivedAt: input.at_utc,
-            actorId: this.superId,
-            sessionId: await this.sessionRef(worker, input.session),
-            correctedStartAt: input.corrected_start_utc ?? null,
-            correctedEndAt: input.corrected_end_utc ?? null,
-            reason: input.reason,
+            event_uuid: uuid(),
+            project_id: this.project.id,
+            operation_type: 'MANUAL_ATTENDANCE_CORRECTION',
+            observed_at: input.at_utc,
+            payload: {
+              worker_id: worker.id,
+              ...(sessionId ? { session_id: sessionId } : {}),
+              ...(input.corrected_start_utc
+                ? { corrected_start_at: input.corrected_start_utc }
+                : {}),
+              ...(input.corrected_end_utc ? { corrected_end_at: input.corrected_end_utc } : {}),
+              reason: input.reason,
+            },
           },
         ]);
         break;
@@ -1161,18 +1223,26 @@ export class ReplayHarness {
         break;
       }
       case 'VISITOR': {
-        const result = await this.backend.visitorEvent({
-          eventUuid: uuid(),
-          projectId: this.project.id,
-          visitorKey: input.visitor,
-          direction: input.direction,
-          observedAt: input.at_utc,
-        });
-        this.record(result);
+        await this.operate('ATTENDANT', [
+          {
+            event_uuid: uuid(),
+            project_id: this.project.id,
+            operation_type: input.direction === 'ENTRY' ? 'VISITOR_ENTRY' : 'VISITOR_EXIT',
+            observed_at: input.at_utc,
+            payload: {
+              visitor_id: deriveUuid('replay-visitor', `${this.fixture.id}|${input.visitor}`),
+              name: input.visitor,
+              host_user_id: this.superId,
+              purpose: 'Replay visit',
+              direction: input.direction,
+            },
+          },
+        ]);
         break;
       }
       case 'PROJECT_STATUS_CHANGE': {
         await this.backend.setProjectStatus(this.project.id, input.status);
+        this.projectStatus = input.status;
         if (input.status !== 'ACTIVE') {
           const snapshot = await this.backend.snapshot(this.project.id);
           await this.applyServer(

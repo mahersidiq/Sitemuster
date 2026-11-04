@@ -180,17 +180,33 @@ describe('OperationEventSchema', () => {
 
 describe('IngestOperationsRequestSchema', () => {
   it('accepts 1–100 operations and rejects 0 or 101', () => {
-    expect(
-      IngestOperationsRequestSchema.safeParse({ schema_version: 1, events: [kioskEntry] }).success,
-    ).toBe(true);
-    expect(IngestOperationsRequestSchema.safeParse({ schema_version: 1, events: [] }).success).toBe(
-      false,
-    );
+    const sent = '2026-11-03T12:00:05Z';
     expect(
       IngestOperationsRequestSchema.safeParse({
         schema_version: 1,
+        client_sent_at: sent,
+        events: [kioskEntry],
+      }).success,
+    ).toBe(true);
+    expect(
+      IngestOperationsRequestSchema.safeParse({
+        schema_version: 1,
+        client_sent_at: sent,
+        events: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      IngestOperationsRequestSchema.safeParse({
+        schema_version: 1,
+        client_sent_at: sent,
         events: Array.from({ length: 101 }, () => kioskEntry),
       }).success,
+    ).toBe(false);
+  });
+
+  it('requires the send time that measures the kiosk clock (decision #84)', () => {
+    expect(
+      IngestOperationsRequestSchema.safeParse({ schema_version: 1, events: [kioskEntry] }).success,
     ).toBe(false);
   });
 });

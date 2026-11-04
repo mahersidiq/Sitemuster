@@ -434,6 +434,10 @@ verify_jwt = false
 [functions.device-renew]
 verify_jwt = false
 
+# Kiosk, foreman, manual and visitor operations: the caller's Supabase JWT is required (spec 11).
+[functions.ingest-operations]
+verify_jwt = true
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false
