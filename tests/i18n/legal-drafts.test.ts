@@ -28,3 +28,28 @@ describe.each(['EN', 'ES'])('WORKER_LOCATION_DISCLOSURE_%s_V1 draft', (lang) => 
     );
   });
 });
+
+// Milestone 12: the muster safety limitations and the account deletion notice.
+const M12 = readRepoFile('supabase/migrations/20261111100100_m12_security_privacy.sql');
+
+describe.each([
+  'MUSTER_SAFETY_LIMITATIONS_EN_V1',
+  'MUSTER_SAFETY_LIMITATIONS_ES_V1',
+  'ACCOUNT_DELETION_RETENTION_EN_V1',
+  'ACCOUNT_DELETION_RETENTION_ES_V1',
+])('%s draft', (documentId) => {
+  const file = `docs/legal/drafts/${documentId}.md`;
+  const text = readRepoFile(file).replace(/\n+$/, '');
+
+  it('is stored verbatim by the Milestone 12 migration and marked as a draft', () => {
+    expect(M12).toContain(`${QUOTE}${text}${QUOTE}`);
+    expect(text.split('\n')[0]).toMatch(/^(DRAFT|BORRADOR) — /);
+  });
+
+  it('has its stored-content hash recorded in the review registry', () => {
+    const hash = createHash('sha256').update(text, 'utf8').digest('hex');
+    expect(REVIEW).toContain(
+      `| \`${documentId}\` | \`${file}\` | \`${hash}\` | \`DRAFT_REQUIRES_HUMAN_REVIEW\` |`,
+    );
+  });
+});
