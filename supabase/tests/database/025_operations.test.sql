@@ -47,7 +47,8 @@ end $$;
 
 select is(pg_temp.ctx('t.u_a_attendant', 't.p_a1') - 'user_id',
   jsonb_build_object('project_id', current_setting('t.p_a1'), 'project_status', 'ACTIVE', 'kiosk', 'ALL',
-                     'visitors', true, 'correct', false, 'foreman_company_ids', '[]'::jsonb),
+                     'visitors', true, 'correct', false, 'foreman_company_ids', '[]'::jsonb,
+                     'muster_command', false, 'muster_worker_id', null),
   'an assigned attendant with MFA runs the kiosk for everyone and the visitor desk, but cannot correct attendance');
 select is(pg_temp.ctx('t.u_a_attendant', 't.p_a1', 'aal1') ->> 'kiosk', null,
   'without MFA the attendant gets no kiosk permission');
@@ -60,11 +61,13 @@ select is(pg_temp.ctx('t.u_a_safety', 't.p_a1') -> 'correct', 'false'::jsonb,
 select is(pg_temp.ctx('t.u_foreman_a', 't.p_a1', 'aal1') - 'user_id',
   jsonb_build_object('project_id', current_setting('t.p_a1'), 'project_status', 'ACTIVE', 'kiosk', 'OWN_CREW',
                      'visitors', false, 'correct', false,
-                     'foreman_company_ids', jsonb_build_array(current_setting('t.c_a'))),
+                     'foreman_company_ids', jsonb_build_array(current_setting('t.c_a')),
+                     'muster_command', false, 'muster_worker_id', null),
   'a foreman with a kiosk grant scans only their own crew, never visitors, and sees only their own company');
 select is(pg_temp.ctx('t.u_foreman_b', 't.p_a1', 'aal1') - 'user_id',
   jsonb_build_object('project_id', current_setting('t.p_a1'), 'project_status', 'ACTIVE', 'kiosk', null,
-                     'visitors', false, 'correct', false, 'foreman_company_ids', '[]'::jsonb),
+                     'visitors', false, 'correct', false, 'foreman_company_ids', '[]'::jsonb,
+                     'muster_command', false, 'muster_worker_id', null),
   'a foreman of another company has no permission on project A');
 select is(pg_temp.ctx('t.u_b_super', 't.p_a1') -> 'correct', 'false'::jsonb, 'GC B staff cannot correct project A attendance');
 select is(pg_temp.ctx('t.u_b_super', 't.p_a1') ->> 'kiosk', null, 'GC B staff cannot run a project A kiosk');

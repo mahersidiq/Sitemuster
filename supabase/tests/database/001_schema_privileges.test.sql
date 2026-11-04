@@ -11,7 +11,7 @@ select tables_are('public', array[
   'kiosk_devices', 'worker_badges', 'latest_onsite_positions', 'attendance_events', 'presence_states',
   'attendance_sessions', 'attendance_corrections', 'visitor_records', 'visitor_visits',
   'daily_company_reports', 'report_confirmations', 'muster_events', 'muster_snapshot_members',
-  'muster_responses'
+  'muster_responses', 'muster_reports', 'muster_amendments'
 ], 'public schema holds exactly the client-readable tables');
 
 select ok(
@@ -103,21 +103,24 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['accept_invitation', 'address_lookup_allowed', 'attendance_counts', 'bulk_approve_enrollments', 'bulk_confirm_employer',
-        'check_project_site', 'close_orientation_session', 'complete_orientation', 'correction_requests',
+  array['accept_invitation', 'address_lookup_allowed', 'amend_muster', 'attendance_counts', 'bulk_approve_enrollments', 'bulk_confirm_employer',
+        'check_project_site', 'close_muster', 'close_orientation_session', 'complete_orientation', 'correction_requests',
         'create_managed_worker',
-        'create_organization', 'create_project', 'decide_enrollment', 'foreman_crew', 'foreman_kiosk_grants',
+        'create_organization', 'create_project', 'decide_enrollment', 'foreman_active_musters', 'foreman_crew', 'foreman_kiosk_grants',
+        'foreman_muster',
         'get_my_access',
         'get_my_emergency_contact', 'get_my_profile', 'get_orientation_session', 'get_project_detail',
         'get_project_notice',
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
-        'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_attendance', 'my_enrollments',
+        'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'muster_board', 'muster_report',
+        'my_active_musters', 'my_attendance', 'my_enrollments',
         'my_foreman_projects', 'my_pending_reports', 'my_tracking_plan', 'open_visitor_visits', 'operation_context',
-        'preview_orientation', 'project_dashboard', 'project_map', 'project_tracking_health', 'register_kiosk',
+        'preview_orientation', 'project_dashboard', 'project_map', 'project_musters', 'project_tracking_health', 'register_kiosk',
+        'register_push_token',
         'reject_correction_request', 'remove_project_staff', 'report_context', 'report_list',
         'request_attendance_correction',
-        'revoke_invitation', 'revoke_kiosk', 'revoke_my_device', 'revoke_printed_badge',
-        'set_foreman_kiosk_grant', 'set_my_language', 'set_project_status', 'start_orientation_session',
+        'revoke_invitation', 'revoke_kiosk', 'revoke_my_device', 'revoke_my_push_tokens', 'revoke_printed_badge',
+        'set_foreman_kiosk_grant', 'set_my_language', 'set_project_status', 'start_muster', 'start_orientation_session',
         'update_my_emergency_contact',
         'update_project_config', 'worker_attendance_sessions', 'workforce_roster'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
@@ -132,14 +135,15 @@ select is(
   array['edge_activate_device', 'edge_attendance_commit', 'edge_attendance_load', 'edge_attendance_sweep',
         'edge_badge_device', 'edge_confirm_report', 'edge_correction_request', 'edge_device_authenticate',
         'edge_device_rate_limit', 'edge_device_renew',
-        'edge_insert_location_receipts', 'edge_kiosk_device', 'edge_location_receipt_lookup',
+        'edge_insert_location_receipts', 'edge_kiosk_device', 'edge_location_receipt_lookup', 'edge_muster_member',
+        'edge_muster_push_targets', 'edge_muster_record_push', 'edge_muster_respond',
         'edge_operation_rate_limit', 'edge_operation_receipts', 'edge_operation_workers',
         'edge_printed_badge_worker', 'edge_record_location_terminals', 'edge_record_operation_receipts',
         'edge_redeem_badge_step', 'edge_reissue_report', 'edge_report_deadline_sweep', 'edge_report_gaps', 'edge_report_inputs',
         'edge_report_ref', 'edge_store_reports', 'edge_visitor_commit', 'edge_visitor_context', 'edge_visitor_load',
         'edge_visitor_register',
         'edge_worker_open_session_projects'],
-  'device activation and credentials, badge redemption, location and operations ingestion, the attendance reconciler and report storage and answers are callable only by the Edge Functions (service_role)'
+  'device activation and credentials, badge redemption, location and operations ingestion, the attendance reconciler and report storage and answers, muster responses and push records are callable only by the Edge Functions (service_role)'
 );
 
 select is(
