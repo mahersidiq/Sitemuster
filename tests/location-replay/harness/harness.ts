@@ -1,14 +1,14 @@
 import {
   type AttendanceConfig,
+  base64UrlDecode,
+  base64UrlEncode,
   buildBadgePayload,
-  combineResults,
   configAt,
   configFromSettings,
   daySummary,
   DAY,
   DEFAULT_WORK_WINDOWS,
   deriveUuid,
-  type DeviceContext,
   distanceMeters,
   type Evidence,
   HOUR,
@@ -16,7 +16,6 @@ import {
   type ItemResult,
   type LocationTraceFixture,
   ms,
-  normalizeSdkRecord,
   projectCounts,
   type ProjectCounts,
   reconcile,
@@ -30,11 +29,17 @@ import {
   addDays,
 } from '@sitemuster/shared';
 
+import { sha256 } from '@noble/hashes/sha2.js';
+
 import { verifyDynamicBadge } from '../../../supabase/functions/_shared/badge-core';
 import {
   developmentBadgeKey,
   encryptBadgeSecret,
 } from '../../../supabase/functions/_shared/badge-crypto';
+import {
+  type DeviceAuthResult,
+  handleIngest,
+} from '../../../supabase/functions/_shared/ingest-core';
 import type { Eligibility, ServerBackend } from './backend';
 
 /**
@@ -52,6 +57,9 @@ const RENEW_BEFORE = TRACKING_DEFAULTS.device_upload_renew_before_expiry_days * 
 const EXPIRING_FLAG = TRACKING_DEFAULTS.credential_expiring_roster_flag_days * DAY;
 const OVERLAP = TRACKING_DEFAULTS.device_upload_rotation_overlap_hours * HOUR;
 const MAX_BATCH = TRACKING_DEFAULTS.location_ingest_max_batch_events;
+
+const hexOf = (bytes: Uint8Array): string =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 
 /** Deterministic PRNG (mulberry32) seeded from the fixture id. */
 class Rng {
@@ -186,6 +194,7 @@ export class ReplayHarness {
     string,
     { deviceId: string; expiresAt: number; revokedAt: number | null }
   >();
+  private readonly tokenByHash = new Map<string, string>();
   private readonly devices = new Map<
     string,
     { workerId: string; active: boolean; ciphertext: Uint8Array }
@@ -418,7 +427,8 @@ export class ReplayHarness {
   }
 
   private issueToken(deviceId: string, issuedAt: number): string {
-    const token = [...this.rng.bytes(32)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const token = base64UrlEncode(this.rng.bytes(32));
+    this.tokenByHash.set(hexOf(sha256(base64UrlDecode(token))), token);
     this.credentials.set(token, {
       deviceId,
       expiresAt: issuedAt + CREDENTIAL_LIFETIME,
@@ -532,6 +542,7 @@ export class ReplayHarness {
         phone.uploadBlocked = true;
         return;
       }
+      if (response.status !== 200) return; // 429 / 503: the SDK keeps the batch and retries
       phone.queue = phone.queue.filter((record) => !batch.includes(record));
     }
   }
@@ -550,61 +561,82 @@ export class ReplayHarness {
   // Server side (production modules)
   // -------------------------------------------------------------------------------------------
 
-  private deviceContext(deviceId: string, workerId: string): DeviceContext {
-    return {
-      deviceId,
-      workerId,
-      fences: this.boundProjects().flatMap((project) =>
-        project.versions.map((config) => ({
+  /**
+   * Fences the server derives for this device (production rule, decision #89): the CURRENT
+   * version of every bound project, plus the version of a still-open session.
+   */
+  private async fences(workerId: string) {
+    const out = [];
+    for (const project of this.boundProjects()) {
+      const current = this.currentConfig(project);
+      const track = await this.backend.store.load(project.id, workerId, [], []);
+      const open = track.state.current;
+      const versions = new Set([current.configVersionId]);
+      if (open && ['OPEN', 'PENDING_APPROVAL', 'UNRESOLVED'].includes(open.status)) {
+        versions.add(open.configVersionId);
+      }
+      for (const config of project.versions.filter((c) => versions.has(c.configVersionId))) {
+        out.push({
           projectId: project.id,
           configVersionId: config.configVersionId,
           identifier: project.identifiers.get(config.configVersionId) as string,
           center: config.center,
           nativeRadiusM: config.radiusM + config.exitHysteresisM,
-        })),
-      ),
-    };
+        });
+      }
+    }
+    return out;
   }
 
+  /** One native HTTP upload through the PRODUCTION ingest handler (ingest-location-batch). */
   private async ingest(
     token: string,
     batch: Record<string, unknown>[],
   ): Promise<{ status: number }> {
-    const credential = this.credentials.get(token);
-    if (!credential || credential.revokedAt !== null || credential.expiresAt <= this.now)
-      return { status: 401 };
-    const device = this.devices.get(credential.deviceId);
-    if (!device?.active) return { status: 401 };
-    const receivedAt = iso(this.now);
-    const context = this.deviceContext(credential.deviceId, device.workerId);
-    const fresh = batch.filter((record) => {
-      const uuid = String(record.uuid);
-      if (this.results.has(uuid)) {
-        this.record({ eventUuid: uuid, status: 'duplicate', reason: null, review: false });
-        return false;
-      }
-      return true;
-    });
-    const normalized = fresh.map((record) => normalizeSdkRecord(context, record, receivedAt));
-    const terminals = normalized.flatMap((n) =>
-      n.kind === 'terminal' && n.receipt ? [n.receipt] : [],
-    );
-    if (terminals.length > 0) await this.backend.insertReceipts(terminals);
-    const evidence = normalized.flatMap((n) => (n.kind === 'evidence' ? n.evidence : []));
-    const outcome = await reconcile(this.backend.store, evidence, receivedAt);
-    for (const n of normalized) {
-      if (n.kind === 'terminal') {
-        if (n.result) this.record(n.result);
-      } else {
-        this.record(
-          combineResults(
-            n.sourceUuid,
-            n.evidence.map((e) => outcome.get(e.eventUuid)).filter((r): r is ItemResult => !!r),
+    const response = await handleIngest(
+      new Request('http://replay.invalid/functions/v1/ingest-location-batch', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ locations: batch }),
+      }),
+      {
+        now: () => iso(this.now),
+        requestId: () => this.rng.uuid(),
+        authenticate: async (hash): Promise<DeviceAuthResult> => {
+          const presented = this.tokenByHash.get(hexOf(hash));
+          const credential = presented ? this.credentials.get(presented) : undefined;
+          if (!credential) return { status: 'INVALID' };
+          const device = this.devices.get(credential.deviceId);
+          if (credential.revokedAt !== null || !device?.active) return { status: 'REVOKED' };
+          if (credential.expiresAt <= this.now) return { status: 'EXPIRED' };
+          return {
+            status: 'OK',
+            device: {
+              deviceId: credential.deviceId,
+              workerId: device.workerId,
+              coordinatesAllowed: true,
+              fences: await this.fences(device.workerId),
+            },
+          };
+        },
+        rateLimit: async () => true,
+        receipts: async (deviceId, uuids) => {
+          const owners = await this.backend.receiptOwners(uuids);
+          return new Map([...owners].map(([uuid, owner]) => [uuid, owner === deviceId]));
+        },
+        recordTerminals: (requestId, rows, quarantine) =>
+          this.backend.recordTerminals(
+            requestId,
+            rows,
+            quarantine as unknown as readonly Record<string, unknown>[],
           ),
-        );
-      }
-    }
-    return { status: 200 };
+        store: this.backend.store,
+        onResults: (results) => {
+          for (const result of results) this.record(result);
+        },
+      },
+    );
+    return { status: response.status };
   }
 
   private async applyServer(evidence: Evidence[]): Promise<void> {

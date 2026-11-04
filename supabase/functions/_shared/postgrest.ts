@@ -72,3 +72,15 @@ export async function currentUserId(
     return null;
   }
 }
+
+/** A service-role RPC caller that throws on any failure (callers answer 503, never fake success). */
+export function serviceRpc(
+  env: PostgrestEnv,
+  fetchImpl: typeof fetch = fetch,
+): (fn: string, args: Record<string, unknown>) => Promise<unknown> {
+  return async (fn, args) => {
+    const result = await callRpc(env, fn, args, 'service', fetchImpl);
+    if (!result.ok) throw new Error(`RPC_FAILED:${fn}:${result.status}:${result.code ?? ''}`);
+    return result.data;
+  };
+}

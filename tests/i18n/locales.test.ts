@@ -7,6 +7,8 @@ import { compareDictionaries, flatten, type Dictionary } from './parity';
 /** Keys whose value is intentionally identical in both languages (proper nouns / endonyms). */
 const SAME_IN_BOTH = new Set([
   'app.name',
+  // Android foreground-service notification title: the product name.
+  'tracking.notification.title',
   'language.english',
   'language.spanish',
   // Number-format example, language neutral.

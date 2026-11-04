@@ -233,8 +233,11 @@ begin
   insert into public.device_installations (id, worker_id, platform, hardware_installation_hash, active, deactivated_at) values
     (tests.id('d_a1_old'), tests.id('w_a1'), 'ANDROID', repeat('a', 64), false, t - interval '2 days'),
     (tests.id('d_a1'), tests.id('w_a1'), 'IOS', repeat('b', 64), true, null);
+  -- Since Milestone 07 the binding is derived by trigger (decision #89); keep the explicit row for
+  -- earlier milestones' tests without duplicating it.
   insert into public.device_project_bindings (device_id, project_id, enrollment_id, config_version_id)
-  values (tests.id('d_a1'), tests.id('p_a1'), tests.id('e_a1'), tests.id('cv_a1'));
+  values (tests.id('d_a1'), tests.id('p_a1'), tests.id('e_a1'), tests.id('cv_a1'))
+  on conflict (device_id, project_id) where revoked_at is null do nothing;
 
   insert into public.kiosk_devices (id, project_id, assigned_operator_user_id, device_public_id)
   values (tests.id('k_a'), tests.id('p_a1'), tests.id('u_a_attendant'), 'kiosk-alpha-0001');

@@ -50,6 +50,16 @@ export async function activateThisDevice(
   return device;
 }
 
+export async function updateUploadToken(
+  userId: string,
+  uploadToken: string,
+  uploadExpiresAt: string,
+): Promise<StoredDevice | null> {
+  if (!device || device.userId !== userId) return null;
+  device = { ...device, uploadToken, uploadExpiresAt };
+  return device;
+}
+
 export async function saveBadgeProjects(next: BadgeProject[]): Promise<void> {
   projects = next;
 }

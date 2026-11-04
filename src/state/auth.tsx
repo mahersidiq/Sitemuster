@@ -155,6 +155,15 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
   const signOut = useCallback(async () => {
     if (!backend) return;
     generation.current += 1;
+    // Revoke this worker's phone server-side while the session is still valid (docs/spec/03:
+    // revoke on logout). Offline sign-out still wipes everything on the phone; the server-side
+    // secret then ends at its expiry or at the next activation.
+    await backend.api?.revokeMyDevice().catch((error: unknown) => {
+      console.warn(
+        'auth: phone not revoked on the server yet',
+        error instanceof Error ? error.message : 'unknown',
+      );
+    });
     await backend.gateway.signOut();
     await backend.storage.wipe();
     // The badge secret and upload token belong to this worker only (decision #74).

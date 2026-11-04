@@ -124,3 +124,28 @@ export const DeviceActivateResponseSchema = z.strictObject({
   upload_expires_at: z.string(),
 });
 export type DeviceActivateResponse = z.infer<typeof DeviceActivateResponseSchema>;
+
+/**
+ * device-renew (docs/spec/11, decision #44): rotates the 30-day upload credential. Called by the
+ * native SDK's own authorization refresh (FORM POST with `refresh_token`, headless) or by the app
+ * (JSON, with the current secret or the signed-in worker session). The response repeats the new
+ * secret under the names the SDK looks for (`access_token`, `refresh_token`, `expires` = the epoch
+ * second at which the next renewal is due) next to the SiteMuster fields.
+ */
+export const DeviceRenewRequestSchema = z.strictObject({
+  app_version: z.string().min(1).max(32).optional(),
+});
+export type DeviceRenewRequest = z.infer<typeof DeviceRenewRequestSchema>;
+
+export const DeviceRenewResponseSchema = z.strictObject({
+  schema_version: z.literal(1),
+  request_id: Uuid,
+  device_id: Uuid,
+  upload_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  upload_expires_at: z.string(),
+  renew_after: z.string(),
+  access_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  refresh_token: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  expires: z.number().int().positive(),
+});
+export type DeviceRenewResponse = z.infer<typeof DeviceRenewResponseSchema>;

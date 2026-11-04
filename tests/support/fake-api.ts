@@ -5,6 +5,7 @@ import {
   TRACKING_DEFAULTS,
   type DeviceActivateRequest,
   type DeviceActivateResponse,
+  type DeviceRenewResponse,
   type Locale,
   type ProjectStaffRole,
   type ProjectStatus,
@@ -38,6 +39,7 @@ import {
   type SiteMusterApi,
 } from '../../src/api/types';
 import { isValidTimeZone } from '../../src/projects/format';
+import type { TrackingPlan } from '../../src/tracking/plan';
 import { NEXT_STATUSES, STATUSES_NEEDING_REASON } from '../../src/projects/lifecycle';
 
 /**
@@ -163,6 +165,7 @@ export class FakeWorld {
   readonly joinPasses: Map<string, { sessionId: string; userId: string }>;
   readonly calls: string[] = [];
   device: DeviceActivateResponse | null = null;
+  trackingPlan: TrackingPlan | null = null;
 
   constructor(
     public access: Access,
@@ -1105,5 +1108,41 @@ export class FakeSiteMusterApi implements SiteMusterApi {
       upload_expires_at: '2026-12-04T00:00:00Z',
     };
     return this.world.device;
+  }
+
+  async getTrackingPlan(_appVersion: string): Promise<TrackingPlan> {
+    this.before('getTrackingPlan');
+    if (!this.myWorker()) throw new ApiError('WORKER_PROFILE_REQUIRED');
+    return (
+      this.world.trackingPlan ?? {
+        device_id: this.world.device?.device_id ?? null,
+        platform: this.world.device ? 'IOS' : null,
+        credential: { status: this.world.device ? 'OK' : 'NONE', expires_at: null },
+        coordinates_allowed: true,
+        projects: [],
+        not_monitored: [],
+      }
+    );
+  }
+
+  async revokeMyDevice(): Promise<void> {
+    this.before('revokeMyDevice');
+    this.world.device = null;
+  }
+
+  async renewDeviceWithSession(_appVersion: string): Promise<DeviceRenewResponse> {
+    this.before('renewDeviceWithSession');
+    if (!this.world.device) throw new ApiError('NO_DEVICE');
+    return {
+      schema_version: 1,
+      request_id: randomUUID(),
+      device_id: this.world.device.device_id,
+      upload_token: FAKE_BADGE_SECRET,
+      upload_expires_at: '2026-12-04T00:00:00Z',
+      renew_after: '2026-11-27T00:00:00Z',
+      access_token: FAKE_BADGE_SECRET,
+      refresh_token: FAKE_BADGE_SECRET,
+      expires: Math.floor(Date.parse('2026-11-27T00:00:00Z') / 1000),
+    };
   }
 }

@@ -54,7 +54,8 @@ fi
   EXPO_PUBLIC_SUPABASE_ANON_KEY="${ANON_KEY:-}" npx expo export --platform web --output-dir dist >/dev/null)
 
 port=8765
-(cd "$scratch/dist" && python3 -m http.server "$port" >/dev/null 2>&1) &
+# exec: the background PID is the server itself, so the EXIT trap really stops it.
+(cd "$scratch/dist" && exec python3 -m http.server "$port" >/dev/null 2>&1) &
 server_pid=$!
 trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 sleep 1

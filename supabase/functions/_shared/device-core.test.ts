@@ -82,4 +82,61 @@ describe('device-activate', () => {
       'WORKER_PROFILE_REQUIRED',
     );
   });
+
+  it("flags the worker's active sessions for review when a phone is replaced (decision #27)", async () => {
+    const flagged: unknown[] = [];
+    const { d } = deps({
+      activate: async () => ({
+        ok: true,
+        data: {
+          replaced_device_id: '00000000-0000-4000-8000-0000000000d0',
+          worker_id: '4a000000-0000-4000-8000-0000000000a1',
+          upload_expires_at: '2026-12-04T00:00:00Z',
+        },
+      }),
+      openSessionProjects: async () => ['0a000000-0000-4000-8000-0000000000a1'],
+      flagReplacement: async (evidence) => {
+        flagged.push(...evidence);
+      },
+      now: () => Date.parse('2026-11-04T15:00:00Z'),
+    });
+    const response = await handleDeviceActivate(request(valid), d);
+    expect(response.status).toBe(200);
+    expect(flagged).toEqual([
+      expect.objectContaining({
+        kind: 'MONITORING',
+        change: 'REPLACED',
+        reason: 'DEVICE_REPLACED',
+        projectId: '0a000000-0000-4000-8000-0000000000a1',
+        workerId: '4a000000-0000-4000-8000-0000000000a1',
+        deviceId: DEVICE,
+        observedAt: '2026-11-04T15:00:00Z',
+      }),
+    ]);
+  });
+
+  it('keeps a committed activation successful when the review flag cannot be applied (retried, logged)', async () => {
+    let attempts = 0;
+    const logs: Record<string, unknown>[] = [];
+    const { d } = deps({
+      activate: async () => ({
+        ok: true,
+        data: {
+          replaced_device_id: '00000000-0000-4000-8000-0000000000d0',
+          worker_id: '4a000000-0000-4000-8000-0000000000a1',
+          upload_expires_at: '2026-12-04T00:00:00Z',
+        },
+      }),
+      openSessionProjects: async () => ['0a000000-0000-4000-8000-0000000000a1'],
+      flagReplacement: async () => {
+        attempts += 1;
+        throw new Error('database unavailable');
+      },
+      log: (entry) => logs.push(entry),
+    });
+    const response = await handleDeviceActivate(request(valid), d);
+    expect(response.status).toBe(200);
+    expect(attempts).toBe(3);
+    expect(logs.at(-1)).toMatchObject({ outcome: 'replacement_review_failed' });
+  });
 });

@@ -1,5 +1,8 @@
 {
   "ios": {
-    "NSCameraUsageDescription": "SiteMuster usa la cámara solo para escanear los códigos QR de orientación y de credenciales."
+    "NSCameraUsageDescription": "SiteMuster usa la cámara solo para escanear los códigos QR de orientación y de credenciales.",
+    "NSLocationWhenInUseUsageDescription": "SiteMuster usa su ubicación solo para estimar cuándo llega y sale de las obras a las que se unió. Nunca envía dónde está cuando no está en una obra.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "La asistencia automática necesita \"Siempre\" para que su teléfono note cuándo llega o sale de una obra con la aplicación cerrada. Fuera de las obras solo se registra la entrada o salida, nunca su ubicación.",
+    "NSMotionUsageDescription": "SiteMuster usa el movimiento solo para ahorrar batería: revisa su ubicación con menos frecuencia mientras está quieto en la obra."
   }
 }

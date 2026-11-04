@@ -28,6 +28,11 @@ export const ApiErrorCodeSchema = z.enum([
   'NO_ENROLLMENTS',
   'TOO_MANY_ENROLLMENTS',
   'WORKER_PROFILE_REQUIRED',
+  // Device upload credential (Milestone 07, decision #44).
+  'DEVICE_REVOKED',
+  'CREDENTIAL_EXPIRED',
+  'CREDENTIAL_SUPERSEDED',
+  'NO_DEVICE',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

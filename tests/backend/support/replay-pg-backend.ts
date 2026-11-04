@@ -4,9 +4,8 @@ import {
   applyVisitorEvent,
   type AttendanceConfig,
   type AttendanceStore,
+  changesetFromOutput,
   configAt,
-  configFromSettings,
-  emptyTrack,
   type EngineOutput,
   type ItemResult,
   type ProjectContext,
@@ -14,6 +13,7 @@ import {
   type SessionRecord,
   sha256Hex,
   type TrackLoad,
+  trackLoadFromJson,
   type TrackState,
   type VisitorEvent,
   type VisitRecord,
@@ -34,45 +34,7 @@ import type {
  * `edge_attendance_sweep` — so every fixture also proves TypeScript ↔ SQL parity of the time rules.
  * World setup (organizations, projects, enrollments, devices) is plain SQL as the test superuser.
  */
-interface ConfigRow {
-  configVersionId: string;
-  projectId: string;
-  versionNumber: number;
-  effectiveAt: string;
-  settings: Record<string, unknown>;
-  center: { lat: number; lng: number };
-  radiusM: number | string;
-  exitHysteresisM: number | string;
-}
-
 type Json = Record<string, unknown>;
-
-function toConfig(row: ConfigRow): AttendanceConfig {
-  return configFromSettings({
-    configVersionId: row.configVersionId,
-    projectId: row.projectId,
-    versionNumber: row.versionNumber,
-    effectiveAt: row.effectiveAt,
-    settings: row.settings,
-    center: row.center,
-    radiusM: Number(row.radiusM),
-    exitHysteresisM: Number(row.exitHysteresisM),
-  });
-}
-
-function toSession(json: Json): SessionRecord {
-  return { ...(json as unknown as SessionRecord) };
-}
-
-function toTrack(json: Json): TrackState {
-  const track = json as unknown as TrackState & { current: Json | null; previous: Json | null };
-  return {
-    ...track,
-    revision: Number(track.revision),
-    current: track.current ? toSession(track.current) : null,
-    previous: track.previous ? toSession(track.previous) : null,
-  };
-}
 
 function settingsOf(config: AttendanceConfig): Json {
   return {
@@ -335,61 +297,34 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
       'select public.edge_attendance_load($1, $2, $3, $4) as value',
       [projectId, workerId, eventUuids, sessionIds],
     );
-    const configs = (json.configs as ConfigRow[]).map(toConfig);
-    const latest = [...configs].sort(
-      (a, b) => b.versionNumber - a.versionNumber,
-    )[0] as AttendanceConfig;
-    const eligibility = json.eligibility as {
-      eligible: boolean;
-      reason: string | null;
-      employerId: string | null;
-    };
-    const position = json.lastPosition as {
-      lat: number;
-      lng: number;
-      accuracyM: number | string;
-      observedAt: string;
-    } | null;
-    return {
-      state: json.track
-        ? toTrack(json.track as Json)
-        : emptyTrack(projectId, workerId, latest.configVersionId),
-      ctx: {
-        project: json.project as ProjectContext,
-        configs: new Map(configs.map((config) => [config.configVersionId, config])),
-        eligibility: { eligible: eligibility.eligible, reason: eligibility.reason },
-        duplicates: new Set(json.duplicates as string[]),
-        lastPosition: position
-          ? {
-              lat: position.lat,
-              lng: position.lng,
-              accuracyM: Number(position.accuracyM),
-              observedAt: position.observedAt,
-            }
-          : null,
-        extraSessions: new Map(
-          (json.extraSessions as Json[]).map((session) => [String(session.id), toSession(session)]),
-        ),
-        employerSnapshotId: eligibility.employerId,
-      },
-    };
+    return trackLoadFromJson(json, projectId, workerId);
   }
 
   async commit(output: EngineOutput, expectedRevision: number): Promise<'ok' | 'conflict'> {
-    const changeset = {
-      projectId: output.state.projectId,
-      workerId: output.state.workerId,
-      expectedRevision,
-      state: output.state,
-      sessions: output.sessions,
-      events: output.events,
-      receipts: output.receipts,
-      corrections: output.corrections,
-      position: output.position,
-    };
     return this.service<'ok' | 'conflict'>('select public.edge_attendance_commit($1) as value', [
-      JSON.stringify(changeset),
+      JSON.stringify(changesetFromOutput(output, expectedRevision)),
     ]);
+  }
+
+  async recordTerminals(
+    requestId: string,
+    rows: readonly ReceiptRow[],
+    quarantine: readonly Record<string, unknown>[],
+  ): Promise<void> {
+    await this.service('select public.edge_record_location_terminals($1, $2, $3) as value', [
+      requestId,
+      JSON.stringify(rows),
+      JSON.stringify(quarantine),
+    ]);
+  }
+
+  async receiptOwners(eventUuids: readonly string[]): Promise<Map<string, string>> {
+    if (eventUuids.length === 0) return new Map();
+    const result = await this.db.query<{ event_uuid: string; device_id: string }>(
+      'select event_uuid::text, device_id::text from app_private.location_event_receipts where event_uuid = any($1::uuid[])',
+      [eventUuids],
+    );
+    return new Map(result.rows.map((row) => [row.event_uuid, row.device_id]));
   }
 
   async insertReceipts(rows: readonly ReceiptRow[]): Promise<void> {
@@ -409,10 +344,8 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
       'select public.edge_attendance_load($1, $2, $3, $4) as value',
       [projectId, this.ownerId, [], []],
     );
-    return {
-      project: json.project as ProjectContext,
-      configs: (json.configs as ConfigRow[]).map(toConfig),
-    };
+    const loaded = trackLoadFromJson(json, projectId, this.ownerId);
+    return { project: loaded.ctx.project, configs: [...loaded.ctx.configs.values()] };
   }
 
   async visitorEvent(event: VisitorEvent): Promise<ItemResult> {
@@ -488,7 +421,7 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
     );
     return {
       tracks,
-      sessions: sessions.rows.map((row) => toSession(row.s)),
+      sessions: sessions.rows.map((row) => ({ ...(row.s as unknown as SessionRecord) })),
       receipts: counts.rows[0]?.receipts ?? 0,
       events: counts.rows[0]?.events ?? 0,
       positions: positions.rows,

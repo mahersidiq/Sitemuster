@@ -613,5 +613,70 @@
     "revokeReason": "Motivo para cancelar (obligatorio)",
     "revoke": "Cancelar esta credencial",
     "revoked": "Credencial cancelada."
+  },
+  "tracking": {
+    "title": "Asistencia automática",
+    "estimateNote": "La asistencia automática es una estimación, no una prueba de que usted está en la obra. Siempre puede registrarse en el quiosco de la obra o con su capataz.",
+    "phase": {
+      "STARTING": "Revisando su teléfono…",
+      "ACTIVE": "Activada. Su teléfono registra cuándo llega y sale de sus obras (estimado).",
+      "TRACKING_LIMITED": "Limitada. Su teléfono registra solo la entrada y salida del área de la obra, nunca su ubicación. Para que lo cuenten, regístrese en el quiosco de la obra o con su capataz.",
+      "PERMISSION_REQUIRED": "Necesita permiso de ubicación: permita \"Siempre\" y mantenga activada la ubicación precisa.",
+      "NO_DEVICE": "Este teléfono aún no está configurado. Abra su credencial una vez con conexión para configurarlo.",
+      "NOT_ENROLLED": "Aún no tiene un proyecto aprobado con el aviso de la obra aceptado.",
+      "DEVICE_REVOKED": "Ahora otro teléfono es su teléfono de seguimiento, así que la asistencia automática está desactivada en este.",
+      "CREDENTIAL_EXPIRED": "Abra SiteMuster con conexión para mantener activada la asistencia automática.",
+      "UNAVAILABLE": "Estado no disponible. Conéctese a internet e inténtelo de nuevo."
+    },
+    "mode": {
+      "DISARMED": "Desactivada",
+      "ARMED_OFFSITE": "Esperando a que llegue a una obra",
+      "ENTRY_PENDING": "Llegando: confirmando que está en la obra (unos 10 minutos)",
+      "ONSITE_ESTIMATED": "En la obra (estimado)"
+    },
+    "permissions": {
+      "title": "Permisos",
+      "location": "Ubicación en \"Siempre\"",
+      "precise": "Ubicación precisa",
+      "services": "Servicios de ubicación activados",
+      "ok": "Listo",
+      "missing": "Necesario",
+      "allow": "Permitir ubicación",
+      "iosHelp": "Elija primero \"Permitir al usar la app\". Cuando el iPhone le pregunte más tarde, elija \"Cambiar a Permitir siempre\". Mantenga activada la ubicación precisa. El iPhone puede recordarle de vez en cuando que SiteMuster usó su ubicación en segundo plano; es normal.",
+      "androidHelp": "En Ajustes > Aplicaciones > SiteMuster > Ubicación, elija \"Permitir todo el tiempo\" y mantenga activada \"Usar ubicación precisa\". Permita las notificaciones para que se pueda mostrar el aviso en la obra."
+    },
+    "credential": {
+      "title": "Clave de conexión",
+      "OK": "Válida hasta el {{date}}",
+      "EXPIRING": "Vence el {{date}}. Abra SiteMuster con conexión para renovarla.",
+      "EXPIRED": "Vencida. Abra SiteMuster con conexión para renovarla.",
+      "NONE": "No configurada"
+    },
+    "sync": {
+      "title": "Estado de sincronización",
+      "locationQueue": "Registros de ubicación por subir: {{count}}",
+      "operationsQueue": "Registros de quiosco, capataz y manuales por subir: ninguno todavía",
+      "syncNow": "Sincronizar ahora",
+      "planStale": "Usando la última lista de obras guardada (sin conexión).",
+      "lastRefused": "El servidor rechazó la última subida. Abra SiteMuster con conexión."
+    },
+    "sites": {
+      "monitored": "Obras vigiladas",
+      "notMonitored": "Obras no vigiladas",
+      "reason": {
+        "CONSENT_MISSING": "Acepte el aviso de la obra",
+        "EMPLOYER_NOT_VERIFIED": "Empleador aún no confirmado",
+        "PROJECT_NOT_ACTIVE": "Proyecto no activo",
+        "NOT_BOUND": "Aún no configurado en este teléfono",
+        "NO_DEVICE": "Teléfono no configurado",
+        "REGION_BUDGET": "Límite del teléfono alcanzado: se vigilan primero las obras más cercanas y las próximas"
+      }
+    },
+    "openDetails": "Detalles de asistencia automática",
+    "notification": {
+      "title": "SiteMuster",
+      "text": "La asistencia automática está activada en su obra.",
+      "channelName": "Asistencia automática"
+    }
   }
 }

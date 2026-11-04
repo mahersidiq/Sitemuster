@@ -1,5 +1,7 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
+import NATIVE_EN from './locales/native/en.json';
+
 /**
  * SiteMuster Expo configuration.
  *
@@ -33,7 +35,24 @@ export const PRODUCTION_REQUIRED_PUBLIC_ENV = [
  * SDK key is an app-restricted CLIENT key written into AndroidManifest by react-native-maps; it is
  * never one of the Google server keys used only by Edge Functions (Places/Geocoding).
  */
-export const PRODUCTION_REQUIRED_BUILD_ENV = ['GOOGLE_MAPS_ANDROID_API_KEY'] as const;
+export const PRODUCTION_REQUIRED_BUILD_ENV = [
+  'GOOGLE_MAPS_ANDROID_API_KEY',
+  // Transistorsoft Android release license (decision #12), bound to the final package id.
+  'TS_ANDROID_LICENSE_KEY',
+] as const;
+
+/** Native tracking permissions (docs/spec/03 "Permissions and platform policies"). */
+export const ANDROID_TRACKING_PERMISSIONS = [
+  'ACCESS_COARSE_LOCATION',
+  'ACCESS_FINE_LOCATION',
+  'ACCESS_BACKGROUND_LOCATION',
+  'FOREGROUND_SERVICE',
+  'FOREGROUND_SERVICE_LOCATION',
+  'POST_NOTIFICATIONS',
+  'RECEIVE_BOOT_COMPLETED',
+  'ACTIVITY_RECOGNITION',
+  'WAKE_LOCK',
+] as const;
 
 /** Server-only Google keys (Edge Function secrets). They must never reach the app build. */
 const GOOGLE_SERVER_KEY_NAMES = ['GOOGLE_PLACES_SERVER_KEY', 'GOOGLE_GEOCODING_SERVER_KEY'];
@@ -118,9 +137,23 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
       bundleIdentifier: bundleId,
       // Kiosk attendant mode runs on supervised staff phones or tablets.
       supportsTablet: true,
+      infoPlist: {
+        // Transistorsoft v5: location updates + background fetch/processing (decision #14).
+        UIBackgroundModes: ['location', 'fetch', 'processing'],
+        BGTaskSchedulerPermittedIdentifiers: [
+          'com.transistorsoft.fetch',
+          'com.transistorsoft.customtask',
+        ],
+        // English defaults; Spanish comes from locales/native/es.json (InfoPlist.strings).
+        NSLocationWhenInUseUsageDescription: NATIVE_EN.ios.NSLocationWhenInUseUsageDescription,
+        NSLocationAlwaysAndWhenInUseUsageDescription:
+          NATIVE_EN.ios.NSLocationAlwaysAndWhenInUseUsageDescription,
+        NSMotionUsageDescription: NATIVE_EN.ios.NSMotionUsageDescription,
+      },
     },
     android: {
       package: bundleId,
+      permissions: [...ANDROID_TRACKING_PERMISSIONS],
     },
     plugins: [
       'expo-router',
@@ -149,6 +182,12 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
         process.env.GOOGLE_MAPS_ANDROID_API_KEY
           ? { androidGoogleMapsApiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY }
           : {},
+      ],
+      // Native background tracking. The Android license is a build-time value (EAS secret); a
+      // development build runs without it (Transistorsoft DEBUG builds), production fails closed.
+      [
+        'react-native-background-geolocation',
+        process.env.TS_ANDROID_LICENSE_KEY ? { license: process.env.TS_ANDROID_LICENSE_KEY } : {},
       ],
       [
         '@sentry/react-native/expo',

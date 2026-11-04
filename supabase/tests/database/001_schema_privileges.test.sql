@@ -110,7 +110,8 @@ select is(
         'get_project_notice',
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
         'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_enrollments',
-        'preview_orientation', 'remove_project_staff', 'revoke_invitation', 'revoke_printed_badge',
+        'my_tracking_plan', 'preview_orientation', 'project_tracking_health', 'remove_project_staff',
+        'revoke_invitation', 'revoke_my_device', 'revoke_printed_badge',
         'set_my_language', 'set_project_status', 'start_orientation_session', 'update_my_emergency_contact',
         'update_project_config'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
@@ -123,9 +124,10 @@ select is(
       and has_function_privilege('service_role', p.oid, 'EXECUTE')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   array['edge_activate_device', 'edge_attendance_commit', 'edge_attendance_load', 'edge_attendance_sweep',
-        'edge_badge_device', 'edge_insert_location_receipts', 'edge_redeem_badge_step', 'edge_visitor_commit',
-        'edge_visitor_load'],
-  'device activation, badge redemption and the attendance reconciler are callable only by the Edge Functions (service_role)'
+        'edge_badge_device', 'edge_device_authenticate', 'edge_device_rate_limit', 'edge_device_renew',
+        'edge_insert_location_receipts', 'edge_location_receipt_lookup', 'edge_record_location_terminals',
+        'edge_redeem_badge_step', 'edge_visitor_commit', 'edge_visitor_load', 'edge_worker_open_session_projects'],
+  'device activation and credentials, badge redemption, location ingestion and the attendance reconciler are callable only by the Edge Functions (service_role)'
 );
 
 select is(
