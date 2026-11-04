@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import type { Locale } from '@sitemuster/shared';
 
+import type { SiteMusterApi } from '../../src/api/types';
 import type { Access } from '../../src/auth/access';
 import type { AuthErrorKind } from '../../src/auth/auth-errors';
 import {
@@ -159,13 +160,16 @@ export class FakeAuthGateway implements AuthGateway {
   }
 }
 
-export function fakeBackend(accessFor: (destination: string) => Access) {
+export function fakeBackend(
+  accessFor: (destination: string) => Access,
+  api: SiteMusterApi | null = null,
+) {
   const storage = new EncryptedSessionStorage(
     memoryTable(),
     memoryKeys(),
     (n) => new Uint8Array(randomBytes(n)),
   );
-  return { gateway: new FakeAuthGateway(accessFor), storage };
+  return { gateway: new FakeAuthGateway(accessFor), storage, api };
 }
 
 export const ids = {

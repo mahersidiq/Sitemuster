@@ -404,8 +404,17 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# LOCAL ONLY: marks the local functions as development so the typed development fakes may run
+# when provider keys are absent. Hosted projects never set this; their functions fail closed.
+[edge_runtime.secrets]
+SITEMUSTER_ENV = "development"
+
+# Each function's deno.json resolves zod/@noble from the lockfile-pinned node_modules (decision #63).
+[functions.address-search]
+verify_jwt = true
+
+[functions.address-resolve]
+verify_jwt = true
 
 [analytics]
 # Log analytics stack is not needed for CI or tests.

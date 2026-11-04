@@ -85,3 +85,26 @@ export function canOpenStaffShell(state: AuthState): boolean {
 export function canOpenWorkerShell(state: AuthState): boolean {
   return state.status === 'signed_in' && state.access.worker_profile_id !== null;
 }
+
+/** Verified staff e-mail at aal2 may create an organization (server re-checks everything). */
+export function canCreateOrganization(state: AuthState): boolean {
+  return (
+    state.status === 'signed_in' &&
+    !state.access.is_platform_operator &&
+    state.access.email_verified &&
+    state.assurance.current === 'aal2'
+  );
+}
+
+/** Organizations where the user is OWNER/ADMIN (may create projects; server re-checks). */
+export function managedOrganizationIds(state: AuthState): string[] {
+  if (state.status !== 'signed_in') return [];
+  return state.access.org_roles.map((role) => role.organization_id);
+}
+
+export function ownedOrganizationIds(state: AuthState): string[] {
+  if (state.status !== 'signed_in') return [];
+  return state.access.org_roles
+    .filter((role) => role.role === 'OWNER')
+    .map((role) => role.organization_id);
+}

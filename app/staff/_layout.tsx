@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { canOpenStaffShell } from '../../src/auth/routing';
+import { LoadingScreen } from '../../src/components/LoadingScreen';
 import { useAuth } from '../../src/state/auth';
 import { useSession } from '../../src/state/session';
 import { tabNavigatorOptions, tabScreenOptions } from '../../src/navigation/tabOptions';
@@ -12,6 +13,8 @@ export default function StaffLayout() {
   const { previewRole } = useSession();
   const { state } = useAuth();
   // Real access needs the server-confirmed role (staff: MFA aal2); the preview is development-only.
+  // Keep deep links while the stored session is restored; decide once access is known.
+  if (previewRole !== 'staff' && state.status === 'loading') return <LoadingScreen />;
   if (previewRole !== 'staff' && !canOpenStaffShell(state)) return <Redirect href="/" />;
   return (
     <Tabs screenOptions={tabNavigatorOptions}>

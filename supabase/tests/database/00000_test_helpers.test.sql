@@ -110,6 +110,21 @@ as $$
   end)::uuid
 $$;
 
+-- Complete settings document like production versions (null before Milestone 04 helpers exist).
+create or replace function tests.full_settings(p_radius numeric, p_24_7 boolean)
+returns jsonb
+language plpgsql
+as $$
+begin
+  if to_regprocedure('app_private.build_settings(numeric, integer, numeric, boolean, jsonb)') is null then
+    return null;
+  end if;
+  return app_private.build_settings(p_radius, 600, 75, p_24_7,
+    (select jsonb_agg(jsonb_build_object('weekday', d, 'local_start_time', '06:00', 'local_end_time', '18:00'))
+       from generate_series(1, 6) d));
+end;
+$$;
+
 -- Deterministic two-tenant world. Run as postgres at the start of a test transaction.
 create or replace function tests.seed_world()
 returns void
@@ -148,8 +163,10 @@ begin
     (tests.id('p_a1'), tests.id('org_a'), 'Alpha Tower', 'America/Chicago', 'ACTIVE', gen_random_uuid()),
     (tests.id('p_b1'), tests.id('org_b'), 'Bravo Plant', 'America/New_York', 'ACTIVE', gen_random_uuid());
   insert into public.project_tracking_config_versions (id, project_id, version_number, effective_at, settings_json) values
-    (tests.id('cv_a1'), tests.id('p_a1'), 1, t - interval '30 days', '{"geofence_radius_m":150,"entry_dwell_seconds":600}'),
-    (tests.id('cv_b1'), tests.id('p_b1'), 1, t - interval '30 days', '{"geofence_radius_m":200,"entry_dwell_seconds":600}');
+    (tests.id('cv_a1'), tests.id('p_a1'), 1, t - interval '30 days',
+     coalesce(tests.full_settings(150, false), '{"geofence_radius_m":150}'::jsonb)),
+    (tests.id('cv_b1'), tests.id('p_b1'), 1, t - interval '30 days',
+     coalesce(tests.full_settings(200, false), '{"geofence_radius_m":200}'::jsonb));
   update public.projects set config_version_id = tests.id('cv_a1') where id = tests.id('p_a1');
   update public.projects set config_version_id = tests.id('cv_b1') where id = tests.id('p_b1');
   insert into public.project_geofences (config_version_id, project_id, center, radius_m) values

@@ -22,7 +22,34 @@ jest.mock('expo-secure-store', () => ({
 
 jest.mock('expo-localization', () => ({
   getLocales: () => [{ languageTag: (globalThis as TestGlobals).__deviceLocale ?? 'en-US' }],
+  getCalendars: () => [{ timeZone: 'America/Chicago' }],
 }));
+
+// react-native-maps is a native view; tests render a placeholder that exposes circle radii.
+jest.mock('react-native-maps', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react') as typeof import('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { View } = require('react-native') as typeof import('react-native');
+  const MapView = React.forwardRef(function MapView(
+    props: { children?: React.ReactNode },
+    ref: React.Ref<{ animateToRegion: () => void }>,
+  ) {
+    React.useImperativeHandle(ref, () => ({ animateToRegion: () => undefined }));
+    return React.createElement(View, { testID: 'native-map' }, props.children);
+  });
+  const Circle = (props: { radius: number }) =>
+    React.createElement(View, { testID: `map-circle-${props.radius}` });
+  const Marker = () => React.createElement(View, { testID: 'map-marker' });
+  return {
+    __esModule: true,
+    default: MapView,
+    Circle,
+    Marker,
+    PROVIDER_GOOGLE: 'google',
+    PROVIDER_DEFAULT: undefined,
+  };
+});
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -65,6 +92,11 @@ jest.mock('expo-sqlite', () => ({
 }));
 
 jest.mock('expo-crypto', () => ({
+  randomUUID: () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { randomUUID } = require('node:crypto') as typeof import('node:crypto');
+    return randomUUID();
+  },
   getRandomBytes: (length: number) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { randomBytes } = require('node:crypto') as typeof import('node:crypto');
