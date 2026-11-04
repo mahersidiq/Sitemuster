@@ -18,7 +18,7 @@
 | 10 | Daily reports, foreman confirmation and worker CSV | done (NOT VERIFIED items) | [#10](https://github.com/mahersidiq/Sitemuster/pull/10) | squash-merged under #48 after CI green and the automated review (`c50426f`) |
 | 11 | Active Muster Mode | done (NOT VERIFIED items) | [#11](https://github.com/mahersidiq/Sitemuster/pull/11) | squash-merged under #48 after CI green and the automated review (`10516cf`) |
 | 12 | Security, privacy, resilience and operator CLI | done (NOT VERIFIED items) | [#12](https://github.com/mahersidiq/Sitemuster/pull/12) | squash-merged under #48 after CI green and the automated review (`67f235c`) |
-| 13 | Native release preparation, review demo and field pilot | in review — `FIELD_PILOT_PENDING` | (PR pending) | release gates open: see `docs/release/release-readiness.md` |
+| 13 | Native release preparation, review demo and field pilot | done (NOT VERIFIED items) — `FIELD_PILOT_PENDING` | [#13](https://github.com/mahersidiq/Sitemuster/pull/13) | squash-merged under #48 after CI green and the automated review; release gates still open: see `docs/release/release-readiness.md` |
 
 ## Milestone 01 — Clean repository, locked stack and CI
 
@@ -603,7 +603,15 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 
 **Decisions added:** #140–#152.
 
-**Next step:** open the Milestone 13 PR, watch CI, address the automated review, merge. Milestone 13 is the last milestone: then give the owner the final report (what works, what is mocked, the ordered accounts/keys list, the real-phone tests, the top risks).
+**Merged:** PR #13 squash-merged under #48 after CI was green on its final head and the automated review was addressed. This line was written in the pull request before the merge, so it reaches `main` only through that merge.
+
+**Next step:** none. Milestones 01–13 are all merged and there is no Milestone 14: do not start new feature work. What remains is the owner's, in this order:
+1. `docs/setup/HUMAN_CHECKLIST.md` (accounts, keys, brand and legal clearance, license);
+2. `docs/release/README.md` (backend deploy, builds, reviewer demo, store submission);
+3. `docs/release/phone-test-checklist.md` on a release candidate, including the location privacy capture (`npm run privacy:capture-check`);
+4. the 30-workday field pilot (`docs/release/field-pilot-protocol.md`).
+
+SiteMuster is not ready for public release until every gate in `docs/release/release-readiness.md` is PASS and `docs/release/pilot/pilot-sign-off.md` is signed by the owner.
 
 ## Environment notes for future sessions (Linux build agent)
 
