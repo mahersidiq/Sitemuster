@@ -1,15 +1,15 @@
 import type { Client } from 'pg';
 
 import {
-  applyVisitorEvent,
+  applyVisitorOperation,
   type AttendanceConfig,
   type AttendanceStore,
   changesetFromOutput,
-  configAt,
   type EngineOutput,
   type ItemResult,
   type ProjectContext,
   type ReceiptRow,
+  type ServiceRpc,
   type SessionRecord,
   sha256Hex,
   type TrackLoad,
@@ -337,59 +337,36 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
     await this.service('select public.edge_attendance_sweep($1) as value', [now]);
   }
 
-  private async configsOf(
-    projectId: string,
-  ): Promise<{ project: ProjectContext; configs: AttendanceConfig[] }> {
-    const json = await this.service<Json>(
-      'select public.edge_attendance_load($1, $2, $3, $4) as value',
-      [projectId, this.ownerId, [], []],
+  /** Service-role RPC by name with named arguments: the transport the Edge Functions use. */
+  private readonly rpc: ServiceRpc = async (fn, args) => {
+    const names = Object.keys(args);
+    const placeholders = names.map((name, i) => name + ' => $' + String(i + 1)).join(', ');
+    return this.service(
+      'select public.' + fn + '(' + placeholders + ') as value',
+      names.map((name) => {
+        const value = args[name];
+        return value !== null && typeof value === 'object' ? JSON.stringify(value) : value;
+      }),
     );
-    const loaded = trackLoadFromJson(json, projectId, this.ownerId);
-    return { project: loaded.ctx.project, configs: [...loaded.ctx.configs.values()] };
-  }
+  };
 
   async visitorEvent(event: VisitorEvent): Promise<ItemResult> {
-    const { project, configs } = await this.configsOf(event.projectId);
-    const config = configAt(configs, event.observedAt);
-    if (!config)
-      return {
-        eventUuid: event.eventUuid,
-        status: 'rejected',
-        reason: 'PROJECT_NOT_FOUND',
-        review: false,
-      };
-    if (project.status !== 'ACTIVE')
-      return {
-        eventUuid: event.eventUuid,
-        status: 'rejected',
-        reason: 'PROJECT_NOT_ACTIVE',
-        review: false,
-      };
     let visitorId = this.visitors.get(event.visitorKey);
     if (!visitorId) {
       visitorId = this.id(`visitor|${event.visitorKey}`);
       await this.db.query(
         "insert into public.visitor_records (id, project_id, name, purpose) values ($1, $2, $3, 'Replay visit')",
-        [visitorId, event.projectId, event.visitorKey],
+        [visitorId, event.projectId, event.visitorKey.slice(0, 200)],
       );
       this.visitors.set(event.visitorKey, visitorId);
     }
-    const visits = await this.service<VisitRecord[]>(
-      'select public.edge_visitor_load($1) as value',
-      [event.projectId],
-    );
-    const { changed, result } = applyVisitorEvent(
-      visits,
-      { ...event, visitorKey: visitorId },
-      config,
-      project.timezone,
-    );
-    if (changed) {
-      await this.service('select public.edge_visitor_commit($1, null, null) as value', [
-        JSON.stringify(changed),
-      ]);
-    }
-    return result;
+    // The production path: edge_visitor_context → edge_visitor_load → rule → edge_visitor_commit.
+    return applyVisitorOperation(this.rpc, {
+      ...event,
+      visitorKey: visitorId,
+      actorId: null,
+      kioskDeviceId: null,
+    });
   }
 
   async snapshot(projectId: string): Promise<BackendSnapshot> {

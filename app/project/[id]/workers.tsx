@@ -55,6 +55,7 @@ function Workers() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canApprove = project.data?.permissions.can_run_orientation ?? false;
+  const canCorrect = project.data?.permissions.can_correct_attendance ?? false;
 
   const groups = useMemo(() => {
     const rows = roster.data ?? [];
@@ -131,6 +132,19 @@ function Workers() {
               setReason('');
             }}
             testID={`reject-${entry.enrollment_id}`}
+          />
+        ) : null}
+        {entry.enrollment_status === 'APPROVED' && canCorrect ? (
+          <AppButton
+            variant="secondary"
+            label={t('correction.action')}
+            onPress={() =>
+              router.push({
+                pathname: '/project/[id]/correct',
+                params: { id, workerId: entry.worker_id, name: entry.legal_name },
+              })
+            }
+            testID={`correct-${entry.enrollment_id}`}
           />
         ) : null}
         {entry.enrollment_status === 'APPROVED' ? (

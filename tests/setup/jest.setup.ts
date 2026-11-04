@@ -75,14 +75,49 @@ beforeEach(() => {
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(async () => {
     const rows = new Map<string, string>();
+    // The operational outbox table (src/outbox/native-outbox.ts), keyed by event_uuid.
+    type MockOutboxRow = {
+      event_uuid: string;
+      actor_user_id: string;
+      created_at: number;
+      status: string;
+      envelope: string;
+    };
+    const outbox = new Map<string, MockOutboxRow>();
     return {
       execAsync: jest.fn(async () => undefined),
       getFirstAsync: jest.fn(async (_sql: string, params: string[]) => {
         const value = rows.get(params[0] ?? '');
         return value === undefined ? null : { value };
       }),
-      getAllAsync: jest.fn(async () => [...rows.keys()].map((key) => ({ key }))),
+      getAllAsync: jest.fn(async (sql: string, params: (string | number)[] = []) =>
+        sql.includes('operational_outbox')
+          ? [...outbox.values()]
+              .filter((row) => row.actor_user_id === params[0])
+              .sort((a, b) => a.created_at - b.created_at)
+          : [...rows.keys()].map((key) => ({ key })),
+      ),
       runAsync: jest.fn(async (sql: string, params: (string | number)[] = []) => {
+        if (sql.includes('operational_outbox')) {
+          const id = String(sql.startsWith('update') ? params[2] : params[0]);
+          if (sql.startsWith('insert')) {
+            if (outbox.has(id)) throw new Error('UNIQUE constraint failed');
+            outbox.set(id, {
+              event_uuid: id,
+              actor_user_id: String(params[1]),
+              created_at: Number(params[2]),
+              status: String(params[3]),
+              envelope: String(params[4]),
+            });
+          } else if (sql.startsWith('update')) {
+            const row = outbox.get(id);
+            if (row)
+              outbox.set(id, { ...row, status: String(params[0]), envelope: String(params[1]) });
+          } else if (sql.startsWith('delete')) {
+            outbox.delete(id);
+          }
+          return;
+        }
         if (sql.startsWith('insert')) rows.set(String(params[0]), String(params[1]));
         else if (sql.includes('where key')) rows.delete(String(params[0]));
         else rows.clear();

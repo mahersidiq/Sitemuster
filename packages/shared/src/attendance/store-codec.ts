@@ -1,13 +1,15 @@
-import { configFromSettings } from './config.ts';
+import { configAt, configFromSettings } from './config.ts';
 import { emptyTrack } from './engine.ts';
 import type { AttendanceStore, TrackLoad } from './reconcile.ts';
 import type {
   AttendanceConfig,
   EngineOutput,
+  ItemResult,
   ProjectContext,
   SessionRecord,
   TrackState,
 } from './types.ts';
+import { applyVisitorEvent, type VisitorEvent, type VisitRecord } from './visitors.ts';
 
 /**
  * One codec between the reconciler's database functions (`edge_attendance_load` /
@@ -97,6 +99,73 @@ export function trackLoadFromJson(json: Json, projectId: string, workerId: strin
     },
   };
 }
+
+/** The `project` and `configs` keys (edge_attendance_load, edge_visitor_context). */
+export function projectConfigsFromJson(json: Json): {
+  project: ProjectContext;
+  configs: AttendanceConfig[];
+} {
+  return {
+    project: json.project as ProjectContext,
+    configs: ((json.configs as ConfigRow[] | undefined) ?? []).map(toConfig),
+  };
+}
+
+/**
+ * One visitor sign-in/out through the service RPCs (Edge Functions and the database replay):
+ * project context, the open visits, the pure visit rule, then the commit. Never counted as
+ * workforce (docs/spec/04).
+ */
+export async function applyVisitorOperation(
+  rpc: ServiceRpc,
+  event: VisitorEvent & { actorId: string | null; kioskDeviceId: string | null },
+): Promise<ItemResult> {
+  const rejected = (reason: string): ItemResult => ({
+    eventUuid: event.eventUuid,
+    status: 'rejected',
+    reason,
+    review: false,
+  });
+  const context = (await rpc('edge_visitor_context', {
+    p_project: event.projectId,
+  })) as Json | null;
+  if (!context) return rejected('PROJECT_NOT_FOUND');
+  const { project, configs } = projectConfigsFromJson(context);
+  const config = configAt(configs, event.observedAt);
+  if (!config) return rejected('PROJECT_NOT_FOUND');
+  if (project.status !== 'ACTIVE') return rejected('PROJECT_NOT_ACTIVE');
+  for (let attempt = 0; attempt < VISIT_COMMIT_ATTEMPTS; attempt += 1) {
+    const visits = (await rpc('edge_visitor_load', {
+      p_project: event.projectId,
+    })) as VisitRecord[];
+    const { changed, result } = applyVisitorEvent(
+      visits,
+      {
+        eventUuid: event.eventUuid,
+        projectId: event.projectId,
+        visitorKey: event.visitorKey,
+        direction: event.direction,
+        observedAt: event.observedAt,
+      },
+      config,
+      project.timezone,
+    );
+    if (!changed) return result;
+    const committed = await rpc('edge_visitor_commit', {
+      p_visit: changed,
+      p_actor: event.actorId,
+      p_kiosk: event.kioskDeviceId,
+    });
+    // Another visit already holds this operation's id (entry or exit): it was applied before.
+    if (committed === 'conflict') return { ...result, status: 'duplicate', reason: null };
+    // 'stale': another operation closed the visit first; decide again on fresh rows.
+    if (committed !== 'stale') return result;
+  }
+  // Still racing after a few attempts: the caller answers 503 and the outbox sends it again.
+  throw new Error('VISIT_COMMIT_CONFLICT');
+}
+
+const VISIT_COMMIT_ATTEMPTS = 3;
 
 /** Engine output → the `edge_attendance_commit` changeset (atomic compare-and-swap). */
 export function changesetFromOutput(output: EngineOutput, expectedRevision: number): Json {

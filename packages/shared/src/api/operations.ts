@@ -165,6 +165,11 @@ export type OperationEvent = z.infer<typeof OperationEventSchema>;
 
 export const IngestOperationsRequestSchema = z.strictObject({
   schema_version: SchemaVersionSchema,
+  /**
+   * The phone's clock when it sent this request. Compared with the server's receipt time it
+   * measures a wrong kiosk clock in either direction (decision #84).
+   */
+  client_sent_at: UtcIsoSchema,
   events: z.array(OperationEventSchema).min(1).max(TRACKING_DEFAULTS.operations_ingest_max_events),
 });
 export type IngestOperationsRequest = z.infer<typeof IngestOperationsRequestSchema>;
@@ -181,7 +186,47 @@ export const OperationResultSchema = z.strictObject({
   status: TerminalStatusSchema,
   reason: z.string().nullable(),
   children: z.array(OperationChildResultSchema).max(100).optional(),
+  /** Kiosk scans: the worker the badge belongs to, only when the scan was authorized (#98). */
+  worker_id: UuidSchema.nullable().optional(),
+  /** Stored but held for human review (e.g. a wrong kiosk clock) instead of verified (#84). */
+  review: z.boolean().optional(),
+  /** A re-sent operation: the outcome it got the first time (#98). */
+  original_status: z.enum(['accepted', 'rejected']).optional(),
 });
+export type OperationResult = z.infer<typeof OperationResultSchema>;
+export type OperationChildResult = z.infer<typeof OperationChildResultSchema>;
+
+/**
+ * Durable rejection reasons the app explains (EN/ES). Anything else is shown with a generic text.
+ * Attendance-engine reasons (ENROLLMENT_NOT_APPROVED, EMPLOYER_NOT_VERIFIED, CONSENT_MISSING,
+ * PROJECT_NOT_ACTIVE, ...) may also appear.
+ */
+export const OPERATION_REASONS = [
+  'FORBIDDEN',
+  'PROJECT_NOT_AUTHORIZED',
+  'KIOSK_NOT_REGISTERED',
+  'BADGE_INVALID',
+  'BADGE_PROJECT_MISMATCH',
+  'BADGE_EXPIRED',
+  'BADGE_REVOKED',
+  'BADGE_MAC_INVALID',
+  'BADGE_REPLAY',
+  'DEVICE_REVOKED',
+  'NOT_APPROVED',
+  'NOT_OWN_CREW',
+  'COMPANY_NOT_AUTHORIZED',
+  'WORKER_NOT_IN_COMPANY',
+  'WORKER_NOT_ENROLLED',
+  'SOME_WORKERS_REJECTED',
+  'VISITOR_ID_CONFLICT',
+  'VISITOR_DETAILS_REQUIRED',
+  'HOST_NOT_FOUND',
+  'VISIT_NOT_FOUND',
+  'ALREADY_CHECKED_IN',
+  'OPERATION_NOT_SUPPORTED',
+  'EVENT_UUID_CONFLICT',
+] as const;
+export type OperationReason = (typeof OPERATION_REASONS)[number];
 
 export const IngestOperationsResponseSchema = z.strictObject({
   schema_version: SchemaVersionSchema,

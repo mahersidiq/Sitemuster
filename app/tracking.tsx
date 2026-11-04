@@ -11,6 +11,7 @@ import { TRACKING_PHASE_TONE } from '../src/components/TrackingStatusCard';
 import { Body, Title } from '../src/components/Typography';
 import { LoadingScreen } from '../src/components/LoadingScreen';
 import { useAuth } from '../src/state/auth';
+import { useOutbox } from '../src/state/outbox';
 import { useTracking } from '../src/state/tracking';
 import { colors, spacing } from '../src/theme';
 
@@ -32,6 +33,7 @@ export function TrackingScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const { status, requestPermission, syncNow, refresh } = useTracking();
+  const outbox = useOutbox();
   const [busy, setBusy] = useState(false);
   // Opening the screen re-reads permissions, the plan and the key (e.g. after Settings changes).
   useEffect(() => {
@@ -123,7 +125,7 @@ export function TrackingScreen() {
         <View testID="tracking-queue">
           <Body>{t('tracking.sync.locationQueue', { count: status.queued })}</Body>
         </View>
-        <Body>{t('tracking.sync.operationsQueue')}</Body>
+        <Body>{t('tracking.sync.operationsQueue', { count: outbox.status?.pending ?? 0 })}</Body>
         {status.planStale ? <Banner tone="info" text={t('tracking.sync.planStale')} /> : null}
         {status.lastHttpStatus === 401 ? (
           <Banner tone="danger" text={t('tracking.sync.lastRefused')} testID="tracking-refused" />

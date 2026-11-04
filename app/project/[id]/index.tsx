@@ -87,7 +87,13 @@ function ProjectDetailBody() {
 function WorkforceCard({ detail }: { detail: ProjectDetail }) {
   const { t } = useTranslation();
   const { permissions, project } = detail;
-  if (!permissions.can_view_roster && !permissions.can_run_orientation) return null;
+  if (
+    !permissions.can_view_roster &&
+    !permissions.can_run_orientation &&
+    !permissions.can_operate_kiosk
+  ) {
+    return null;
+  }
   return (
     <Card testID="workforce-card">
       <Heading>{t('project.workforceTitle')}</Heading>
@@ -102,6 +108,25 @@ function WorkforceCard({ detail }: { detail: ProjectDetail }) {
       ) : null}
       {permissions.can_run_orientation && project.status !== 'ACTIVE' ? (
         <Text style={styles.hint}>{t('project.orientationNeedsActive')}</Text>
+      ) : null}
+      {permissions.can_operate_kiosk && project.status === 'ACTIVE' ? (
+        <AppButton
+          label={t('kiosk.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/kiosk', params: { id: project.id } })
+          }
+          testID="open-kiosk"
+        />
+      ) : null}
+      {permissions.can_run_visitor_desk && project.status === 'ACTIVE' ? (
+        <AppButton
+          variant="secondary"
+          label={t('kiosk.visitors')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/visitors', params: { id: project.id } })
+          }
+          testID="open-visitors"
+        />
       ) : null}
       {permissions.can_view_roster ? (
         <AppButton

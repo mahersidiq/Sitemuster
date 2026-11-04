@@ -53,6 +53,8 @@ const styles = StyleSheet.create({
   chip: {
     minHeight: minTouchTarget,
     minWidth: minTouchTarget,
+    // Long labels (e-mail addresses) wrap inside the screen instead of overflowing it.
+    maxWidth: '100%',
     paddingHorizontal: spacing.sm,
     borderRadius: 24,
     borderWidth: 1,
@@ -62,6 +64,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: 16, color: colors.text, fontWeight: '600' },
+  chipText: { fontSize: 16, color: colors.text, fontWeight: '600', flexShrink: 1 },
   chipTextSelected: { color: colors.onPrimary },
 });

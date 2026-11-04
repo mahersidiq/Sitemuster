@@ -12,8 +12,8 @@
 | 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
 | 05 | Orientation sessions, badges, approval | done (NOT VERIFIED items) | [#5](https://github.com/mahersidiq/Sitemuster/pull/5) | squash-merged under #48 after CI green and the automated review |
 | 06 | Attendance state machine and deterministic replay | done (NOT VERIFIED items) | [#6](https://github.com/mahersidiq/Sitemuster/pull/6) | squash-merged under #48 after CI green and the automated review (`edbe76f`) |
-| 07 | Native tracking and custom device ingestion | in review | (PR pending) | |
-| 08 | Kiosk, foreman, manual and visitor fallbacks | not started | | |
+| 07 | Native tracking and custom device ingestion | done (NOT VERIFIED items) | [#7](https://github.com/mahersidiq/Sitemuster/pull/7) | squash-merged under #48 after CI green and the automated review (`d509baf`) |
+| 08 | Kiosk, foreman, manual and visitor fallbacks | in review | (PR pending) | |
 | 09 | Mobile superintendent dashboard and map | not started | | |
 | 10 | Daily reports, foreman confirmation and worker CSV | not started | | |
 | 11 | Active Muster Mode | not started | | |
@@ -234,7 +234,7 @@
 
   Also: integration 51, security **78** (incl. the native config gates and the bundle guard), i18n 18, replay **180**; Jest **50** (mobile-unit 11 incl. the tracking screen EN/ES, mobile-integration 39).
 - typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
-- GitHub Actions: run 41787601927 on `3651d3b` green (pgTAP 18/491, backend 110/110). The run for the review-fix head is recorded in the Milestone 08 PR.
+- GitHub Actions: run 41787601927 on `3651d3b` green (pgTAP 18/491, backend 110/110). After the three automated-review fixes, run [41790721734](https://github.com/mahersidiq/Sitemuster/actions/runs/41790721734) on the final head `e020d58` was green: pgTAP Files=18, Tests=491, PASS; backend 11 files, 110/110 (81 database replays); code-quality all steps.
 
 **NOT VERIFIED (Milestone 07)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): native background delivery, iOS relaunch and Android headless events, reboot, Force Stop, permission flows, battery, the rendered HTTP wire of the real SDK, its interpretation of `expires` (decision #92), reading the persisted secret before `ready()` (decision #97), and the egress gate in killed-app conditions. No EAS development build exists yet (needs Expo account, checklist §2).
@@ -245,7 +245,63 @@
 
 **Decisions added:** #89 derived device bindings and current/open-session fences, #90 continuous-coordinate release gate (TRACKING_LIMITED), #91 two-mode SDK operation and JavaScript egress gate, #92 native authorization refresh and renewal paths, #93 ingest endpoint details, #94 sign-out revocation and replacement flag, #95 coordinate-free monitoring reports, #96 the egress gate fails closed, #97 the phone keeps the secret the SDK holds.
 
-**Next step:** after Milestone 07 merges, start Milestone 08 (kiosk, foreman, manual and visitor fallbacks; operational outbox) on `milestone-08-fallbacks`.
+**Next step:** done — squash-merged as `d509baf` after CI green and the automated review fixes (decisions #96, #97). Milestone 08 started on `milestone-08-fallbacks`.
+
+## Milestone 08 — Kiosk, foreman, manual and visitor fallbacks
+
+**What was built**
+- **Server.**
+  - Migration `20261107100000_m08_operations.sql`:
+    - `operation_context`, called with the caller's own JWT: kiosk ALL/OWN_CREW, visitor desk, correction, foreman companies.
+    - `register_kiosk` / `revoke_kiosk` (audited).
+    - Service-role helpers: kiosk lookup, receipts with worker/children/review, printed badge by hash, worker enrollment facts with the attendance-eligibility rule, visitor registration and context, rate limit.
+    - Screen reads: `my_foreman_projects`, `foreman_crew` (names only), `open_visitor_visits`, `worker_attendance_sessions`.
+    - Project detail flags.
+  - Edge Function `ingest-operations` (`verify_jwt = true`) on `supabase/functions/_shared/operations-core.ts`:
+    - per-operation and per-worker results;
+    - kiosk clock offset from `client_sent_at` (decision #84);
+    - badge HMAC and one-use steps verified on sync;
+    - printed flag kept; visitors separate;
+    - receipts answer resends; whole-request 503 on store failure; fails closed without the badge key.
+  - Shared `applyVisitorOperation` and `edge_visitor_context`.
+- **Replay.** The harness sends kiosk, foreman, manual and visitor steps through the production handler; the database replay uses the shared visitor RPC path. 180 replays and 81 database replays are green.
+- **Phone.**
+  - `src/outbox`: encrypted expo-sqlite operational outbox (own key, per person, store before send, ≤ 100 per request, only terminal answers settle, 24 h retention) and `OutboxProvider`.
+  - Screens (EN/ES):
+    - attended kiosk: camera or typed code, arriving/leaving, printed-badge confirmation, per-person results, offline "waiting to sync";
+    - visitor desk (offline-capable visitor ids);
+    - foreman crew (≤ 100, per-worker results, estimate note) and a granted foreman's crew kiosk;
+    - manual correction (pick a visit or add a missing one, project time zone, reason);
+    - combined sync status card;
+    - sign-out guard for unsent records.
+  - Entry points: project detail, roster rows, worker home.
+- Screenshots: `docs/screenshots/m08` (web render against the local stack; the kiosk round trip uses the real Edge Function).
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db`: **19 files, 554** pgTAP tests. `025_operations` has 63: permissions per role incl. MFA, GC B, foreman B, worker and operator; kiosk registration, hand-over, revocation and audit; receipts; printed badge by hash; eligibility parity with the reconciler; visitor registration incl. the cross-project id refusal; the visitor exit compare-and-swap that keeps the exit's operation id; crew names-only; screen-read authorization.
+- `npm run test:backend`: **112/112**, incl. `operations.test.ts` (2) against the real stack:
+  - offline kiosk 20 scans (10 phone, 10 printed) plus 20 crew events → exactly 40 accepted; the resend adds nothing (40 sessions, 40 events, 22 receipts);
+  - badge replay refused; per-worker errors; visitor separate; manual correction with reason; the overlap refusal; attendant cannot correct;
+  - GC B attendant refused for project A with zero rows written there; anon key and missing bearer refused.
+
+  The 81 database replays pass through the production handler.
+- Vitest unit **324**:
+  - operations core 15, incl. the acceptance scenario, a visitor exit resent after a 503 (duplicate, not VISIT_NOT_FOUND), replay, printed flag, visitors, per-worker errors, permissions, zero reads of a foreign project, foreman crew kiosk, clock skew, 503 then exactly once, malformed and muster, foreign id, HTTP guards, row mappers;
+  - outbox 8 against the real handler, incl. offline then a lost answer then exactly 40 accepted;
+  - helpers 6.
+
+  Also: integration 51, security 78, i18n 18, replay 180. Jest **61**, incl. the outbox key race (two first records at once share one key) and 9 new flows: kiosk offline→sync, printed confirmation, late-approved worker named, not-a-badge, Spanish, crew per-worker, correction, visitors, sign-out guard.
+- typecheck, ESLint + shellcheck, Prettier: pass.
+- GitHub Actions: _recorded in the PR._
+
+**NOT VERIFIED (Milestone 08)**
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): camera scanning of real phone and printed badges, two phones and the kiosk in airplane mode, kiosk restart offline, real expo-sqlite and keystore behaviour. The checklist has the step-by-step check ("Real-device kiosk, crew and visitor check"). No EAS build yet (checklist §2).
+- Hosted deployment of `ingest-operations` and attendant assignment (checklist §3).
+- There is no screen yet for a GC to grant a foreman kiosk use. The database grant exists, and the screen comes with the dashboard work.
+
+**Decisions added:** #98 operation answers and receipts, #99 who may record what, #100 eligibility before a badge step, #101 visitor ids and foreman batch results, #102 the phone outbox, #103 kiosk registration and printed-badge confirmation.
+
+**Next step:** open the Milestone 08 PR, watch CI, address the automated review, merge, then start Milestone 09 (mobile superintendent dashboard and map) on `milestone-09-dashboard`.
 
 ## Environment notes for future sessions (Linux build agent)
 

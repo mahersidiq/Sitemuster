@@ -25,6 +25,11 @@ export const queryKeys = {
   myEnrollments: ['my-enrollments'] as const,
   roster: (projectId: string) => ['roster', projectId] as const,
   orientationSessions: (projectId: string) => ['orientation-sessions', projectId] as const,
+  foremanProjects: ['foreman-projects'] as const,
+  crew: (projectId: string, companyId: string) => ['crew', projectId, companyId] as const,
+  openVisits: (projectId: string) => ['open-visits', projectId] as const,
+  correctable: (projectId: string, workerId: string) =>
+    ['correctable', projectId, workerId] as const,
 };
 
 export function useOrganizations() {
@@ -71,6 +76,45 @@ export function useRoster(projectId: string) {
     useQuery({
       queryKey: queryKeys.roster(projectId),
       queryFn: () => api.listEnrollments(projectId),
+    }),
+  );
+}
+
+// Milestone 08: kiosk, foreman, visitor and correction screens.
+
+export function useForemanProjects() {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({ queryKey: queryKeys.foremanProjects, queryFn: () => api.myForemanProjects() }),
+  );
+}
+
+export function useCrew(projectId: string, companyId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.crew(projectId, companyId),
+      queryFn: () => api.foremanCrew(projectId, companyId),
+    }),
+  );
+}
+
+export function useOpenVisits(projectId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.openVisits(projectId),
+      queryFn: () => api.openVisitorVisits(projectId),
+    }),
+  );
+}
+
+export function useCorrectableSessions(projectId: string, workerId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.correctable(projectId, workerId),
+      queryFn: () => api.workerAttendanceSessions(projectId, workerId),
     }),
   );
 }

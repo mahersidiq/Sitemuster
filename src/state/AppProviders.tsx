@@ -6,6 +6,7 @@ import { errorCode } from '../api/errors';
 import type { RuntimeEnv } from '../config/runtime-env';
 import { AuthProvider } from './auth';
 import { LanguageProvider } from './language';
+import { OutboxProvider } from './outbox';
 import { SessionProvider } from './session';
 import { TrackingProvider } from './tracking';
 
@@ -31,7 +32,9 @@ export function AppProviders({ env, children }: { env: RuntimeEnv; children: Rea
         <LanguageProvider appEnv={env.appEnv}>
           <SessionProvider env={env}>
             <AuthProvider env={env}>
-              <TrackingProvider env={env}>{children}</TrackingProvider>
+              <OutboxProvider>
+                <TrackingProvider env={env}>{children}</TrackingProvider>
+              </OutboxProvider>
             </AuthProvider>
           </SessionProvider>
         </LanguageProvider>
