@@ -53,6 +53,19 @@ const families: Record<string, readonly string[]> = {
   'weekdays.short': ['1', '2', '3', '4', '5', '6', '7'],
   'weekdays.long': ['1', '2', '3', '4', '5', '6', '7'],
   'wizard.steps': ['basics', 'site', 'schedule', 'review'],
+  // Milestone 10
+  reportStatus: [
+    'PENDING_CONFIRMATION',
+    'CONFIRMED',
+    'DISPUTED',
+    'CORRECTION_REQUESTED',
+    'NOT_CONFIRMED',
+    'SUPERSEDED',
+  ],
+  reportAction: ['CONFIRM', 'DISPUTE', 'SUBMIT_CORRECTION'],
+  'requests.channel': ['WORKER_REQUEST', 'FOREMAN_REQUEST'],
+  'hours.requestStatus': ['PENDING', 'APPROVED', 'REJECTED'],
+  'hours.csv.statusValue': ['OPEN', 'CLOSED', 'UNRESOLVED', 'ENDED_UNVERIFIED', 'PENDING_APPROVAL'],
 };
 
 describe('runtime-built translation keys', () => {

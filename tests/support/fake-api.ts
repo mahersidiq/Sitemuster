@@ -14,6 +14,10 @@ import {
   type OperationResult,
   type ProjectStaffRole,
   type ProjectStatus,
+  type DailyReportsResponse,
+  type ReportConfirmRequest,
+  type ReportConfirmResponse,
+  type ReportView,
   type WorkWindow,
 } from '@sitemuster/shared';
 
@@ -56,6 +60,10 @@ import {
   type RosterPresence,
   type TrackingHealth,
   type WorkforceMember,
+  type CorrectionRequestInput,
+  type CorrectionRequestRow,
+  type ForemanKioskGrant,
+  type MyAttendance,
 } from '../../src/api/types';
 import { isValidTimeZone } from '../../src/projects/format';
 import type { TrackingPlan } from '../../src/tracking/plan';
@@ -205,6 +213,17 @@ export class FakeWorld {
   channelMode: ChannelStatus = 'SUBSCRIBED';
   /** No signal on the staff phone: dashboard, roster and map reads fail with NETWORK. */
   readsOffline = false;
+  // Milestone 10 fake server state (views as the server functions return them), shared by
+  // every signed-in user of the same fake server.
+  readonly reports: ReportView[];
+  /** Local dates whose project day has not ended yet (list answers day_open). */
+  readonly openDays: Set<string>;
+  readonly answers: ReportConfirmRequest[];
+  readonly attendance: Map<string, MyAttendance>;
+  readonly correctionRequests: CorrectionRequestRow[];
+  readonly kioskGrants: Map<string, ForemanKioskGrant[]>;
+  /** The fake server clock for report deadlines. */
+  now = Date.parse('2026-11-04T15:00:00Z');
   private broadcastVersion = 0;
 
   constructor(
@@ -221,6 +240,12 @@ export class FakeWorld {
     this.companies = shared?.companies ?? [];
     this.printedBadges = shared?.printedBadges ?? [];
     this.joinPasses = shared?.joinPasses ?? new Map();
+    this.reports = shared?.reports ?? [];
+    this.openDays = shared?.openDays ?? new Set();
+    this.answers = shared?.answers ?? [];
+    this.attendance = shared?.attendance ?? new Map();
+    this.correctionRequests = shared?.correctionRequests ?? [];
+    this.kioskGrants = shared?.kioskGrants ?? new Map();
   }
 
   /** Test helper: a worker (with or without an app account) enrolled in a project. */
@@ -1312,10 +1337,25 @@ export class FakeSiteMusterApi implements SiteMusterApi {
           children,
         };
       }
-      case 'MANUAL_ATTENDANCE_CORRECTION':
-        return this.canCorrectAttendance(event.project_id)
-          ? { ...base, status: 'accepted', reason: null }
-          : { ...base, status: 'rejected', reason: 'FORBIDDEN' };
+      case 'MANUAL_ATTENDANCE_CORRECTION': {
+        if (!this.canCorrectAttendance(event.project_id)) {
+          return { ...base, status: 'rejected', reason: 'FORBIDDEN' };
+        }
+        // Approving a correction request: the change and the approval are one (Milestone 10).
+        const requestId = event.payload.request_id;
+        if (requestId) {
+          const request = this.world.correctionRequests.find((r) => r.request_id === requestId);
+          if (!request || request.worker_id !== event.payload.worker_id) {
+            return { ...base, status: 'rejected', reason: 'REQUEST_NOT_FOUND' };
+          }
+          if (request.status !== 'PENDING') {
+            return { ...base, status: 'rejected', reason: 'REQUEST_ALREADY_DECIDED' };
+          }
+          request.status = 'APPROVED';
+          request.decided_at = new Date(this.world.now).toISOString();
+        }
+        return { ...base, status: 'accepted', reason: null };
+      }
       case 'VISITOR_ENTRY': {
         this.world.visits.push({
           visit_id: event.event_uuid,
@@ -1520,6 +1560,260 @@ export class FakeSiteMusterApi implements SiteMusterApi {
       active = false;
       listeners.delete(listener);
     };
+  }
+
+  // ---------------------------------------------------------------- Milestone 10
+
+  private foremanCompanies(projectId: string): string[] {
+    return this.world.foremanProjects
+      .filter((p) => p.project_id === projectId)
+      .map((p) => p.company_id);
+  }
+
+  /** The newest version per company, status as readers see it (overdue = NOT_CONFIRMED). */
+  private reportViews(filter: (r: ReportView) => boolean): ReportView[] {
+    const latest = new Map<string, ReportView>();
+    for (const report of this.world.reports.filter(filter)) {
+      const key = `${report.project_id}|${report.company_id}|${report.local_date}`;
+      const seen = latest.get(key);
+      if (!seen || seen.version < report.version) latest.set(key, report);
+    }
+    return [...latest.values()].map((report) => {
+      const overdue =
+        report.status === 'PENDING_CONFIRMATION' && Date.parse(report.due_at) <= this.world.now;
+      const status = overdue ? 'NOT_CONFIRMED' : report.status;
+      const history = this.world.reports.filter(
+        (r) =>
+          r.project_id === report.project_id &&
+          r.company_id === report.company_id &&
+          r.local_date === report.local_date,
+      );
+      return {
+        ...report,
+        status,
+        can_answer:
+          status === 'PENDING_CONFIRMATION' &&
+          this.foremanCompanies(report.project_id).includes(report.company_id),
+        earlier_versions: history
+          .filter((r) => r.version < report.version)
+          .sort((a, b) => a.version - b.version)
+          .map((r) => ({ version: r.version, status: r.status })),
+      };
+    });
+  }
+
+  private reportsResponse(reports: ReportView[], dayOpen = false): DailyReportsResponse {
+    return { schema_version: 1, request_id: randomUUID(), day_open: dayOpen, reports };
+  }
+
+  async listReports(projectId: string, localDate: string): Promise<DailyReportsResponse> {
+    this.before('listReports');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    const staff = this.canViewRoster(projectId);
+    const companies = this.foremanCompanies(projectId);
+    if (!staff && companies.length === 0) throw new ApiError('FORBIDDEN');
+    return this.reportsResponse(
+      this.reportViews(
+        (r) =>
+          r.project_id === projectId &&
+          r.local_date === localDate &&
+          (staff || companies.includes(r.company_id)),
+      ),
+      this.world.openDays.has(localDate),
+    );
+  }
+
+  async pendingReports(): Promise<DailyReportsResponse> {
+    this.before('pendingReports');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    return this.reportsResponse(
+      this.reportViews((r) => this.foremanCompanies(r.project_id).includes(r.company_id)).filter(
+        (r) => r.status === 'PENDING_CONFIRMATION',
+      ),
+    );
+  }
+
+  async reissueReport(input: {
+    projectId: string;
+    companyId: string;
+    localDate: string;
+    reason: string;
+  }): Promise<DailyReportsResponse> {
+    this.before('reissueReport');
+    if (!this.canCorrectAttendance(input.projectId)) throw new ApiError('FORBIDDEN');
+    if (input.reason.trim().length < 3) throw new ApiError('INVALID_REQUEST');
+    const history = this.world.reports.filter(
+      (r) =>
+        r.project_id === input.projectId &&
+        r.company_id === input.companyId &&
+        r.local_date === input.localDate,
+    );
+    const latest = history.sort((a, b) => b.version - a.version)[0];
+    if (!latest) throw new ApiError('NOT_FOUND');
+    latest.status = 'SUPERSEDED';
+    this.world.reports.push({
+      ...latest,
+      report_id: randomUUID(),
+      version: latest.version + 1,
+      status: 'PENDING_CONFIRMATION',
+      due_at: new Date(this.world.now + 86_400_000).toISOString(),
+      generated_at: new Date(this.world.now).toISOString(),
+    });
+    return this.after(await this.listReports(input.projectId, input.localDate));
+  }
+
+  async answerReport(request: ReportConfirmRequest): Promise<ReportConfirmResponse> {
+    this.before('answerReport');
+    const report = this.world.reports.find((r) => r.report_id === request.report_id);
+    if (!report || !this.foremanCompanies(report.project_id).includes(report.company_id)) {
+      throw new ApiError('FORBIDDEN');
+    }
+    const duplicate = this.world.answers.find((a) => a.event_uuid === request.event_uuid);
+    if (duplicate) {
+      return {
+        schema_version: 1,
+        request_id: randomUUID(),
+        report_id: report.report_id,
+        version: report.version,
+        status: report.status,
+        duplicate: true,
+      };
+    }
+    if (report.version !== request.version || report.status === 'SUPERSEDED') {
+      throw new ApiError('REPORT_VERSION_STALE');
+    }
+    if (report.status === 'PENDING_CONFIRMATION' && Date.parse(report.due_at) <= this.world.now) {
+      report.status = 'NOT_CONFIRMED';
+      throw new ApiError('REPORT_DEADLINE_PASSED');
+    }
+    if (report.status !== 'PENDING_CONFIRMATION') throw new ApiError('REPORT_ALREADY_ANSWERED');
+    if (request.action !== 'CONFIRM' && !request.reason) throw new ApiError('REASON_REQUIRED');
+    this.world.answers.push(request);
+    report.status =
+      request.action === 'CONFIRM'
+        ? 'CONFIRMED'
+        : request.action === 'DISPUTE'
+          ? 'DISPUTED'
+          : 'CORRECTION_REQUESTED';
+    report.answers = [
+      ...report.answers,
+      {
+        version: report.version,
+        action: request.action,
+        comment: request.reason,
+        created_at: new Date(this.world.now).toISOString(),
+      },
+    ];
+    for (const proposal of request.proposed) {
+      const worker = this.world.workers.find((w) => w.id === proposal.worker_id);
+      this.world.correctionRequests.push({
+        request_id: randomUUID(),
+        worker_id: proposal.worker_id,
+        worker_name: worker?.legalName ?? report.worker_names[proposal.worker_id] ?? '',
+        company_name: report.company_name,
+        channel: 'FOREMAN_REQUEST',
+        session_id: proposal.session_id,
+        original: {},
+        proposed: {
+          proposed_start_at: proposal.proposed_start_at,
+          proposed_end_at: proposal.proposed_end_at,
+          note: proposal.note,
+        },
+        reason: request.reason ?? '',
+        status: 'PENDING',
+        decision_reason: null,
+        created_at: new Date(this.world.now).toISOString(),
+        decided_at: null,
+      });
+    }
+    return this.after({
+      schema_version: 1,
+      request_id: randomUUID(),
+      report_id: report.report_id,
+      version: report.version,
+      status: report.status,
+      duplicate: false,
+    });
+  }
+
+  async myAttendance(projectId: string, _from: string, _to: string): Promise<MyAttendance> {
+    this.before('myAttendance');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    const mine = this.world.attendance.get(projectId);
+    if (!mine) throw new ApiError('FORBIDDEN');
+    // A fresh answer each time, like the server (never the stored object itself).
+    return { ...mine, sessions: [...mine.sessions], requests: [...mine.requests] };
+  }
+
+  async requestCorrection(input: CorrectionRequestInput) {
+    this.before('requestCorrection');
+    const mine = this.world.attendance.get(input.projectId);
+    if (!mine) throw new ApiError('FORBIDDEN');
+    const seen = this.world.correctionRequests.find((r) => r.request_id === input.eventUuid);
+    if (seen) return { request_id: seen.request_id, duplicate: true };
+    if (input.reason.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    const request = {
+      request_id: input.eventUuid,
+      session_id: input.sessionId,
+      status: 'PENDING' as const,
+      reason: input.reason.trim(),
+      proposed: { proposed_start_at: input.proposedStartAt, proposed_end_at: input.proposedEndAt },
+      decision_reason: null,
+      created_at: new Date(this.world.now).toISOString(),
+    };
+    mine.requests = [request, ...mine.requests];
+    this.world.correctionRequests.push({
+      ...request,
+      worker_id: this.myWorker()?.id ?? '',
+      worker_name: this.myWorker()?.legalName ?? '',
+      company_name: null,
+      channel: 'WORKER_REQUEST',
+      original: {},
+      decided_at: null,
+    });
+    return this.after({ request_id: request.request_id, duplicate: false });
+  }
+
+  async correctionRequests(projectId: string): Promise<CorrectionRequestRow[]> {
+    this.before('correctionRequests');
+    if (!this.canCorrectAttendance(projectId)) throw new ApiError('FORBIDDEN');
+    return this.world.correctionRequests.map((request) => ({ ...request }));
+  }
+
+  async rejectCorrectionRequest(requestId: string, reason: string): Promise<void> {
+    this.before('rejectCorrectionRequest');
+    const request = this.world.correctionRequests.find((r) => r.request_id === requestId);
+    if (!request) throw new ApiError('FORBIDDEN');
+    if (request.status !== 'PENDING') throw new ApiError('REQUEST_ALREADY_DECIDED');
+    if (reason.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    request.status = 'REJECTED';
+    request.decision_reason = reason.trim();
+    request.decided_at = new Date(this.world.now).toISOString();
+    this.after(undefined);
+  }
+
+  async foremanKioskGrants(projectId: string): Promise<ForemanKioskGrant[]> {
+    this.before('foremanKioskGrants');
+    if (!this.canCorrectAttendance(projectId)) throw new ApiError('FORBIDDEN');
+    return (this.world.kioskGrants.get(projectId) ?? []).map((grant) => ({ ...grant }));
+  }
+
+  async setForemanKioskGrant(input: {
+    projectId: string;
+    companyId: string;
+    foremanProfileId: string;
+    enabled: boolean;
+    reason: string;
+  }): Promise<void> {
+    this.before('setForemanKioskGrant');
+    if (!this.canCorrectAttendance(input.projectId)) throw new ApiError('FORBIDDEN');
+    if (input.reason.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    const grant = (this.world.kioskGrants.get(input.projectId) ?? []).find(
+      (g) => g.foreman_profile_id === input.foremanProfileId && g.company_id === input.companyId,
+    );
+    if (!grant) throw new ApiError('FOREMAN_NOT_FOUND');
+    grant.can_operate_kiosk = input.enabled;
+    this.after(undefined);
   }
 
   async renewDeviceWithSession(_appVersion: string): Promise<DeviceRenewResponse> {

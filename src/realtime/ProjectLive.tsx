@@ -83,6 +83,8 @@ export function queryKeysFor(projectId: string, scopes: ReadonlySet<RefreshScope
   }
   if (any('WORKFORCE_CHANGED')) add(queryKeys.openVisits(projectId));
   if (any('ENROLLMENT_CHANGED')) add(queryKeys.roster(projectId));
+  // Every date's company reports of the project (prefix key).
+  if (any('REPORT_CHANGED')) add(queryKeys.reportsOf(projectId));
   if (any('PROJECT_CONFIG_CHANGED')) {
     add(queryKeys.project(projectId));
     add(queryKeys.projects);

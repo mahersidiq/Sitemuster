@@ -33,6 +33,13 @@ export const queryKeys = {
   dashboard: (projectId: string) => ['dashboard', projectId] as const,
   workforce: (projectId: string) => ['workforce', projectId] as const,
   projectMap: (projectId: string) => ['project-map', projectId] as const,
+  // Milestone 10
+  reportsOf: (projectId: string) => ['reports', projectId] as const,
+  reports: (projectId: string, localDate: string) => ['reports', projectId, localDate] as const,
+  pendingReports: ['pending-reports'] as const,
+  myAttendance: (projectId: string, from: string) => ['my-attendance', projectId, from] as const,
+  correctionRequests: (projectId: string) => ['correction-requests', projectId] as const,
+  kioskGrants: (projectId: string) => ['kiosk-grants', projectId] as const,
 };
 
 export function useOrganizations() {
@@ -154,6 +161,61 @@ export function useProjectMap(projectId: string | null, enabled: boolean) {
       queryKey: queryKeys.projectMap(projectId ?? ''),
       queryFn: () => api.projectMap(projectId ?? ''),
       enabled: Boolean(projectId) && enabled,
+    }),
+  );
+}
+
+// Milestone 10: daily company reports, the foreman's answers, own hours and correction requests.
+
+export function useReports(projectId: string, localDate: string | null) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.reports(projectId, localDate ?? ''),
+      queryFn: () => api.listReports(projectId, localDate ?? ''),
+      enabled: Boolean(localDate),
+    }),
+  );
+}
+
+export function usePendingReports(enabled = true) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.pendingReports,
+      queryFn: () => api.pendingReports(),
+      enabled,
+    }),
+  );
+}
+
+export function useMyAttendance(projectId: string | null, from: string, to: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.myAttendance(projectId ?? '', from),
+      queryFn: () => api.myAttendance(projectId ?? '', from, to),
+      enabled: Boolean(projectId),
+    }),
+  );
+}
+
+export function useCorrectionRequests(projectId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.correctionRequests(projectId),
+      queryFn: () => api.correctionRequests(projectId),
+    }),
+  );
+}
+
+export function useKioskGrants(projectId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.kioskGrants(projectId),
+      queryFn: () => api.foremanKioskGrants(projectId),
     }),
   );
 }

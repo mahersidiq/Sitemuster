@@ -24,6 +24,11 @@ export function ForemanCard() {
   return (
     <Card testID="foreman-card">
       <Heading>{t('crew.open')}</Heading>
+      <AppButton
+        label={t('foremanReports.open')}
+        onPress={() => router.push('/foreman/reports')}
+        testID="foreman-reports-open"
+      />
       {projects.data.map((entry) => (
         <Card key={`${entry.project_id}|${entry.company_id}`}>
           <Text style={styles.line}>{`${entry.company_name} · ${entry.project_name}`}</Text>

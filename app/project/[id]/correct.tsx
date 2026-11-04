@@ -37,19 +37,35 @@ const MISSING = 'missing';
  */
 function Correct() {
   const { t } = useTranslation();
-  const { id, workerId, name } = useLocalSearchParams<{
-    id: string;
-    workerId: string;
-    name?: string;
-  }>();
+  const { id, workerId, name, requestId, sessionId, proposedStart, proposedEnd } =
+    useLocalSearchParams<{
+      id: string;
+      workerId: string;
+      name?: string;
+      /** Approving a worker or foreman correction request (Milestone 10). */
+      requestId?: string;
+      sessionId?: string;
+      proposedStart?: string;
+      proposedEnd?: string;
+    }>();
   const project = useProject(id);
   const sessions = useCorrectableSessions(id, workerId);
   const outbox = useOutbox();
   const zone = project.data?.project.iana_timezone ?? 'UTC';
-  const [target, setTarget] = useState<string>(MISSING);
-  const [date, setDate] = useState('');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [target, setTarget] = useState<string>(sessionId ? sessionId : MISSING);
+  // null = not edited yet: a request's proposal fills the form (in the project time zone).
+  const [dateInput, setDate] = useState<string | null>(null);
+  const [startInput, setStart] = useState<string | null>(null);
+  const [endInput, setEnd] = useState<string | null>(null);
+  const proposal = useMemo(() => {
+    if (!requestId || !project.data) return { date: '', start: '', end: '' };
+    const from = proposedStart ? localDateTime(proposedStart, zone) : null;
+    const to = proposedEnd ? localDateTime(proposedEnd, zone) : null;
+    return { date: (from ?? to)?.date ?? '', start: from?.time ?? '', end: to?.time ?? '' };
+  }, [requestId, project.data, proposedStart, proposedEnd, zone]);
+  const date = dateInput ?? proposal.date;
+  const start = startInput ?? proposal.start;
+  const end = endInput ?? proposal.end;
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -110,6 +126,7 @@ function Correct() {
             ...(times.startAt ? { corrected_start_at: times.startAt } : {}),
             ...(times.endAt ? { corrected_end_at: times.endAt } : {}),
             reason: reason.trim(),
+            ...(requestId ? { request_id: requestId } : {}),
           },
         },
         { title: name ?? workerId },
@@ -124,6 +141,9 @@ function Correct() {
     <Screen testID="correct-screen">
       <Title>{t('correction.title')}</Title>
       <Body>{t('correction.worker', { name: name ?? workerId })}</Body>
+      {requestId ? (
+        <Banner tone="info" text={t('correction.fromRequest')} testID="correct-from-request" />
+      ) : null}
       <QueryState
         isLoading={sessions.isLoading}
         error={sessions.error}

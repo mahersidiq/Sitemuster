@@ -34,8 +34,16 @@ describe('which reads a live message makes stale', () => {
     );
   });
 
+  it('a report change refetches every date of the project reports (Milestone 10)', () => {
+    expect(keys('REPORT_CHANGED')).toEqual(
+      expect.arrayContaining([key('reports', PROJECT), key('dashboard', PROJECT)]),
+    );
+    expect(keys('REPORT_CHANGED')).not.toContain(key('project-map', PROJECT));
+  });
+
   it('a full resync refetches every project read; nothing asked, nothing refetched', () => {
-    expect(keys('ALL')).toHaveLength(7);
+    expect(keys('ALL')).toHaveLength(8);
+    expect(keys('ALL')).toContain(key('reports', PROJECT));
     expect(keys()).toEqual([]);
   });
 });

@@ -22,6 +22,9 @@ const SAME_IN_BOTH = new Set([
   'invitations.summary',
   'workerProjects.employerLine',
   'workers.resultLine',
+  // Milestone 10: an hours unit and a "company, date: status." line (placeholders only).
+  'reports.hours',
+  'foremanReports.sent',
 ]);
 
 describe('EN/ES UI dictionaries', () => {
