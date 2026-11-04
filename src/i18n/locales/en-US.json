@@ -1,0 +1,95 @@
+{
+  "app": {
+    "name": "SiteMuster"
+  },
+  "common": {
+    "loading": "Loading…",
+    "notAvailableYet": "Not available in this build yet.",
+    "previewBanner": "Preview only — no real data. Sign-in arrives in a later build.",
+    "developmentWarning": "Development build"
+  },
+  "language": {
+    "title": "Choose your language",
+    "subtitle": "You can change it any time in Profile or Settings.",
+    "english": "English",
+    "spanish": "Español",
+    "suggested": "Suggested for this phone",
+    "currentValue": "Current language: {{language}}",
+    "changeTitle": "Language",
+    "a11ySelect": "Use {{language}}",
+    "suggestedValue": "Suggested for this phone: {{language}}"
+  },
+  "signIn": {
+    "title": "Sign in",
+    "workerHeading": "Workers",
+    "workerBody": "Sign in with a 6-digit code sent to your phone by text message.",
+    "workerAction": "Sign in with phone",
+    "staffHeading": "Site staff",
+    "staffBody": "Owners, project managers, superintendents and safety managers sign in with a verified email and an authenticator app.",
+    "staffAction": "Sign in with email",
+    "noPhoneHeading": "No phone?",
+    "noPhoneBody": "Ask your foreman or the site kiosk attendant. You can be checked in without a phone.",
+    "devPreviewHeading": "Developer preview (development builds only)",
+    "devPreviewWorker": "Preview worker screens",
+    "devPreviewStaff": "Preview staff screens"
+  },
+  "worker": {
+    "tabs": {
+      "home": "Home",
+      "projects": "My Projects",
+      "history": "Time History",
+      "profile": "Profile"
+    },
+    "home": {
+      "title": "Today",
+      "body": "Your project status, check-in method and sync status will appear here."
+    },
+    "projects": {
+      "title": "My projects",
+      "body": "Projects you joined through orientation, and whether each one is approved."
+    },
+    "history": {
+      "title": "Time history",
+      "body": "Your estimated onsite hours by day and week. Estimated onsite presence is not payroll."
+    },
+    "profile": {
+      "title": "Profile",
+      "body": "Your name, employer, emergency contact, language and privacy settings."
+    }
+  },
+  "staff": {
+    "tabs": {
+      "home": "Home",
+      "projects": "Projects",
+      "workforce": "Workforce",
+      "map": "Map",
+      "more": "More"
+    },
+    "home": {
+      "title": "Selected project",
+      "body": "Estimated onsite, unknown, confirmed and visitor counts for the selected project."
+    },
+    "projects": {
+      "title": "Projects",
+      "body": "Create and manage projects, site circles and work windows."
+    },
+    "workforce": {
+      "title": "Workforce",
+      "body": "Roster by company and trade, pending approvals and close-out."
+    },
+    "map": {
+      "title": "Map",
+      "body": "Site circle and recent estimated positions with time and accuracy. Stale markers are never shown as live."
+    },
+    "more": {
+      "title": "More",
+      "body": "Orientation, reports, muster, account and settings."
+    }
+  },
+  "errors": {
+    "configTitle": "SiteMuster cannot start",
+    "configBody": "This build is missing required configuration, so it will not run. Contact your administrator.",
+    "routeNotFound": "This screen does not exist.",
+    "goHome": "Go to start"
+  }
+}

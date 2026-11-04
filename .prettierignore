@@ -1,0 +1,13 @@
+node_modules/
+package-lock.json
+.expo/
+dist/
+coverage/
+ios/
+android/
+supabase/.temp/
+supabase/.branches/
+# Binding specification documents and the CI skeleton are kept byte-for-byte as delivered.
+CLAUDE.md
+docs/
+.github/

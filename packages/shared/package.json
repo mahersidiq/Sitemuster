@@ -1,0 +1,12 @@
+{
+  "name": "@sitemuster/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod schemas, enums, config defaults, provider interfaces and pure domain logic shared by the mobile app and Supabase Edge Functions.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "zod": "4.6.7"
+  }
+}
