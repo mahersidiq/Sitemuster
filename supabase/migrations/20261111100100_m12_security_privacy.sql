@@ -517,8 +517,9 @@ as $$
      and not exists (select 1 from app_private.account_deletion_requests r where r.auth_user_id = auth.uid())
 $$;
 
--- Called by the account-delete Edge Function after it checked a fresh sign-in (service role).
-create function public.edge_request_account_deletion(p_user uuid)
+-- Called by the account-delete Edge Function after it checked a fresh sign-in (service role);
+-- p_aal is the assurance level of that sign-in, taken from the verified access token.
+create function public.edge_request_account_deletion(p_user uuid, p_aal text)
 returns jsonb
 language plpgsql
 security definer
@@ -542,6 +543,12 @@ begin
   -- Platform operators are removed by the platform owner, not through the app (spec 02).
   if exists (select 1 from app_private.platform_operators o where o.user_id = p_user and o.active) then
     raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+  -- Someone with an authenticator must have used it in this sign-in: deleting is never a way
+  -- around MFA.
+  if exists (select 1 from auth.mfa_factors f where f.user_id = p_user and f.status = 'verified')
+     and coalesce(p_aal, 'aal1') <> 'aal2' then
+    raise exception 'MFA_REQUIRED' using errcode = '42501';
   end if;
   -- An organization always keeps an owner: the founding owner or the last OWNER transfers first.
   if exists (select 1 from public.organizations o where o.owner_user_id = p_user)
@@ -1104,7 +1111,7 @@ revoke all on function
 revoke all on function
   public.legal_document_text(public.legal_document_type, public.locale_code), public.my_consents(),
   public.set_my_location_consent(uuid, boolean), public.renew_my_consent(uuid, uuid, boolean),
-  public.edge_request_account_deletion(uuid),
+  public.edge_request_account_deletion(uuid, text),
   public.operator_org_lookup(text, text), public.operator_revoke_device(uuid, text),
   public.operator_resend_invitation(uuid, text), public.operator_health(text),
   public.operator_list_legal_notices(text),
@@ -1115,7 +1122,7 @@ revoke all on function
   public.operator_reset_staff_mfa(uuid, text)
   from public, anon, authenticated, service_role;
 
-grant execute on function public.edge_request_account_deletion(uuid) to service_role;
+grant execute on function public.edge_request_account_deletion(uuid, text) to service_role;
 
 grant execute on function
   public.legal_document_text(public.legal_document_type, public.locale_code), public.my_consents(),

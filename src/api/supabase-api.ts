@@ -1,6 +1,8 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  ACCOUNT_DELETE_CONFIRMATION,
+  AccountDeleteResponseSchema,
   AddressResolveResponseSchema,
   AddressSearchResponseSchema,
   BulkApproveResultSchema,
@@ -32,9 +34,11 @@ import {
   type CrewMember,
   type ForemanKioskGrant,
   type ForemanMusterSummary,
+  type GlobalLegalDocument,
   type MusterBoard,
   type MusterReportView,
   type MyAttendance,
+  type MyConsent,
   type MyMuster,
   type ProjectMusters,
   type ForemanProject,
@@ -648,6 +652,38 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
 
   async revokeMyPushTokens(installationId: string) {
     await this.rpc('revoke_my_push_tokens', { p_installation_id: installationId });
+  }
+
+  async myConsents() {
+    return (await this.rpc('my_consents', {})) as MyConsent[];
+  }
+
+  async setLocationConsent(projectId: string, enabled: boolean) {
+    await this.rpc('set_my_location_consent', { p_project_id: projectId, p_enabled: enabled });
+  }
+
+  async renewConsent(projectId: string, noticeId: string) {
+    await this.rpc('renew_my_consent', {
+      p_project_id: projectId,
+      p_notice_id: noticeId,
+      p_accept: true,
+    });
+  }
+
+  async legalDocument(type: GlobalLegalDocument, locale: Locale) {
+    return (await this.rpc('legal_document_text', {
+      p_document_type: type,
+      p_locale: locale,
+    })) as Notice;
+  }
+
+  async deleteAccount() {
+    return AccountDeleteResponseSchema.parse(
+      await this.invoke('account-delete', {
+        schema_version: 1,
+        confirmation: ACCOUNT_DELETE_CONFIRMATION,
+      }),
+    );
   }
 
   async setForemanKioskGrant(input: {

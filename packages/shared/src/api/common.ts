@@ -48,6 +48,12 @@ export const ApiErrorCodeSchema = z.enum([
   'LABEL_REQUIRED',
   'ACKNOWLEDGE_INCOMPLETE_REQUIRED',
   'MUSTER_NOT_CLOSED',
+  // Security, privacy and legal gates (Milestone 12).
+  'LEGAL_NOTICE_NOT_APPROVED',
+  'CONFIRMATION_REQUIRED',
+  'REAUTHENTICATION_REQUIRED',
+  'MFA_REQUIRED',
+  'ORG_OWNER_TRANSFER_REQUIRED',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

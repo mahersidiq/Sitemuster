@@ -242,7 +242,12 @@
     "REASON_TOO_LONG": "El motivo es demasiado largo (1,000 caracteres como máximo).",
     "LABEL_REQUIRED": "Escriba qué está pasando (el incidente).",
     "ACKNOWLEDGE_INCOMPLETE_REQUIRED": "Confirme que revisó a las personas sin localizar.",
-    "MUSTER_NOT_CLOSED": "Esta reunión sigue activa."
+    "MUSTER_NOT_CLOSED": "Esta reunión sigue activa.",
+    "LEGAL_NOTICE_NOT_APPROVED": "Esta versión todavía no puede iniciar una reunión: el aviso de seguridad no está aprobado en inglés y español.",
+    "CONSENT_RENEWAL_REQUIRED": "El aviso de la obra cambió. Primero acepte la nueva versión.",
+    "REAUTHENTICATION_REQUIRED": "Por su seguridad, confirme otra vez que es usted.",
+    "MFA_REQUIRED": "Escriba el código de su app de autenticación para continuar.",
+    "ORG_OWNER_TRANSFER_REQUIRED": "Usted es dueño de una organización. Pase la propiedad a otra persona antes de eliminar su cuenta."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Elija al menos un día para cada turno.",
@@ -690,7 +695,9 @@
         "PROJECT_NOT_ACTIVE": "Proyecto no activo",
         "NOT_BOUND": "Aún no configurado en este teléfono",
         "NO_DEVICE": "Teléfono no configurado",
-        "REGION_BUDGET": "Límite del teléfono alcanzado: se vigilan primero las obras más cercanas y las próximas"
+        "REGION_BUDGET": "Límite del teléfono alcanzado: se vigilan primero las obras más cercanas y las próximas",
+        "LOCATION_WITHDRAWN": "Ubicación apagada para este proyecto",
+        "CONSENT_RENEWAL_REQUIRED": "Acepte el aviso actualizado de la obra"
       }
     },
     "openDetails": "Detalles de asistencia automática",
@@ -1253,6 +1260,41 @@
       "selfOnly": "Dijeron estar a salvo pero nunca se verificaron en persona: {{count}}",
       "person": "- {{name}} ({{group}}): {{status}}",
       "amendments": "Agregado después del cierre: {{count}}"
+    }
+  },
+  "privacy": {
+    "open": "Ubicación y consentimiento",
+    "title": "Ubicación y consentimiento",
+    "intro": "En cada proyecto puede apagar la ubicación del teléfono en cualquier momento. La asistencia automática se detiene para ese proyecto; el quiosco y su capataz todavía pueden registrar su llegada y salida.",
+    "none": "Todavía no ha aceptado un aviso de obra.",
+    "location": "Ubicación para este proyecto",
+    "locationOnHelp": "Encendida: su teléfono lo cuenta en la obra automáticamente (estimado).",
+    "locationOffHelp": "Apagada: use el quiosco o a su capataz para registrar llegada y salida.",
+    "turnedOn": "La ubicación está encendida para este proyecto.",
+    "turnedOff": "La ubicación está apagada para este proyecto. Su teléfono no envía nada para él.",
+    "renewalNeeded": "El aviso de la obra cambió. Léalo y acéptelo para volver a usar la ubicación. Mientras tanto, el quiosco y su capataz siguen funcionando.",
+    "accept": "Lo leí y lo acepto",
+    "renewed": "Gracias. La ubicación está encendida otra vez para este proyecto.",
+    "accepted": "Aceptó la versión {{version}} el {{date}}."
+  },
+  "account": {
+    "delete": {
+      "open": "Eliminar mi cuenta",
+      "title": "Eliminar mi cuenta",
+      "understand": "Entiendo que eliminar mi cuenta no se puede deshacer",
+      "continue": "Continuar",
+      "verifyTitle": "Confirme que es usted",
+      "codeSentPhone": "Enviamos un código de 6 dígitos a su número de teléfono.",
+      "codeSentEmail": "Enviamos un código de 6 dígitos a su correo electrónico.",
+      "code": "Código de 6 dígitos",
+      "verify": "Confirmar",
+      "mfaTitle": "Escriba el código de su app de autenticación",
+      "mfaCode": "Código de autenticación",
+      "final": "Último paso: su cuenta se eliminará. Se cerrará su sesión en todos los teléfonos, su teléfono dejará de enviar la ubicación y sus credenciales dejarán de funcionar de inmediato.",
+      "now": "Eliminar mi cuenta ahora",
+      "done": "Su cuenta se está eliminando. Su nombre y sus datos de contacto se eliminan en un plazo de 30 días (normalmente en un día).",
+      "noContact": "Esta cuenta no tiene número de teléfono ni correo para enviar un código. Pida ayuda a su superintendente.",
+      "keepHint": "No se elimina nada hasta el último paso."
     }
   }
 }

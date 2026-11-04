@@ -242,7 +242,12 @@
     "REASON_TOO_LONG": "The reason is too long (1,000 characters at most).",
     "LABEL_REQUIRED": "Write what is happening (the incident).",
     "ACKNOWLEDGE_INCOMPLETE_REQUIRED": "Confirm that you reviewed the people who are not accounted for.",
-    "MUSTER_NOT_CLOSED": "This muster is still active."
+    "MUSTER_NOT_CLOSED": "This muster is still active.",
+    "LEGAL_NOTICE_NOT_APPROVED": "This build cannot start a muster yet: the safety notice has not been approved in English and Spanish.",
+    "CONSENT_RENEWAL_REQUIRED": "The site notice changed. Accept the new version first.",
+    "REAUTHENTICATION_REQUIRED": "For your security, confirm it is you again.",
+    "MFA_REQUIRED": "Enter the code from your authenticator app to continue.",
+    "ORG_OWNER_TRANSFER_REQUIRED": "You own an organization. Give ownership to someone else before deleting your account."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Pick at least one day for each shift.",
@@ -690,7 +695,9 @@
         "PROJECT_NOT_ACTIVE": "Project not active",
         "NOT_BOUND": "Not set up on this phone yet",
         "NO_DEVICE": "Phone not set up",
-        "REGION_BUDGET": "Phone limit reached: the nearest and next sites are monitored first"
+        "REGION_BUDGET": "Phone limit reached: the nearest and next sites are monitored first",
+        "LOCATION_WITHDRAWN": "Location switched off for this project",
+        "CONSENT_RENEWAL_REQUIRED": "Accept the updated site notice"
       }
     },
     "openDetails": "Automatic attendance details",
@@ -1253,6 +1260,41 @@
       "selfOnly": "Said safe but never checked in person: {{count}}",
       "person": "- {{name}} ({{group}}): {{status}}",
       "amendments": "Added after closing: {{count}}"
+    }
+  },
+  "privacy": {
+    "open": "Location and consent",
+    "title": "Location and consent",
+    "intro": "For each project you can switch the phone's location off at any time. Automatic attendance then stops for that project; the kiosk and your foreman can still sign you in and out.",
+    "none": "You have not accepted a site notice yet.",
+    "location": "Location for this project",
+    "locationOnHelp": "On: your phone counts you on site automatically (estimated).",
+    "locationOffHelp": "Off: use the kiosk or your foreman to sign in and out.",
+    "turnedOn": "Location is on for this project.",
+    "turnedOff": "Location is off for this project. Nothing is sent from your phone for it.",
+    "renewalNeeded": "The site notice changed. Read it and accept it to use location again. Until then the kiosk and your foreman still work.",
+    "accept": "I have read it and accept",
+    "renewed": "Thank you. Location is on again for this project.",
+    "accepted": "You accepted version {{version}} on {{date}}."
+  },
+  "account": {
+    "delete": {
+      "open": "Delete my account",
+      "title": "Delete my account",
+      "understand": "I understand that deleting my account cannot be undone",
+      "continue": "Continue",
+      "verifyTitle": "Confirm it is you",
+      "codeSentPhone": "We sent a 6-digit code to your phone number.",
+      "codeSentEmail": "We sent a 6-digit code to your e-mail address.",
+      "code": "6-digit code",
+      "verify": "Confirm",
+      "mfaTitle": "Enter the code from your authenticator app",
+      "mfaCode": "Authenticator code",
+      "final": "Last step: your account will be deleted. You are signed out on every phone, your phone stops sending location and your badges stop working right away.",
+      "now": "Delete my account now",
+      "done": "Your account is being deleted. Your name and contact details are removed within 30 days (normally within a day).",
+      "noContact": "This account has no phone number or e-mail to send a code to. Ask your superintendent for help.",
+      "keepHint": "Nothing is deleted until the last step."
     }
   }
 }

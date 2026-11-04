@@ -1,6 +1,8 @@
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { AccountSection } from '../../src/components/AccountSection';
+import { AppButton } from '../../src/components/AppButton';
 import { EmergencyContactSection } from '../../src/components/EmergencyContactSection';
 import { LanguageSwitcher } from '../../src/components/LanguageSwitcher';
 import { ShellScreen } from '../../src/components/ShellScreen';
@@ -19,6 +21,14 @@ export default function WorkerProfileScreen() {
       body={t('worker.profile.body')}
     >
       {isWorker ? <EmergencyContactSection /> : null}
+      {isWorker ? (
+        <AppButton
+          variant="secondary"
+          label={t('privacy.open')}
+          onPress={() => router.push('/privacy')}
+          testID="open-privacy"
+        />
+      ) : null}
       <LanguageSwitcher />
       <AccountSection />
     </ShellScreen>

@@ -67,7 +67,9 @@ import {
   type MusterBoard,
   type MusterMemberRow,
   type MusterReportView,
+  type GlobalLegalDocument,
   type MyAttendance,
+  type MyConsent,
   type MyMuster,
   type ProjectMusters,
 } from '../../src/api/types';
@@ -248,6 +250,9 @@ export class FakeWorld {
   readonly pushTokens: { userId: string; token: string }[];
   /** Simulated push outage: starting a muster still works, alerts fail. */
   pushOutage = false;
+  /** Milestone 12: the signed-in worker's consents per project, and deletion requests. */
+  readonly consents: MyConsent[];
+  readonly deletionRequests: { userId: string; at: number }[];
   /** The fake server clock for report deadlines. */
   now = Date.parse('2026-11-04T15:00:00Z');
   private broadcastVersion = 0;
@@ -274,6 +279,8 @@ export class FakeWorld {
     this.kioskGrants = shared?.kioskGrants ?? new Map();
     this.musters = shared?.musters ?? [];
     this.pushTokens = shared?.pushTokens ?? [];
+    this.consents = shared?.consents ?? [];
+    this.deletionRequests = shared?.deletionRequests ?? [];
   }
 
   /** Test helper: a worker (with or without an app account) enrolled in a project. */
@@ -2299,6 +2306,73 @@ export class FakeSiteMusterApi implements SiteMusterApi {
       if (this.world.pushTokens[i]?.userId === userId) this.world.pushTokens.splice(i, 1);
     }
     this.after(undefined);
+  }
+
+  // ---------------------------------------------------------------- Milestone 12
+
+  /** Account deletion needs a fresh sign-in; tests set this to simulate an old one. */
+  signInIsStale = false;
+  /** Tests set this to simulate an enrolled authenticator that was not used (aal1). */
+  mfaMissing = false;
+
+  async myConsents(): Promise<MyConsent[]> {
+    this.before('myConsents');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    return this.world.consents.map((c) => ({ ...c }));
+  }
+
+  async setLocationConsent(projectId: string, enabled: boolean) {
+    this.before('setLocationConsent');
+    const consent = this.world.consents.find((c) => c.project_id === projectId);
+    if (!consent) throw new ApiError('CONSENT_REQUIRED');
+    if (enabled && consent.renewal_required) throw new ApiError('CONSENT_RENEWAL_REQUIRED');
+    consent.location_enabled = enabled;
+    this.after(undefined);
+  }
+
+  async renewConsent(projectId: string, noticeId: string) {
+    this.before('renewConsent');
+    const consent = this.world.consents.find((c) => c.project_id === projectId);
+    if (!consent || consent.renewal_notice?.id !== noticeId) throw new ApiError('NOTICE_OUTDATED');
+    consent.notice_version_id = noticeId;
+    consent.notice_version = consent.renewal_notice.version;
+    consent.renewal_required = false;
+    consent.renewal_notice = null;
+    consent.location_enabled = true;
+    this.after(undefined);
+  }
+
+  async legalDocument(type: GlobalLegalDocument, locale: Locale): Promise<Notice> {
+    this.before('legalDocument');
+    return {
+      id: `notice-${type}-${locale}`,
+      document_id: `${type}_${locale === 'es-US' ? 'ES' : 'EN'}_V1`,
+      version: 1,
+      locale,
+      review_status: 'DRAFT_REQUIRES_HUMAN_REVIEW',
+      content:
+        locale === 'es-US'
+          ? 'Eliminar su cuenta de SiteMuster (borrador).'
+          : 'Deleting your SiteMuster account (draft).',
+      content_hash: 'a'.repeat(64),
+    };
+  }
+
+  async deleteAccount() {
+    this.before('deleteAccount');
+    if (this.signInIsStale) throw new ApiError('REAUTHENTICATION_REQUIRED');
+    if (this.mfaMissing) throw new ApiError('MFA_REQUIRED');
+    const userId = this.world.access.user_id;
+    if (!this.world.deletionRequests.some((r) => r.userId === userId)) {
+      this.world.deletionRequests.push({ userId, at: this.world.now });
+    }
+    return this.after({
+      schema_version: 1 as const,
+      request_id: randomUUID(),
+      status: 'REQUESTED' as const,
+      process_after: new Date(this.world.now + 86_400_000).toISOString(),
+      duplicate: false,
+    });
   }
 
   async renewDeviceWithSession(_appVersion: string): Promise<DeviceRenewResponse> {

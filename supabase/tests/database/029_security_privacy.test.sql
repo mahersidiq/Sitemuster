@@ -2,7 +2,7 @@
 -- privacy maintenance, rate limits and the platform operator RPCs (docs/spec/09, 02, 05, 08;
 -- decisions #123–#131).
 begin;
-select plan(72);
+select plan(73);
 select tests.seed_world();
 
 select set_config('t.muster_en', (select id::text from public.legal_notice_versions where document_id = 'MUSTER_SAFETY_LIMITATIONS_EN_V1'), true);
@@ -141,20 +141,20 @@ insert into public.attendance_sessions (id, project_id, worker_id, employer_snap
 values ('6a000000-0000-4000-8000-0000000000a2', tests.id('p_a1'), tests.id('w_a2'), tests.id('c_a'), now() - interval '2 days',
         now() - interval '2 days' + interval '8 hours', 'FOREMAN', 'FOREMAN', tests.id('cv_a1'), 'CLOSED', 'America/Chicago');
 
-select is(public.edge_request_account_deletion(tests.id('u_worker_a2')) ->> 'status', 'REQUESTED', 'a worker asks to delete their account');
+select is(public.edge_request_account_deletion(tests.id('u_worker_a2'), 'aal1') ->> 'status', 'REQUESTED', 'a worker asks to delete their account');
 select is((select count(*)::int from app_private.device_upload_credentials
             where device_id = '5d000000-0000-4000-8000-0000000000a2' and revoked_at is null), 0, 'the upload credential is revoked at once');
 select is((select active from public.device_installations where id = '5d000000-0000-4000-8000-0000000000a2'), false, 'the phone is deactivated');
 select is((select count(*)::int from app_private.push_tokens where auth_user_id = tests.id('u_worker_a2') and revoked_at is null), 0,
   'muster alerts stop');
 select is((select enrollment_status::text from public.worker_enrollments where id = tests.id('e_a2')), 'REVOKED', 'the enrollment is revoked');
-select is(public.edge_request_account_deletion(tests.id('u_worker_a2')) ->> 'duplicate', 'true', 'asking twice is the same request');
+select is(public.edge_request_account_deletion(tests.id('u_worker_a2'), 'aal1') ->> 'duplicate', 'true', 'asking twice is the same request');
 select tests.authenticate_as(tests.id('u_worker_a2'), 'aal1');
 select is((select count(*)::int from public.worker_profiles), 0, 'even an unexpired session reads nothing any more');
 select tests.as_postgres();
-select throws_ok(format($$select public.edge_request_account_deletion(%L)$$, tests.id('u_a_owner')),
+select throws_ok(format($$select public.edge_request_account_deletion(%L, 'aal2')$$, tests.id('u_a_owner')),
   '22023', 'ORG_OWNER_TRANSFER_REQUIRED', 'an organization owner transfers the organization first');
-select throws_ok(format($$select public.edge_request_account_deletion(%L)$$, tests.id('u_operator')),
+select throws_ok(format($$select public.edge_request_account_deletion(%L, 'aal2')$$, tests.id('u_operator')),
   '42501', 'FORBIDDEN', 'a platform operator is not deleted through the app');
 select is(app_private.process_account_deletions(now()), 0, 'nothing is removed before the 24-hour window');
 select is(app_private.process_account_deletions(now() + interval '25 hours'), 1, 'the request is processed after it');
@@ -172,7 +172,7 @@ select ok(public.operator_set_retention_hold(tests.id('org_a'), null, 'CONTRACT_
 select set_config('t.legal_hold', (public.operator_set_retention_hold(tests.id('org_a'), tests.id('p_a1'), 'LEGAL_HOLD',
                                     'Incident 2026-11-01 investigation', 'counsel requested a hold') ->> 'hold_id'), true);
 select tests.as_postgres();
-select is(public.edge_request_account_deletion(tests.id('u_worker_a1')) ->> 'status', 'REQUESTED', 'a worker under a legal hold asks to delete');
+select is(public.edge_request_account_deletion(tests.id('u_worker_a1'), 'aal1') ->> 'status', 'REQUESTED', 'a worker under a legal hold asks to delete');
 select is(app_private.process_account_deletions(now() + interval '25 hours'), 0, 'the legal hold postpones identity removal');
 select tests.authenticate_as(tests.id('u_operator'));
 select ok(public.operator_release_retention_hold(current_setting('t.legal_hold')::uuid, 'investigation closed') ? 'released_at',
@@ -187,7 +187,11 @@ select is((select count(*)::int from public.emergency_contacts where worker_prof
 select is((select count(*)::int from public.latest_onsite_positions where worker_id = tests.id('w_a1')), 0, 'the last position is removed');
 
 -- A staff member's assignments end at once.
-select is(public.edge_request_account_deletion(tests.id('u_a_super')) ->> 'status', 'REQUESTED', 'a superintendent asks to delete');
+insert into auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_at, updated_at, secret)
+values (gen_random_uuid(), tests.id('u_a_super'), 'phone', 'totp', 'verified', now(), now(), 'JBSWY3DPEHPK3PXQ');
+select throws_ok(format($$select public.edge_request_account_deletion(%L, 'aal1')$$, tests.id('u_a_super')),
+  '42501', 'MFA_REQUIRED', 'someone with an authenticator must use it to delete their account');
+select is(public.edge_request_account_deletion(tests.id('u_a_super'), 'aal2') ->> 'status', 'REQUESTED', 'a superintendent asks to delete');
 select is((select count(*)::int from public.project_staff where user_id = tests.id('u_a_super') and status = 'ACTIVE'), 0,
   'their project assignments are revoked at once');
 
