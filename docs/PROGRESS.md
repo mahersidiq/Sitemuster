@@ -7,7 +7,7 @@
 | # | Milestone | Status | PR | Notes |
 |---|---|---|---|---|
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
-| 02 | Database, RLS and role matrix | in review | PR #2 | NOT VERIFIED items below |
+| 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
 | 03 | Authentication, MFA and English/Spanish | not started | | |
 | 04 | GC organizations, projects, shifts and circles | not started | | |
 | 05 | Orientation sessions, badges, approval | not started | | |
@@ -62,6 +62,7 @@
 **Test results (local)**
 - `supabase db reset` + `supabase test db` (CLI 2.122.1, Docker): **12 files, 203 pgTAP tests pass** — two-tenant isolation, PM/SUPER/SAFETY/ATTENDANT/ADMIN/OWNER matrix, MFA enforcement, foreman and worker boundaries, platform operator denial, device credentials, uniqueness/immutability/privacy constraints, realtime authorization, org creation, raw-fix retention. Sanity run confirmed assertions fail when wrong.
 - npm checks: typecheck, lint, format pass; unit 92 + 7, integration 51 + 8 (adds DB↔TS enum parity), security 64 (adds migration static scan), i18n 10, replay contract 3.
+- GitHub Actions run 41748240221: `code-quality` success; `database` success (`supabase test db`: Files=12, Tests=203, PASS).
 
 **NOT VERIFIED (Milestone 02)**
 - Migrations not applied to real Supabase staging/production (no accounts — HUMAN_CHECKLIST §3). Data API/Realtime dashboard settings in §3 are manual owner steps.
