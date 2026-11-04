@@ -105,15 +105,16 @@ select is(
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   array['accept_invitation', 'address_lookup_allowed', 'attendance_counts', 'bulk_approve_enrollments', 'bulk_confirm_employer',
         'check_project_site', 'close_orientation_session', 'complete_orientation', 'create_managed_worker',
-        'create_organization', 'create_project', 'decide_enrollment', 'get_my_access',
+        'create_organization', 'create_project', 'decide_enrollment', 'foreman_crew', 'get_my_access',
         'get_my_emergency_contact', 'get_my_profile', 'get_orientation_session', 'get_project_detail',
         'get_project_notice',
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
         'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_enrollments',
-        'my_tracking_plan', 'preview_orientation', 'project_tracking_health', 'remove_project_staff',
-        'revoke_invitation', 'revoke_my_device', 'revoke_printed_badge',
+        'my_foreman_projects', 'my_tracking_plan', 'open_visitor_visits', 'operation_context',
+        'preview_orientation', 'project_tracking_health', 'register_kiosk', 'remove_project_staff',
+        'revoke_invitation', 'revoke_kiosk', 'revoke_my_device', 'revoke_printed_badge',
         'set_my_language', 'set_project_status', 'start_orientation_session', 'update_my_emergency_contact',
-        'update_project_config'],
+        'update_project_config', 'worker_attendance_sessions'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
 );
 
@@ -125,9 +126,12 @@ select is(
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   array['edge_activate_device', 'edge_attendance_commit', 'edge_attendance_load', 'edge_attendance_sweep',
         'edge_badge_device', 'edge_device_authenticate', 'edge_device_rate_limit', 'edge_device_renew',
-        'edge_insert_location_receipts', 'edge_location_receipt_lookup', 'edge_record_location_terminals',
-        'edge_redeem_badge_step', 'edge_visitor_commit', 'edge_visitor_load', 'edge_worker_open_session_projects'],
-  'device activation and credentials, badge redemption, location ingestion and the attendance reconciler are callable only by the Edge Functions (service_role)'
+        'edge_insert_location_receipts', 'edge_kiosk_device', 'edge_location_receipt_lookup',
+        'edge_operation_rate_limit', 'edge_operation_receipts', 'edge_operation_workers',
+        'edge_printed_badge_worker', 'edge_record_location_terminals', 'edge_record_operation_receipts',
+        'edge_redeem_badge_step', 'edge_visitor_commit', 'edge_visitor_load', 'edge_visitor_register',
+        'edge_worker_open_session_projects'],
+  'device activation and credentials, badge redemption, location and operations ingestion and the attendance reconciler are callable only by the Edge Functions (service_role)'
 );
 
 select is(
