@@ -13,6 +13,7 @@ export * from './api/broadcast.ts';
 export * from './api/address.ts';
 export * from './api/orientation.ts';
 export * from './api/reports.ts';
+export * from './api/muster.ts';
 export * from './replay/fixture-schema.ts';
 export * from './providers/types.ts';
 export * from './providers/registry.ts';

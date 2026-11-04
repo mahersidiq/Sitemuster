@@ -9,6 +9,8 @@ import {
   contextFromJson,
   correctionRequestFromJson,
   handleOperations,
+  musterMemberFromJson,
+  musterRespondFromJson,
   OperationsAuthError,
   receiptsFromJson,
   type VisitorRegistration,
@@ -89,6 +91,28 @@ Deno.serve((req) => {
     applyVisitor: (input) => applyVisitorOperation(rpc, input),
     correctionRequest: async (requestId) =>
       correctionRequestFromJson(await rpc('edge_correction_request', { p_request_id: requestId })),
+    musterMember: async (musterId, memberId, workerId) =>
+      musterMemberFromJson(
+        await rpc('edge_muster_member', {
+          p_muster: musterId,
+          p_member: memberId,
+          p_worker: workerId,
+        }),
+      ),
+    musterRespond: async (input) =>
+      musterRespondFromJson(
+        await rpc('edge_muster_respond', {
+          p_muster: input.musterId,
+          p_member: input.memberId,
+          p_action: input.action,
+          p_channel: input.channel,
+          p_actor: input.actorId,
+          p_kiosk_device: input.kioskDeviceId,
+          p_observed_at: input.observedAt,
+          p_event_uuid: input.eventUuid,
+          p_reason: null,
+        }),
+      ),
     store,
     // Safe structured lines (request id, codes and counts only) for refusals and failures.
     log: (entry) => {

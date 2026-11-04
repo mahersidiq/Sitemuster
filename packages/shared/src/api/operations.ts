@@ -87,12 +87,49 @@ const VisitorPayloadSchema = z
     }
   });
 
-const MusterPayloadSchema = z.strictObject({
-  muster_id: UuidSchema,
-  snapshot_member_id: UuidSchema,
-  action: z.enum(['SELF_REPORT', 'PHYSICAL_VERIFICATION']),
-  witness_actor_id: UuidSchema.optional(),
-});
+/**
+ * Muster responses (docs/spec/12, Milestone 11). A self report comes from the worker's own app or
+ * the notification's I'M SAFE action. A physical verification is either a tap by the safety team,
+ * the worker's own foreman or the visitor desk (`snapshot_member_id`), or an attended-kiosk scan of
+ * the worker's badge (`badge_payload` + `badge_kind` + `kiosk_device_id`, member resolved by the
+ * server). The channel of a verification is always derived server-side from the caller's role.
+ */
+const MusterPayloadSchema = z
+  .strictObject({
+    muster_id: UuidSchema,
+    snapshot_member_id: UuidSchema.optional(),
+    action: z.enum(['SELF_REPORT', 'PHYSICAL_VERIFICATION']),
+    witness_actor_id: UuidSchema.optional(),
+    channel: z.enum(['APP', 'NOTIFICATION_ACTION']).optional(),
+    badge_payload: z.string().min(1).max(256).optional(),
+    badge_kind: z.enum(['DYNAMIC_APP', 'PRINTED']).optional(),
+    kiosk_device_id: UuidSchema.optional(),
+  })
+  .superRefine((payload, ctx) => {
+    const badge =
+      payload.badge_payload !== undefined ||
+      payload.badge_kind !== undefined ||
+      payload.kiosk_device_id !== undefined;
+    if (badge && !(payload.badge_payload && payload.badge_kind && payload.kiosk_device_id)) {
+      ctx.addIssue({ code: 'custom', message: 'badge scans need payload, kind and kiosk' });
+    }
+    if (badge && payload.action !== 'PHYSICAL_VERIFICATION') {
+      ctx.addIssue({ code: 'custom', message: 'a badge scan is a physical verification' });
+    }
+    if (badge && payload.badge_payload && payload.badge_kind) {
+      const valid =
+        payload.badge_kind === 'DYNAMIC_APP'
+          ? BadgePayloadSchema.safeParse(payload.badge_payload).success
+          : PrintedBadgePayloadSchema.safeParse(payload.badge_payload).success;
+      if (!valid) ctx.addIssue({ code: 'custom', message: 'badge payload format invalid' });
+    }
+    if (payload.channel !== undefined && payload.action !== 'SELF_REPORT') {
+      ctx.addIssue({ code: 'custom', message: 'channel is for self reports only' });
+    }
+    if (payload.action === 'PHYSICAL_VERIFICATION' && !badge && !payload.snapshot_member_id) {
+      ctx.addIssue({ code: 'custom', message: 'snapshot_member_id required' });
+    }
+  });
 
 const base = {
   event_uuid: UuidSchema,
@@ -229,6 +266,8 @@ export const OPERATION_REASONS = [
   'EVENT_UUID_CONFLICT',
   'REQUEST_NOT_FOUND',
   'REQUEST_ALREADY_DECIDED',
+  'NOT_IN_MUSTER',
+  'MUSTER_CLOSED',
 ] as const;
 export type OperationReason = (typeof OPERATION_REASONS)[number];
 

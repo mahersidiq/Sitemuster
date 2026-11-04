@@ -44,6 +44,10 @@ export const ApiErrorCodeSchema = z.enum([
   'WORKER_NOT_IN_REPORT',
   'SESSION_NOT_IN_REPORT',
   'EVENT_ID_CONFLICT',
+  // Active Muster Mode (Milestone 11).
+  'LABEL_REQUIRED',
+  'ACKNOWLEDGE_INCOMPLETE_REQUIRED',
+  'MUSTER_NOT_CLOSED',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

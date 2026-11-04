@@ -445,6 +445,13 @@ verify_jwt = true
 [functions.report-confirm]
 verify_jwt = true
 
+# Active Muster Mode (Milestone 11): the caller's Supabase JWT is required.
+[functions.muster-start]
+verify_jwt = true
+
+[functions.muster-close]
+verify_jwt = true
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false

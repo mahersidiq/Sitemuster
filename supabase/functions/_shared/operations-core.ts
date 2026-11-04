@@ -45,6 +45,49 @@ export interface OperationContext {
   visitors: boolean;
   correct: boolean;
   foremanCompanyIds: string[];
+  /** The designated safety role (start, close, verify anyone; Milestone 11). */
+  musterCommand?: boolean;
+  /** The caller as a worker in one of this project's muster rosters (self reports only). */
+  musterWorkerId?: string | null;
+}
+
+/** One person of a muster snapshot (`edge_muster_member`). */
+export interface MusterMemberFact {
+  musterId: string;
+  projectId: string;
+  musterStatus: 'ACTIVE' | 'CLOSED';
+  memberId: string;
+  workerId: string | null;
+  visitorId: string | null;
+  employerId: string | null;
+}
+
+export function musterMemberFromJson(value: unknown): MusterMemberFact | null {
+  const row = value as Record<string, unknown> | null;
+  if (!row || typeof row.member_id !== 'string' || typeof row.project_id !== 'string') return null;
+  return {
+    musterId: String(row.muster_id),
+    projectId: row.project_id,
+    musterStatus: row.muster_status === 'CLOSED' ? 'CLOSED' : 'ACTIVE',
+    memberId: row.member_id,
+    workerId: typeof row.worker_id === 'string' ? row.worker_id : null,
+    visitorId: typeof row.visitor_id === 'string' ? row.visitor_id : null,
+    employerId: typeof row.employer_id === 'string' ? row.employer_id : null,
+  };
+}
+
+export type MusterChannel = 'APP' | 'NOTIFICATION_ACTION' | 'KIOSK' | 'FOREMAN' | 'SAFETY_STAFF';
+
+export interface MusterRespondResult {
+  result: 'accepted' | 'duplicate' | 'rejected';
+  reason: string | null;
+}
+
+export function musterRespondFromJson(value: unknown): MusterRespondResult {
+  const row = (value ?? {}) as Record<string, unknown>;
+  const result =
+    row.result === 'accepted' || row.result === 'duplicate' ? row.result : ('rejected' as const);
+  return { result, reason: typeof row.reason === 'string' ? row.reason : null };
 }
 
 export interface StoredReceipt {
@@ -130,6 +173,23 @@ export interface OperationsDeps {
    * The database approves it atomically with the correction; this check gives a clear rejection.
    */
   correctionRequest?(requestId: string): Promise<CorrectionRequestFact | null>;
+  /** Active Muster Mode (Milestone 11): a member by id, or by worker within a muster. */
+  musterMember?(
+    musterId: string,
+    memberId: string | null,
+    workerId: string | null,
+  ): Promise<MusterMemberFact | null>;
+  /** Records one response (`edge_muster_respond`); late offline checks become amendments. */
+  musterRespond?(input: {
+    musterId: string;
+    memberId: string;
+    action: 'SELF_REPORT' | 'PHYSICAL_VERIFICATION';
+    channel: MusterChannel;
+    actorId: string;
+    kioskDeviceId: string | null;
+    observedAt: string;
+    eventUuid: string;
+  }): Promise<MusterRespondResult>;
   store: AttendanceStore;
   log?(entry: Record<string, unknown>): void;
 }
@@ -170,6 +230,8 @@ export function contextFromJson(value: unknown): OperationContext {
     foremanCompanyIds: Array.isArray(row.foreman_company_ids)
       ? row.foreman_company_ids.filter((id): id is string => typeof id === 'string')
       : [],
+    musterCommand: row.muster_command === true,
+    musterWorkerId: typeof row.muster_worker_id === 'string' ? row.muster_worker_id : null,
   };
 }
 
@@ -265,7 +327,12 @@ function compact(result: OperationResult): OperationResult {
 
 const hasAnyPermission = (ctx: OperationContext) =>
   ctx.projectId !== null &&
-  (ctx.kiosk !== null || ctx.visitors || ctx.correct || ctx.foremanCompanyIds.length > 0);
+  (ctx.kiosk !== null ||
+    ctx.visitors ||
+    ctx.correct ||
+    ctx.foremanCompanyIds.length > 0 ||
+    ctx.musterCommand === true ||
+    (ctx.musterWorkerId ?? null) !== null);
 
 /** Validates, authorizes and applies a request body. Throws only on infrastructure failure. */
 export async function processOperations(
@@ -655,10 +722,123 @@ export async function processOperations(
         break;
       }
       case 'MUSTER_SELF_REPORT':
-      case 'MUSTER_PHYSICAL_VERIFY':
-        // Active Muster Mode arrives in Milestone 11.
-        pending.push(done(event, event.event_uuid, 'rejected', 'OPERATION_NOT_SUPPORTED'));
+      case 'MUSTER_PHYSICAL_VERIFY': {
+        // Active Muster Mode (docs/spec/12): the server derives who may answer for whom and the
+        // channel; a self report can never become a physical verification.
+        const payload = event.payload;
+        if (!deps.musterMember || !deps.musterRespond) {
+          pending.push(done(event, event.event_uuid, 'rejected', 'OPERATION_NOT_SUPPORTED'));
+          break;
+        }
+        // A wrong device clock is corrected by the measured offset (decision #84).
+        const when = new Date(Date.parse(observedAt) - (skewed ? offset : 0)).toISOString();
+        let member: MusterMemberFact | null = null;
+        let channel: MusterChannel | null = null;
+        let kioskDeviceId: string | null = null;
+        let rejection: string | null = null;
+        if (event.operation_type === 'MUSTER_SELF_REPORT') {
+          const self = ctx.musterWorkerId ?? null;
+          if (!self) rejection = 'FORBIDDEN';
+          else {
+            member = await deps.musterMember(
+              payload.muster_id,
+              payload.snapshot_member_id ?? null,
+              self,
+            );
+            if (!member || member.projectId !== event.project_id) rejection = 'NOT_IN_MUSTER';
+            else if (member.workerId !== self) rejection = 'FORBIDDEN';
+            else channel = payload.channel ?? 'APP';
+          }
+        } else if (payload.badge_payload && payload.badge_kind && payload.kiosk_device_id) {
+          // Attended kiosk at the assembly point: the badge names the worker, a person checks the
+          // face (the app asks). Not GPS, never self service.
+          const kiosk = ctx.kiosk ? await deps.kiosk(payload.kiosk_device_id) : null;
+          if (!ctx.kiosk) rejection = 'FORBIDDEN';
+          else if (!kiosk || kiosk.projectId !== event.project_id)
+            rejection = 'KIOSK_NOT_REGISTERED';
+          else {
+            let workerId: string | null = null;
+            if (payload.badge_kind === 'DYNAMIC_APP') {
+              const verdict = await verifyDynamicBadge(
+                {
+                  payload: payload.badge_payload,
+                  projectId: event.project_id,
+                  observedAt: new Date(when),
+                },
+                {
+                  key: deps.badgeKey as Uint8Array,
+                  loadDevice: deps.loadBadgeDevice,
+                  // Membership of the muster roster is checked below instead of tracking eligibility.
+                  isApproved: async () => true,
+                  // A muster check does not spend the badge step: entry and muster may use the
+                  // same 30-second code (decision #117).
+                  redeem: async () => 'accepted',
+                },
+              );
+              if (verdict.status === 'rejected') rejection = verdict.reason;
+              else workerId = verdict.workerId;
+            } else {
+              const badge = await deps.printedBadge(codeHash(payload.badge_payload));
+              if (!badge) rejection = 'BADGE_INVALID';
+              else if (!badge.active) rejection = 'BADGE_REVOKED';
+              else workerId = badge.workerId;
+            }
+            if (workerId) {
+              member = await deps.musterMember(payload.muster_id, null, workerId);
+              if (!member || member.projectId !== event.project_id) rejection = 'NOT_IN_MUSTER';
+              else if (
+                ctx.kiosk === 'OWN_CREW' &&
+                !ctx.foremanCompanyIds.includes(member.employerId ?? '')
+              ) {
+                rejection = 'NOT_OWN_CREW';
+              } else {
+                channel = 'KIOSK';
+                kioskDeviceId = kiosk.id;
+              }
+            }
+          }
+        } else {
+          member = await deps.musterMember(
+            payload.muster_id,
+            payload.snapshot_member_id ?? null,
+            null,
+          );
+          if (!member || member.projectId !== event.project_id) rejection = 'NOT_IN_MUSTER';
+          else if (ctx.musterCommand) channel = 'SAFETY_STAFF';
+          else if (member.workerId && ctx.foremanCompanyIds.includes(member.employerId ?? '')) {
+            channel = 'FOREMAN';
+          } else if (member.visitorId && ctx.visitors) channel = 'KIOSK';
+          else rejection = ctx.foremanCompanyIds.length > 0 ? 'NOT_OWN_CREW' : 'FORBIDDEN';
+        }
+        if (rejection || !member || !channel) {
+          pending.push(done(event, event.event_uuid, 'rejected', rejection ?? 'NOT_IN_MUSTER'));
+          break;
+        }
+        const answer = await deps.musterRespond({
+          musterId: member.musterId,
+          memberId: member.memberId,
+          action:
+            event.operation_type === 'MUSTER_SELF_REPORT' ? 'SELF_REPORT' : 'PHYSICAL_VERIFICATION',
+          channel,
+          actorId,
+          kioskDeviceId,
+          observedAt: when,
+          eventUuid: event.event_uuid,
+        });
+        pending.push(
+          done(
+            event,
+            event.event_uuid,
+            answer.result,
+            answer.result === 'rejected' ? answer.reason : null,
+            {
+              ...(member.workerId ? { worker_id: member.workerId } : {}),
+              kioskDeviceId,
+            },
+          ),
+        );
         break;
+      }
     }
   }
 

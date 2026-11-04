@@ -33,6 +33,12 @@ export const ATTENDANT = 'a0000000-0000-4000-8000-0000000000a1';
 export const FOREMAN = 'f0000000-0000-4000-8000-0000000000a1';
 export const SUPER = '50000000-0000-4000-8000-0000000000a1';
 export const KIOSK = 'ab000000-0000-4000-8000-0000000000a1';
+/** The designated safety manager (muster commander) and a worker answering for themself. */
+export const SAFETY = '5a000000-0000-4000-8000-0000000000a1';
+export const WORKER_K1 = 'c0000000-0000-4000-8000-0000000000a1';
+export const MUSTER = '9a000000-0000-4000-8000-0000000000a1';
+export const VISITOR = '7b000000-0000-4000-8000-0000000000a1';
+export const memberOf = (id: string) => `9${id.slice(1)}`;
 export const HOST = SUPER;
 export const T0 = Date.parse('2026-11-04T13:00:00Z');
 export const KEY = developmentBadgeKey();
@@ -60,6 +66,8 @@ export const CONTEXTS: Record<string, Record<string, Partial<OperationContext>>>
   [ATTENDANT]: { [PROJECT_A]: { kiosk: 'ALL', visitors: true } },
   [FOREMAN]: { [PROJECT_A]: { kiosk: 'OWN_CREW', foremanCompanyIds: [COMPANY_A] } },
   [SUPER]: { [PROJECT_A]: { correct: true } },
+  [SAFETY]: { [PROJECT_A]: { musterCommand: true } },
+  [WORKER_K1]: { [PROJECT_A]: { musterWorkerId: '4a000000-0000-4000-8000-000000000001' } },
 };
 
 export interface OperationsWorld {
@@ -75,7 +83,26 @@ export interface OperationsWorld {
   requests: Map<string, CorrectionRequestFact>;
   /** Correction rows the reconciler committed. */
   corrections: CorrectionRow[];
+  /** An ACTIVE muster on project A (Milestone 11), mirroring the SQL response rules. */
+  muster: MemoryMuster;
   as(actor: string): void;
+}
+
+export interface MemoryMuster {
+  status: 'ACTIVE' | 'CLOSED';
+  endedAt: string | null;
+  members: Map<
+    string,
+    { workerId: string | null; visitorId: string | null; employerId: string | null; status: string }
+  >;
+  responses: {
+    eventUuid: string;
+    memberId: string;
+    action: string;
+    channel: string;
+    actorId: string;
+    late: boolean;
+  }[];
 }
 
 export async function operationsWorld(): Promise<OperationsWorld> {
@@ -114,6 +141,32 @@ export async function operationsWorld(): Promise<OperationsWorld> {
   const failReceipts = { on: false };
   const requests = new Map<string, CorrectionRequestFact>();
   const corrections: CorrectionRow[] = [];
+  // Muster roster: k1, k2 (company A), k11 (company B), f1 (company A) and one visitor.
+  const muster: MemoryMuster = {
+    status: 'ACTIVE',
+    endedAt: null,
+    members: new Map(),
+    responses: [],
+  };
+  for (const [id, employer] of [
+    [workerId('k', 1), COMPANY_A],
+    [workerId('k', 2), COMPANY_A],
+    [workerId('k', 11), COMPANY_B],
+    [workerId('f', 1), COMPANY_A],
+  ] as const) {
+    muster.members.set(memberOf(id), {
+      workerId: id,
+      visitorId: null,
+      employerId: employer,
+      status: 'UNACCOUNTED',
+    });
+  }
+  muster.members.set(memberOf(VISITOR), {
+    workerId: null,
+    visitorId: VISITOR,
+    employerId: null,
+    status: 'UNACCOUNTED',
+  });
   let actor = ATTENDANT;
   const store: AttendanceStore = {
     load: async (projectId, worker, uuids, sessions) => {
@@ -194,6 +247,41 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     },
     applyVisitor: (input) => backend.visitorEvent(input),
     correctionRequest: async (id) => requests.get(id) ?? null,
+    musterMember: async (musterId, memberId, worker) => {
+      if (musterId !== MUSTER) return null;
+      const entry = [...muster.members.entries()].find(([id, m]) =>
+        memberId ? id === memberId : m.workerId === worker,
+      );
+      return entry
+        ? {
+            musterId: MUSTER,
+            projectId: PROJECT_A,
+            musterStatus: muster.status,
+            memberId: entry[0],
+            workerId: entry[1].workerId,
+            visitorId: entry[1].visitorId,
+            employerId: entry[1].employerId,
+          }
+        : null;
+    },
+    musterRespond: async (input) => {
+      if (muster.responses.some((r) => r.eventUuid === input.eventUuid)) {
+        return { result: 'duplicate', reason: null };
+      }
+      const member = muster.members.get(input.memberId);
+      if (!member) return { result: 'rejected', reason: 'NOT_IN_MUSTER' };
+      if (muster.status === 'CLOSED') {
+        if (muster.endedAt && Date.parse(input.observedAt) <= Date.parse(muster.endedAt)) {
+          muster.responses.push({ ...input, late: true });
+          return { result: 'accepted', reason: null };
+        }
+        return { result: 'rejected', reason: 'MUSTER_CLOSED' };
+      }
+      muster.responses.push({ ...input, late: false });
+      if (input.action === 'PHYSICAL_VERIFICATION') member.status = 'VERIFIED_ACCOUNTED';
+      else if (member.status !== 'VERIFIED_ACCOUNTED') member.status = 'SELF_REPORTED_SAFE';
+      return { result: 'accepted', reason: null };
+    },
     store,
   };
   // Printed badges: the core sends the SHA-256 (hex) of the code.
@@ -218,6 +306,7 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     failReceipts,
     requests,
     corrections,
+    muster,
     as: (a) => (actor = a),
   };
 }
@@ -260,3 +349,34 @@ export const crew = (n: number, workers: string[], company = COMPANY_A) => ({
     verification_method: 'PHYSICAL_CONFIRMATION',
   },
 });
+
+/** A muster response operation (Milestone 11). */
+export const musterOp = (
+  n: number,
+  type: 'MUSTER_SELF_REPORT' | 'MUSTER_PHYSICAL_VERIFY',
+  payload: Record<string, unknown>,
+  at = T0,
+) => ({
+  event_uuid: uuid(n),
+  project_id: PROJECT_A,
+  operation_type: type,
+  observed_at: new Date(at).toISOString(),
+  payload: {
+    muster_id: MUSTER,
+    action: type === 'MUSTER_SELF_REPORT' ? 'SELF_REPORT' : 'PHYSICAL_VERIFICATION',
+    ...payload,
+  },
+});
+
+/** An attended-kiosk muster scan of worker k{i}'s phone badge. */
+export const musterScan = (n: number, i: number, at = T0) =>
+  musterOp(
+    n,
+    'MUSTER_PHYSICAL_VERIFY',
+    {
+      badge_payload: buildBadgePayload(secretOf(i), deviceId(i), PROJECT_A, Math.floor(at / 1000)),
+      badge_kind: 'DYNAMIC_APP',
+      kiosk_device_id: KIOSK,
+    },
+    at,
+  );
