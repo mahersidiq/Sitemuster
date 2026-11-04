@@ -3,7 +3,7 @@ import { containsCoordinateKeys } from '../../packages/shared/src/privacy/coordi
 /**
  * Checks a real-device network capture (HAR file) against the location privacy rules before the
  * release sign-off (docs/spec/03 "Privacy assertions", docs/spec/10 "physical privacy capture",
- * HUMAN_CHECKLIST §10; decision #152). It helps the person doing the walk; it does not replace
+ * HUMAN_CHECKLIST §12; decision #152). It helps the person doing the walk; it does not replace
  * reading the capture.
  *
  * Rules:

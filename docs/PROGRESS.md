@@ -614,6 +614,11 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 
 **Merged:** PR #13 squash-merged under #48 after CI was green on its final head and the automated review was addressed. This line was written in the pull request before the merge, so it reaches `main` only through that merge.
 
+**Follow-up after the merge** (branch `milestone-13-checklist-refs`, docs and a test only):
+- Milestone 13 inserted HUMAN_CHECKLIST §11 and §12 above the real-device subsections, which moved them from §10 to §12.
+- The references that still sent the location privacy capture to §10 (the Transistorsoft license) now name §12. Three code comments that named §9 for device checks now name §12.
+- `tests/security/release-docs.test.ts` now checks that every `HUMAN_CHECKLIST §N` reference names an existing section, and that capture references name the section that holds the sign-off steps.
+
 **Next step:** none. Milestones 01–13 are all merged and there is no Milestone 14: do not start new feature work. What remains is the owner's, in this order:
 1. `docs/setup/HUMAN_CHECKLIST.md` (accounts, keys, brand and legal clearance, license);
 2. `docs/release/README.md` (backend deploy, builds, reviewer demo, store submission);

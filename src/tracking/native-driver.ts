@@ -17,7 +17,7 @@ import type { QueuedRecord } from './gate';
 /**
  * Transistorsoft react-native-background-geolocation v5 adapter (decision #12). The only module
  * that talks to the native SDK. Native behaviour (background delivery, OS relaunch, headless
- * tasks, the rendered HTTP wire) is verified only on physical devices (HUMAN_CHECKLIST §9).
+ * tasks, the rendered HTTP wire) is verified only on physical devices (HUMAN_CHECKLIST §12).
  */
 const STATUS: Record<number, PermissionSnapshot['location']> = {
   0: 'NOT_DETERMINED',

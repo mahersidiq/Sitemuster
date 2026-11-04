@@ -19,7 +19,7 @@ reported separately from physical counts.
   pilot worker code.
 - **Build**: the production build from the release workflow (TestFlight / Play testing track), on
   the production backend with approved legal notices. If the real-device privacy sign-off
-  (HUMAN_CHECKLIST §10) is not recorded for that build, phones run in TRACKING_LIMITED: that is
+  (HUMAN_CHECKLIST §12) is not recorded for that build, phones run in TRACKING_LIMITED: that is
   correct and is part of what the pilot measures.
 - **People and consent**: every participant goes through the normal orientation and accepts the
   approved site notice; nobody is pressured to allow location (spec 01 "Worker denies tracking").

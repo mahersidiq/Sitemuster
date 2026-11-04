@@ -10,7 +10,7 @@
  *   any that is not before upload.
  *
  * The exact rendered wire must be captured from a development build on real iOS and Android
- * devices before release (HUMAN_CHECKLIST §9); the server accepts this shape only.
+ * devices before release (HUMAN_CHECKLIST §12); the server accepts this shape only.
  */
 export const GEOFENCE_TEMPLATE =
   '{"uuid":"<%= uuid %>","timestamp":"<%= timestamp %>","event":"geofence",' +

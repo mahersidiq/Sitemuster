@@ -15,7 +15,7 @@ public release; field pilot pending**).
 4. **Builds** — GitHub → Actions → **release** → `preview` for testers, `production` for the stores
    (`native-builds.md`).
 5. **Phone tests** — `phone-test-checklist.md` on the release candidate, including the real-device
-   location privacy sign-off (HUMAN_CHECKLIST §10) checked with `npm run privacy:capture-check`.
+   location privacy sign-off (HUMAN_CHECKLIST §12) checked with `npm run privacy:capture-check`.
 6. **Reviewer demo** — seed it on production (`reviewer-demo.md`).
 7. **Store submission** — `store-submission.md`, `apple-review-notes.md`,
    `play-background-location-video.md`. The release workflow can send a production build to

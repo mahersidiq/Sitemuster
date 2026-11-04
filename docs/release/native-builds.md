@@ -76,7 +76,7 @@ under an already signed-off version. Rollback is therefore a store action (`runb
 - The marketing version is `version` in `app.config.ts` (`0.1.0` today). Raise it in a pull request
   for each store release; the build number is assigned by EAS.
 - For each new version, record the real-device privacy sign-off for that exact version and
-  platform before production phones may send on-site coordinates (HUMAN_CHECKLIST §10).
+  platform before production phones may send on-site coordinates (HUMAN_CHECKLIST §12).
 
 ## Native configuration in this repository
 

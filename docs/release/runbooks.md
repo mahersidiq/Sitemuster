@@ -45,7 +45,7 @@ unexpected tracking (severity 0).
    notes; kiosk and foreman count people (decision #90).
 3. Raw on-site fixes are deleted within 24 hours by the hourly job anyway; do not wait for it if a
    leak is confirmed — ask counsel about notification duties (spec 09 breach process).
-4. Confirm with a capture (HUMAN_CHECKLIST §10) and `npm run privacy:capture-check`.
+4. Confirm with a capture (HUMAN_CHECKLIST §12, "Real-device location privacy sign-off") and `npm run privacy:capture-check`.
 
 ## 4. Suspected off-site location leak (severity 0)
 
