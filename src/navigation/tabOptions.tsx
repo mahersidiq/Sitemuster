@@ -12,7 +12,12 @@ export function tabScreenOptions(title: string) {
     tabBarIcon: () => null,
     tabBarIconStyle: styles.hiddenIcon,
     tabBarLabel: ({ color }: { color: ColorValue }) => (
-      <Text numberOfLines={2} style={[styles.label, { color }]}>
+      <Text
+        numberOfLines={2}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+        style={[styles.label, { color }]}
+      >
         {title}
       </Text>
     ),
@@ -28,5 +33,5 @@ export const tabNavigatorOptions = {
 
 const styles = StyleSheet.create({
   hiddenIcon: { display: 'none' },
-  label: { fontSize: 14, fontWeight: '600', textAlign: 'center', paddingHorizontal: 2 },
+  label: { fontSize: 12, fontWeight: '600', textAlign: 'center', paddingHorizontal: 1 },
 });

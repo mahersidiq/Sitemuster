@@ -85,6 +85,7 @@ function LiveMap() {
                 ? (map.error ?? map.failureReason)
                 : (dashboard.error ?? dashboard.failureReason)
             }
+            paused={(allowed ? map.fetchStatus : dashboard.fetchStatus) === 'paused'}
             onRefresh={() => {
               void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) });
               void queryClient.invalidateQueries({ queryKey: queryKeys.projectMap(projectId) });

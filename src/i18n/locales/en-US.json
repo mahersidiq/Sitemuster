@@ -861,11 +861,11 @@
     "noWorkers": "No approved workers yet. Run an orientation to enroll workers."
   },
   "live": {
-    "LIVE": "Live: changes arrive automatically. Updated {{time}}.",
-    "CONNECTING": "Connecting to live updates. Updated {{time}}.",
-    "PAUSED": "Live updates paused. Refreshing every minute. Updated {{time}}.",
+    "LIVE": "Live: changes arrive automatically (updated {{time}}).",
+    "CONNECTING": "Connecting to live updates (updated {{time}}).",
+    "PAUSED": "Live updates paused. Refreshing every minute (updated {{time}}).",
     "DENIED": "Live updates stopped: you no longer have access to this project.",
-    "offline": "Offline: showing what was loaded at {{time}}. It may be out of date.",
+    "offline": "Offline: showing what was loaded at {{time}}; it may be out of date.",
     "refresh": "Refresh now",
     "never": "not yet"
   },

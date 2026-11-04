@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 
 import {
   AddressResolveResponseSchema,
@@ -485,37 +485,66 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
  * Private Broadcast for one project (decision #19). The database authorizes the join through the
  * `realtime.messages` policy; a refused join reports DENIED and stops retrying. Messages are
  * validated against the strict contract and anything else is dropped.
+ *
+ * supabase-js returns the EXISTING channel object when one with the same topic is still known,
+ * so a channel object is never shared: a new subscription creates its channel only after the
+ * previous one for that topic has been removed (a quick re-join must not inherit a channel that
+ * is being torn down).
  */
+const removals = new WeakMap<SupabaseClient, Map<string, Promise<unknown>>>();
+
 export function subscribeProjectChannel(
   client: SupabaseClient,
   projectId: string,
   listener: ProjectChannelListener,
 ): () => void {
-  const channel = client.channel(projectTopic(projectId), { config: { private: true } });
+  const topic = projectTopic(projectId);
+  const pending = removals.get(client) ?? new Map<string, Promise<unknown>>();
+  removals.set(client, pending);
   let closed = false;
-  channel.on('broadcast', { event: '*' }, (message: { payload?: unknown }) => {
-    const parsed = parseBroadcastPayload(message.payload);
-    if (!closed && parsed && parsed.project_id === projectId) listener.onMessage(parsed);
-  });
-  void client.realtime
-    .setAuth()
+  let channel: RealtimeChannel | null = null;
+
+  void (pending.get(topic) ?? Promise.resolve())
+    .then(() => client.realtime.setAuth())
     .catch(() => undefined) // no session: the join below is refused and reported
     .then(() => {
       if (closed) return;
-      channel.subscribe((status, error) => {
+      if (client.getChannels().some((c) => c.topic === `realtime:${topic}`)) {
+        // Another live subscription to this project in the same client (never expected: the
+        // app keeps one). Report it rather than silently sharing a channel object.
+        console.warn('realtime: project channel already open');
+        listener.onStatus('DISCONNECTED');
+        return;
+      }
+      const current = client.channel(topic, { config: { private: true } });
+      channel = current;
+      current.on('broadcast', { event: '*' }, (message: { payload?: unknown }) => {
+        const parsed = parseBroadcastPayload(message.payload);
+        if (!closed && parsed && parsed.project_id === projectId) listener.onMessage(parsed);
+      });
+      current.subscribe((status, error) => {
         if (closed) return;
         if (status === 'SUBSCRIBED') listener.onStatus('SUBSCRIBED');
         else if (status === 'CHANNEL_ERROR' && isAuthorizationError(error)) {
-          closed = true;
           listener.onStatus('DENIED');
-          void client.removeChannel(channel);
+          unsubscribe();
         } else listener.onStatus('DISCONNECTED');
       });
     });
-  return () => {
+
+  function unsubscribe(): void {
+    if (closed) return;
     closed = true;
-    void client.removeChannel(channel);
-  };
+    if (!channel) return;
+    const removal: Promise<unknown> = client
+      .removeChannel(channel)
+      .catch(() => undefined)
+      .finally(() => {
+        if (pending.get(topic) === removal) pending.delete(topic);
+      });
+    pending.set(topic, removal);
+  }
+  return unsubscribe;
 }
 
 function isAuthorizationError(error: Error | undefined): boolean {

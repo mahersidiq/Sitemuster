@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 
+import { canOpenStaffShell } from '../auth/routing';
+import { ProjectLiveProvider } from '../realtime/ProjectLive';
 import { useAuth } from './auth';
 
 /**
@@ -100,4 +102,19 @@ export function SelectedProjectProvider({ children }: { children: ReactNode }) {
 
 export function useSelectedProject(): SelectedProjectValue {
   return useContext(SelectedProjectContext);
+}
+
+/**
+ * ONE live channel for the whole app (decision #106): the navigator can keep several copies of
+ * the staff tabs mounted, and each copy must read the same live state. Only while the person can
+ * open the staff screens.
+ */
+export function SelectedProjectLive({ children }: { children: ReactNode }) {
+  const { state } = useAuth();
+  const { projectId } = useSelectedProject();
+  return (
+    <ProjectLiveProvider projectId={canOpenStaffShell(state) ? projectId : null}>
+      {children}
+    </ProjectLiveProvider>
+  );
 }

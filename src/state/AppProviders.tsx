@@ -7,7 +7,7 @@ import type { RuntimeEnv } from '../config/runtime-env';
 import { AuthProvider } from './auth';
 import { LanguageProvider } from './language';
 import { OutboxProvider } from './outbox';
-import { SelectedProjectProvider } from './selected-project';
+import { SelectedProjectLive, SelectedProjectProvider } from './selected-project';
 import { SessionProvider } from './session';
 import { TrackingProvider } from './tracking';
 
@@ -35,7 +35,9 @@ export function AppProviders({ env, children }: { env: RuntimeEnv; children: Rea
             <AuthProvider env={env}>
               <OutboxProvider>
                 <SelectedProjectProvider>
-                  <TrackingProvider env={env}>{children}</TrackingProvider>
+                  <SelectedProjectLive>
+                    <TrackingProvider env={env}>{children}</TrackingProvider>
+                  </SelectedProjectLive>
                 </SelectedProjectProvider>
               </OutboxProvider>
             </AuthProvider>

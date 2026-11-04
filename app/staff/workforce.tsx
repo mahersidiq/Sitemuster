@@ -80,6 +80,7 @@ function Workforce() {
             state={live}
             updatedAt={roster.dataUpdatedAt}
             error={roster.error ?? roster.failureReason}
+            paused={roster.fetchStatus === 'paused'}
             onRefresh={() =>
               void queryClient.invalidateQueries({ queryKey: queryKeys.workforce(projectId) })
             }

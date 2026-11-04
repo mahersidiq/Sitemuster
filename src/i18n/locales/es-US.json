@@ -861,11 +861,11 @@
     "noWorkers": "Todavía no hay trabajadores aprobados. Haga una orientación para inscribir trabajadores."
   },
   "live": {
-    "LIVE": "En vivo: los cambios llegan automáticamente. Actualizado {{time}}.",
-    "CONNECTING": "Conectando con las actualizaciones en vivo. Actualizado {{time}}.",
-    "PAUSED": "Actualizaciones en vivo en pausa. Se actualiza cada minuto. Actualizado {{time}}.",
+    "LIVE": "En vivo: los cambios llegan automáticamente (actualizado {{time}}).",
+    "CONNECTING": "Conectando con las actualizaciones en vivo (actualizado {{time}}).",
+    "PAUSED": "Actualizaciones en vivo en pausa. Se actualiza cada minuto (actualizado {{time}}).",
     "DENIED": "Actualizaciones en vivo detenidas: ya no tiene acceso a este proyecto.",
-    "offline": "Sin conexión: se muestra lo cargado a las {{time}}. Puede no estar al día.",
+    "offline": "Sin conexión: se muestra lo cargado a las {{time}}; puede no estar al día.",
     "refresh": "Actualizar ahora",
     "never": "todavía no"
   },

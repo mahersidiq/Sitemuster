@@ -13,8 +13,8 @@
 | 05 | Orientation sessions, badges, approval | done (NOT VERIFIED items) | [#5](https://github.com/mahersidiq/Sitemuster/pull/5) | squash-merged under #48 after CI green and the automated review |
 | 06 | Attendance state machine and deterministic replay | done (NOT VERIFIED items) | [#6](https://github.com/mahersidiq/Sitemuster/pull/6) | squash-merged under #48 after CI green and the automated review (`edbe76f`) |
 | 07 | Native tracking and custom device ingestion | done (NOT VERIFIED items) | [#7](https://github.com/mahersidiq/Sitemuster/pull/7) | squash-merged under #48 after CI green and the automated review (`d509baf`) |
-| 08 | Kiosk, foreman, manual and visitor fallbacks | in review | (PR pending) | |
-| 09 | Mobile superintendent dashboard and map | not started | | |
+| 08 | Kiosk, foreman, manual and visitor fallbacks | done (NOT VERIFIED items) | [#8](https://github.com/mahersidiq/Sitemuster/pull/8) | squash-merged under #48 after CI green and the automated review (`41a0307`) |
+| 09 | Mobile superintendent dashboard and map | in review | (PR pending) | |
 | 10 | Daily reports, foreman confirmation and worker CSV | not started | | |
 | 11 | Active Muster Mode | not started | | |
 | 12 | Security, privacy, resilience and operator CLI | not started | | |
@@ -292,16 +292,67 @@
 
   Also: integration 51, security 78, i18n 18, replay 180. Jest **61**, incl. the outbox key race (two first records at once share one key) and 9 new flows: kiosk offline→sync, printed confirmation, late-approved worker named, not-a-badge, Spanish, crew per-worker, correction, visitors, sign-out guard.
 - typecheck, ESLint + shellcheck, Prettier: pass.
-- GitHub Actions: _recorded in the PR._
+- GitHub Actions run 41801770966 (`03b4c25`) and, after the review fixes, run 41804465972 (`7a7820f`): `code-quality` success; `database` success (pgTAP PASS; backend 12 files, 112/112).
+- Automated review (Codex), both fixed with regression tests before merging:
+  - P1: two overlapping first records could each create an outbox key → one serialized keystore access;
+  - P2: a visitor exit resent after a lost answer read `VISIT_NOT_FOUND` → the exit id is stored with the close, compare-and-swap.
 
 **NOT VERIFIED (Milestone 08)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): camera scanning of real phone and printed badges, two phones and the kiosk in airplane mode, kiosk restart offline, real expo-sqlite and keystore behaviour. The checklist has the step-by-step check ("Real-device kiosk, crew and visitor check"). No EAS build yet (checklist §2).
 - Hosted deployment of `ingest-operations` and attendant assignment (checklist §3).
-- There is no screen yet for a GC to grant a foreman kiosk use. The database grant exists, and the screen comes with the dashboard work.
+- There is no screen yet for a GC to grant a foreman kiosk use. The database grant exists; the screen moves to Milestone 10 with the foreman workflows (decision #107).
 
 **Decisions added:** #98 operation answers and receipts, #99 who may record what, #100 eligibility before a badge step, #101 visitor ids and foreman batch results, #102 the phone outbox, #103 kiosk registration and printed-badge confirmation.
 
-**Next step:** open the Milestone 08 PR, watch CI, address the automated review, merge, then start Milestone 09 (mobile superintendent dashboard and map) on `milestone-09-dashboard`.
+**Next step:** done — merged as `41a0307`; Milestone 09 started.
+
+## Milestone 09 — Mobile superintendent dashboard and map
+
+**What was built**
+- **Server** (`20261108100000_m09_dashboard.sql`):
+  - `app_private.live_tracks`: one place for decision #87's live counting rule; `attendance_counts` answers the same from it.
+  - `project_dashboard`: counts, today's arrivals and departures (project day), per company and trade, approval queue, `can_view_map`.
+  - `workforce_roster`: approved workers with live presence, source, witnessed, arrival, last signal, review flag and phone tracking health.
+  - `project_map`: location roles only; the site circle; unexpired qualified positions with time and accuracy, rounded to about 11 m, fresh or stale.
+  - All three are authorized in SQL with the caller's JWT.
+  - **Private Broadcast:** row triggers queue one message per transaction, project and type, sent at commit by a deferred constraint trigger with only the contract keys. The project topic is now staff-only (decision #104).
+- **Phone:**
+  - `subscribeProject` (private channel, strict parse, a refused join reports DENIED, never a shared channel object);
+  - `ProjectLiveSync` (decision #106) and ONE `ProjectLiveProvider` for the app, above the navigator;
+  - the selected-project state (decision #107);
+  - Home dashboard, Workforce roster and Map screens (EN/ES) with an always-visible freshness line (live, paused, offline with the data time, access ended), stale markers labelled "not live", and a map failure that keeps the numbers.
+- Screenshots: `docs/screenshots/m09` (web render against the local stack; the live update arrives through the real Realtime server).
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db`: **20 files, 596** pgTAP tests. `026_dashboard` has 42:
+  - counts equal `attendance_counts` with live staleness and witnessed evidence; repeated evidence adds no one;
+  - per company and trade, today in the project's zone, approvals;
+  - roster presence, sources and tracking flags (incl. a credential with 2 days left), with no phones, contacts or positions;
+  - map: fresh vs stale, expired hidden, rounded, project B never shown; attendant, GC B, foreman, operator and no-MFA refused;
+  - Broadcast: nothing before commit, one message for three changes, exact keys, counts equal the database, changed ids once each, no names or positions, separate types, project B on its own topic, who may receive.
+- `npm run test:backend`: **117/117**, incl. `dashboard.test.ts` (5) against the real stack:
+  - counts match the open sessions and a resent crew batch adds no one;
+  - the private channel reaches the superintendent with ids and counts only; GC B is refused the channel (DENIED) and the map;
+  - the production `ProjectLiveSync` pauses on a disconnect and, after re-joining, refetches the change it missed;
+  - an immediate re-join gets its own channel; a second simultaneous subscription is told DISCONNECTED instead of hanging (it hung before the fix).
+- The preview found that the navigator kept two copies of the staff tabs, each with its own live provider. Only one heard the join, so the visible copy stayed "connecting". Now there is one provider for the app, and the transport never shares a channel object.
+- Vitest unit **336** (live sync 7, dashboard helpers 4, Broadcast parse 1); integration 51, security 78, i18n 18, replay 180.
+- Jest **70**, incl. 9 new flows:
+  - counts and sources; a Broadcast refetch; pause and resync of a missed change;
+  - offline with the data time; revoked access hides data; Spanish;
+  - the project picker; the roster with filters; the map (fresh, stale, expired);
+  - a failing map keeps attendance; an attendant sees no map.
+- typecheck, ESLint + shellcheck, Prettier, `expo config`: pass.
+- GitHub Actions: _recorded in the PR._
+
+**NOT VERIFIED (Milestone 09)**
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the native map (Apple Maps; Google Maps needs the restricted Android key, checklist §5), live updates and offline behaviour on real phones, and EN/ES screen recordings on a phone. The checklist has "Real-device dashboard and map check". No EAS build yet (checklist §2).
+- Hosted Realtime settings (private channels only, checklist §3) and the hosted migration.
+- The foreman kiosk-grant screen moves to Milestone 10 (decision #107).
+
+**Decisions added:** #104 private Broadcast (staff-only topic, one message per transaction), #105 worker map, #106 live updates on the phone, #107 dashboard and roster rules.
+
+**Next step:** open the Milestone 09 PR, watch CI, address the automated review, merge, then start Milestone 10 (daily reports, foreman confirmation and worker CSV) on `milestone-10-reports`.
 
 ## Environment notes for future sessions (Linux build agent)
 

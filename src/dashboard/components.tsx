@@ -80,11 +80,14 @@ export function LiveStatusLine({
   state,
   updatedAt,
   error,
+  paused = false,
   onRefresh,
 }: {
   state: LiveState;
   updatedAt: number;
   error: unknown;
+  /** The read is waiting for a network connection (TanStack `fetchStatus === 'paused'`). */
+  paused?: boolean;
   onRefresh: () => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -96,7 +99,7 @@ export function LiveStatusLine({
           minute: '2-digit',
         })
       : t('live.never');
-  const offline = errorCode(error) === 'NETWORK' && updatedAt > 0;
+  const offline = (paused || errorCode(error) === 'NETWORK') && updatedAt > 0;
   return (
     <View style={styles.stack} testID="live-status">
       {offline ? (
@@ -117,6 +120,15 @@ export function LiveStatusLine({
   );
 }
 
+/** The headline number of a card (large, for a glance at the gate). */
+export function BigNumber({ value, testID }: { value: number; testID?: string }) {
+  return (
+    <Text style={styles.big} testID={testID}>
+      {String(value)}
+    </Text>
+  );
+}
+
 /** One labelled number in a card. */
 export function StatLine({ text, testID }: { text: string; testID?: string }) {
   return (
@@ -134,5 +146,6 @@ const styles = StyleSheet.create({
   stack: { gap: spacing.sm },
   name: { fontSize: 18, fontWeight: '600', color: colors.text },
   line: { fontSize: 16, color: colors.text, paddingVertical: 2 },
+  big: { fontSize: 44, fontWeight: '700', color: colors.text },
   hint: { fontSize: 14, color: colors.mutedText },
 });

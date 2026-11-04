@@ -37,7 +37,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Deploy the Milestone 05 functions too: `supabase functions deploy orientation-session enrollment-bulk-approve device-activate --project-ref <ref>` (JWT verification on).
 - [ ] Deploy the Milestone 07 functions: `supabase functions deploy ingest-location-batch device-renew device-activate --project-ref <ref>`. `ingest-location-batch` and `device-renew` deliberately run **without** gateway JWT verification (they check the 32-byte device secret themselves; `supabase/config.toml`). If the dashboard or CLI shows "Verify JWT" enabled for either, turn it off for these two only. Every other function keeps it on.
 - [ ] Deploy the Milestone 08 function: `supabase functions deploy ingest-operations --project-ref <ref>`. JWT verification stays **on** (`supabase/config.toml`). It needs the same `BADGE_SECRET_ENCRYPTION_KEY` as `device-activate`. Without it, it answers "not configured" to every request and phones keep their kiosk and crew records queued (decision #102).
-- [ ] Assign kiosk attendants: invite the people who run the gate kiosk to the project with the **Kiosk attendant** role (they need e-mail sign-in and an authenticator app, like other staff). A foreman may run a crew kiosk only after the GC grants it (`foreman_project_grants.can_operate_kiosk`; a screen for granting arrives with the dashboard work).
+- [ ] Assign kiosk attendants: invite the people who run the gate kiosk to the project with the **Kiosk attendant** role (they need e-mail sign-in and an authenticator app, like other staff). A foreman may run a crew kiosk only after the GC grants it (`foreman_project_grants.can_operate_kiosk`; the screen for granting arrives with the foreman workflows in Milestone 10, decision #107).
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] After deploying the Milestone 06 migrations, open *Database → Cron* (or run `select jobname, schedule, active from cron.job;` in the SQL editor) and confirm the job `sitemuster-attendance-sweep` runs every minute and its recent runs succeed. It applies the attendance time rules (unknown after 20 min, end-of-shift close-out, 24/7 review, visitor close-out) and only works when the environment marker above is `staging` or `production` — on a database marked `development` it deliberately does nothing. The migration enables the `pg_cron` and `btree_gist` extensions; if the deploy reports a permission error for either, enable it under *Database → Extensions* and deploy again.
 - [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
@@ -119,6 +119,17 @@ On a development build pointing at **staging**, with one attendant phone and two
 - [ ] Foreman (worker account made foreman of an approved company): Home → **Crew sign-in/out** → select workers → **Record**. → One result per worker.
 - [ ] Visitors: sign a visitor in and out. → They never appear in worker counts.
 - [ ] With an unsent record (airplane mode on), sign out. → "Records not sent yet" asks before discarding.
+
+### Real-device dashboard and map check (Milestone 09)
+
+Needs an EAS development build (§2), a staging project with workers on site, and the Android map key (§5). Status: `NOT_EXECUTED_PHYSICAL_DEVICE`.
+- [ ] Superintendent (signed in with the authenticator) opens **Home**: the counts match the people actually on site within the estimate, the sources add up, visitors are listed apart.
+- [ ] A worker is scanned at the kiosk: the superintendent's Home updates by itself within a few seconds ("Live" line), without pulling to refresh.
+- [ ] Airplane mode on the superintendent phone: Home shows "Offline: showing what was loaded at …" and keeps the numbers; airplane mode off: the line returns to "Live" and anything that changed meanwhile appears.
+- [ ] **Map** on iPhone (Apple Maps) and Android (Google Maps with the restricted key): the site circle and exit ring sit on the right place, positions show accuracy circles, a position older than 10 minutes is grey and labelled "Stale, not live", and positions disappear after the worker leaves.
+- [ ] A kiosk attendant opens **Map**: no positions, only the note and the counts.
+- [ ] Remove the superintendent from the project in another session: their Home stops showing project data and says live updates stopped.
+- [ ] Switch to Spanish: Home, Workforce and Map are fully in Spanish.
 
 ### Real-device location privacy sign-off (release gate, decision #90)
 

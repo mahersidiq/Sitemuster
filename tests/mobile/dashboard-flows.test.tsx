@@ -193,7 +193,9 @@ describe('superintendent dashboard', () => {
       world.setChannelStatus(projectId, 'DISCONNECTED');
     });
     expect(await screen.findByTestId('live-PAUSED')).toBeTruthy();
-    expect(screen.getByText(/Live updates paused\. Refreshing every minute\./)).toBeTruthy();
+    expect(
+      screen.getByText(/Live updates paused\. Refreshing every minute \(updated /),
+    ).toBeTruthy();
     world.setPresence(diego.id, { presence: 'ONSITE_ESTIMATED', counted: true });
     // Back: joining again refetches everything, so the missed change appears.
     await act(async () => {

@@ -198,6 +198,59 @@ describe('superintendent dashboard and live updates (local stack)', () => {
     }
   });
 
+  it('an immediate re-join on the same client gets its own channel and reaches SUBSCRIBED', async () => {
+    const { projectId } = await site();
+    const superintendent = await staffClient();
+    await assignStaff(superintendent.client, projectId, 'SUPER');
+    const first: ChannelStatus[] = [];
+    const stopFirst = subscribeProjectChannel(superintendent.client, projectId, {
+      onMessage: () => undefined,
+      onStatus: (status) => first.push(status),
+    });
+    await waitFor(() => first.includes('SUBSCRIBED'), 'the first join');
+    // Re-join at once (what the sync does after a drop): the old channel is still being removed.
+    stopFirst();
+    const second: ChannelStatus[] = [];
+    const stopSecond = subscribeProjectChannel(superintendent.client, projectId, {
+      onMessage: () => undefined,
+      onStatus: (status) => second.push(status),
+    });
+    try {
+      await waitFor(() => second.includes('SUBSCRIBED'), 'the second join');
+      expect(second).not.toContain('DISCONNECTED');
+    } finally {
+      stopSecond();
+    }
+  });
+
+  it('a second simultaneous subscription on one client reports DISCONNECTED instead of hanging', async () => {
+    // The app keeps ONE live provider (decision #106); this guards the transport if that breaks:
+    // supabase-js would hand back the first channel object and the second caller would never hear
+    // a status, staying "connecting" forever.
+    const { projectId } = await site();
+    const superintendent = await staffClient();
+    await assignStaff(superintendent.client, projectId, 'SUPER');
+    const first: ChannelStatus[] = [];
+    const second: ChannelStatus[] = [];
+    const stopFirst = subscribeProjectChannel(superintendent.client, projectId, {
+      onMessage: () => undefined,
+      onStatus: (status) => first.push(status),
+    });
+    let stopSecond = () => undefined as void;
+    try {
+      await waitFor(() => first.includes('SUBSCRIBED'), 'the first join');
+      stopSecond = subscribeProjectChannel(superintendent.client, projectId, {
+        onMessage: () => undefined,
+        onStatus: (status) => second.push(status),
+      });
+      await waitFor(() => second.includes('DISCONNECTED'), 'the second subscription to be told');
+      expect(first).toEqual(['SUBSCRIBED']);
+    } finally {
+      stopSecond();
+      stopFirst();
+    }
+  });
+
   it('the production live sync refetches everything after the channel comes back (missed message)', async () => {
     const { projectId, companyId, crew, foreman } = await crewSite(3);
     const superintendent = await staffClient();

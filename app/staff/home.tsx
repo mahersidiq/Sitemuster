@@ -12,7 +12,13 @@ import { QueryState } from '../../src/components/QueryState';
 import { Screen } from '../../src/components/Screen';
 import { ShellScreen } from '../../src/components/ShellScreen';
 import { Heading } from '../../src/components/Typography';
-import { Hint, LiveStatusLine, ProjectHeader, StatLine } from '../../src/dashboard/components';
+import {
+  BigNumber,
+  Hint,
+  LiveStatusLine,
+  ProjectHeader,
+  StatLine,
+} from '../../src/dashboard/components';
 import { SOURCES } from '../../src/dashboard/format';
 import { useLiveState } from '../../src/realtime/ProjectLive';
 import { useAuth } from '../../src/state/auth';
@@ -56,6 +62,7 @@ function Dashboard() {
             state={live}
             updatedAt={dashboard.dataUpdatedAt}
             error={dashboard.error ?? dashboard.failureReason}
+            paused={dashboard.fetchStatus === 'paused'}
             onRefresh={() =>
               void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard(projectId) })
             }
@@ -73,7 +80,7 @@ function Dashboard() {
 }
 
 function DashboardBody({ data }: { data: ProjectDashboard }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { counts, today, approvals } = data;
   const projectId = data.project.id;
   return (
@@ -86,7 +93,7 @@ function DashboardBody({ data }: { data: ProjectDashboard }) {
       ) : null}
       <Card testID="dash-onsite">
         <Heading>{t('dashboard.estimatedOnsite')}</Heading>
-        <StatLine text={String(counts.estimated_onsite)} testID="dash-onsite-count" />
+        <BigNumber value={counts.estimated_onsite} testID="dash-onsite-count" />
         <Hint text={t('dashboard.estimateNote')} />
         <StatLine
           text={t('dashboard.witnessed', { count: counts.manually_verified })}
@@ -120,7 +127,9 @@ function DashboardBody({ data }: { data: ProjectDashboard }) {
         />
       </Card>
       <Card testID="dash-today">
-        <Heading>{t('dashboard.today', { date: today.local_date })}</Heading>
+        <Heading>
+          {t('dashboard.today', { date: localDay(today.local_date, i18n.language) })}
+        </Heading>
         <StatLine text={t('dashboard.arrivals', { count: today.arrivals })} />
         <StatLine text={t('dashboard.departures', { count: today.departures })} />
         <StatLine text={t('dashboard.approvedRoster', { count: counts.approved_roster })} />
@@ -191,4 +200,18 @@ function DashboardBody({ data }: { data: ProjectDashboard }) {
       ) : null}
     </>
   );
+}
+
+/** The project's calendar day (YYYY-MM-DD, already in the project zone) as a short local label. */
+function localDay(isoDate: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }).format(new Date(`${isoDate}T12:00:00Z`));
+  } catch {
+    return isoDate;
+  }
 }
