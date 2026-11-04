@@ -5,11 +5,14 @@ import {
   AddressSearchResponseSchema,
   BulkApproveResultSchema,
   DeviceActivateResponseSchema,
+  DeviceRenewResponseSchema,
   OrientationSessionSchema,
   type DeviceActivateRequest,
   type Locale,
   type ProjectStatus,
 } from '@sitemuster/shared';
+
+import { TrackingPlanSchema } from '../tracking/plan';
 
 import {
   ApiError,
@@ -397,5 +400,21 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
 
   async activateDevice(input: DeviceActivateRequest) {
     return DeviceActivateResponseSchema.parse(await this.invoke('device-activate', input));
+  }
+
+  async getTrackingPlan(appVersion: string) {
+    return TrackingPlanSchema.parse(
+      await this.rpc<unknown>('my_tracking_plan', { p_app_version: appVersion }),
+    );
+  }
+
+  async revokeMyDevice() {
+    await this.rpc('revoke_my_device', {});
+  }
+
+  async renewDeviceWithSession(appVersion: string) {
+    return DeviceRenewResponseSchema.parse(
+      await this.invoke('device-renew', { app_version: appVersion }),
+    );
   }
 }

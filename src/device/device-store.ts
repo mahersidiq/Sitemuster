@@ -78,6 +78,22 @@ export async function activateThisDevice(
   return device;
 }
 
+/**
+ * A renewed upload secret (decision #44). Callers update the native SDK's authorization FIRST,
+ * then persist here, so the next native sync never uses a secret the app has not stored.
+ */
+export async function updateUploadToken(
+  userId: string,
+  uploadToken: string,
+  uploadExpiresAt: string,
+): Promise<StoredDevice | null> {
+  const stored = await loadDevice(userId);
+  if (!stored) return null;
+  const next: StoredDevice = { ...stored, uploadToken, uploadExpiresAt };
+  await SecureStore.setItemAsync(DEVICE_KEY, JSON.stringify(next), OPTIONS);
+  return next;
+}
+
 /** Approved projects remembered for offline badge display (ids and names only). */
 export async function saveBadgeProjects(projects: BadgeProject[]): Promise<void> {
   await SecureStore.setItemAsync(BADGE_PROJECTS_KEY, JSON.stringify(projects), OPTIONS);

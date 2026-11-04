@@ -543,6 +543,34 @@ begin
 end;
 $$;
 
+-- Signing out revokes this worker's phone immediately (docs/spec/03: revoke on logout): upload
+-- secrets and badge secret revoked, device inactive (bindings follow by trigger). The next sign-in
+-- activates the phone again.
+create function public.revoke_my_device()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_worker uuid := app_private.current_worker_id();
+  v_device uuid;
+begin
+  if v_worker is null then
+    return;
+  end if;
+  select id into v_device from public.device_installations where worker_id = v_worker and active for update;
+  if v_device is null then
+    return;
+  end if;
+  update app_private.device_upload_credentials set revoked_at = coalesce(revoked_at, now()) where device_id = v_device;
+  update app_private.device_badge_secrets set revoked_at = coalesce(revoked_at, now()) where device_id = v_device;
+  update public.device_installations set active = false, deactivated_at = now() where id = v_device;
+  perform app_private.write_audit('USER', auth.uid(), 'device.revoked_on_sign_out', null, null,
+                                  'device_installation', v_device, null, '{}'::jsonb);
+end;
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- Staff: per-worker tracking health for a project (roster flags CREDENTIAL_EXPIRING/EXPIRED,
 -- decision #44). Ids and statuses only; no coordinates.
@@ -599,7 +627,7 @@ revoke all on function
   public.edge_device_authenticate(bytea), public.edge_device_rate_limit(uuid, integer),
   public.edge_location_receipt_lookup(uuid, uuid[]), public.edge_record_location_terminals(uuid, jsonb, jsonb),
   public.edge_device_renew(bytea, uuid, bytea, text), public.edge_worker_open_session_projects(uuid),
-  public.my_tracking_plan(text), public.project_tracking_health(uuid)
+  public.my_tracking_plan(text), public.project_tracking_health(uuid), public.revoke_my_device()
   from public, anon, authenticated, service_role;
 
 grant execute on function
@@ -608,4 +636,5 @@ grant execute on function
   public.edge_device_renew(bytea, uuid, bytea, text), public.edge_worker_open_session_projects(uuid)
   to service_role;
 
-grant execute on function public.my_tracking_plan(text), public.project_tracking_health(uuid) to authenticated;
+grant execute on function public.my_tracking_plan(text), public.project_tracking_health(uuid), public.revoke_my_device()
+  to authenticated;

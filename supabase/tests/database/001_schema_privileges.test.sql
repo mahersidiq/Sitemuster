@@ -111,7 +111,7 @@ select is(
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
         'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_enrollments',
         'my_tracking_plan', 'preview_orientation', 'project_tracking_health', 'remove_project_staff',
-        'revoke_invitation', 'revoke_printed_badge',
+        'revoke_invitation', 'revoke_my_device', 'revoke_printed_badge',
         'set_my_language', 'set_project_status', 'start_orientation_session', 'update_my_emergency_contact',
         'update_project_config'],
   'client-callable RPCs in public are exactly the reviewed allowlist'

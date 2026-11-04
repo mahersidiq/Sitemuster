@@ -1,12 +1,15 @@
 import type {
   DeviceActivateRequest,
   DeviceActivateResponse,
+  DeviceRenewResponse,
   Locale,
   ProjectStaffRole,
   ProjectStatus,
   WorkWindow,
   WorkWindowInput,
 } from '@sitemuster/shared';
+
+import type { TrackingPlan } from '../tracking/plan';
 
 export interface ProjectSummary {
   id: string;
@@ -336,6 +339,12 @@ export interface SiteMusterApi {
   issuePrintedBadge(projectId: string, workerId: string): Promise<PrintedBadge>;
   revokePrintedBadge(projectId: string, badgeId: string, reason: string): Promise<void>;
   activateDevice(input: DeviceActivateRequest): Promise<DeviceActivateResponse>;
+  /** Milestone 07: this phone's tracking plan (own data only, decision #89). */
+  getTrackingPlan(appVersion: string): Promise<TrackingPlan>;
+  /** Sign-out: revoke this worker's phone and its upload secrets (docs/spec/03). */
+  revokeMyDevice(): Promise<void>;
+  /** Foreground renewal with the signed-in session (also after expiry; decision #44). */
+  renewDeviceWithSession(appVersion: string): Promise<DeviceRenewResponse>;
 }
 
 /** Machine error code from the server (raise exception 'CODE[: detail]') or transport. */

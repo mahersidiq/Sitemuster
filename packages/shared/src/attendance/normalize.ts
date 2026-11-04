@@ -133,11 +133,31 @@ function providerAvailable(provider: unknown): boolean {
   return true;
 }
 
+/**
+ * The SiteMuster location template (src/tracking/templates.ts) renders the event of a plain fix
+ * as an empty string and booleans as quoted strings, so a tag a platform leaves empty still yields
+ * valid JSON. Canonicalize those forms before validation; nothing else is changed.
+ */
+function canonicalWire(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const record = { ...(raw as Record<string, unknown>) };
+  if ((record.event === '' || record.event === undefined) && record.coords !== undefined) {
+    record.event = 'location';
+  }
+  for (const key of ['is_moving', 'mock'] as const) {
+    if (record[key] === 'true') record[key] = true;
+    else if (record[key] === 'false') record[key] = false;
+    else if (record[key] === '') delete record[key];
+  }
+  return record;
+}
+
 export function normalizeSdkRecord(
   device: DeviceContext,
-  raw: unknown,
+  input: unknown,
   receivedAt: string,
 ): NormalizedRecord {
+  const raw = canonicalWire(input);
   const record = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const uuid =
     typeof record.uuid === 'string' && UUID.test(record.uuid) ? record.uuid.toLowerCase() : null;

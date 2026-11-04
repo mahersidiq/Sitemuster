@@ -2,7 +2,7 @@
 -- the continuous-coordinate release gate, the worker tracking plan and staff tracking health
 -- (docs/spec/03, docs/spec/11; decisions #24, #27, #39, #44, #45, #89–#95).
 begin;
-select plan(57);
+select plan(61);
 select tests.seed_world();
 -- Ids as session settings: usable under every role (the tests schema is postgres-only).
 select set_config('t.cv_a1', tests.id('cv_a1')::text, true);
@@ -251,6 +251,21 @@ select ok((select bool_and((h ->> 'device') = case when (h ->> 'worker_id')::uui
 select tests.authenticate_as(current_setting('t.u_b_super')::uuid);
 select throws_ok(format($$select public.project_tracking_health(%L)$$, current_setting('t.p_a1')::uuid), '42501', null,
   'another GC cannot read project A''s tracking health');
+
+-- Sign-out revokes the worker's own phone (and nothing else).
+select tests.authenticate_as(current_setting('t.u_worker_a1')::uuid, 'aal1');
+select lives_ok($$select public.revoke_my_device()$$, 'a worker revokes their own phone at sign-out');
+select tests.authenticate_as(current_setting('t.u_a_super')::uuid);
+select lives_ok($$select public.revoke_my_device()$$, 'staff without a phone: no-op');
+select tests.as_postgres();
+select ok((select not active from public.device_installations where id = current_setting('t.d_a1')::uuid)
+          and not exists (select 1 from app_private.device_upload_credentials
+                           where device_id = current_setting('t.d_a1')::uuid and revoked_at is null)
+          and not exists (select 1 from public.device_project_bindings
+                           where device_id = current_setting('t.d_a1')::uuid and revoked_at is null),
+  'after sign-out the phone, its upload secrets and its bindings are revoked');
+select ok((select active from public.device_installations where id = current_setting('t.d_a2')::uuid),
+  'another worker''s phone is untouched');
 
 select * from finish();
 rollback;
