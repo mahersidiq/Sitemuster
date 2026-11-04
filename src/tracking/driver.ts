@@ -36,6 +36,12 @@ export interface DriverHandlers {
   connectivity(online: boolean): void;
 }
 
+export interface StoredAuthorization {
+  token: string;
+  /** The SDK's `expires`: epoch second of the next renewal (credential expiry − 7 days). */
+  renewAfterEpoch: number | null;
+}
+
 export interface TrackerDriver {
   readonly kind: 'native' | 'simulated';
   ready(config: Config): Promise<void>;
@@ -51,8 +57,11 @@ export interface TrackerDriver {
   clear(): Promise<void>;
   sync(): Promise<void>;
   count(): Promise<number>;
-  /** The secret the SDK currently sends (it may have refreshed it natively). */
-  accessToken(): Promise<string | null>;
+  /**
+   * The secret held in the SDK's persisted configuration — it may have refreshed it natively,
+   * also while the app was closed. Read before `ready()` on a cold start (decision #97).
+   */
+  storedAuthorization(): Promise<StoredAuthorization | null>;
   permission(): Promise<PermissionSnapshot>;
   requestPermission(): Promise<PermissionSnapshot>;
   subscribe(handlers: DriverHandlers): () => void;
@@ -60,22 +69,32 @@ export interface TrackerDriver {
 
 export type CommandFailure = { command: Command['type']; error: unknown };
 
+/** Reported for a SYNC that was not run because the egress gate failed before it. */
+export const EGRESS_GATE_FAILED = 'EGRESS_GATE_FAILED';
+
 /**
  * Runs controller commands in order. A failed command is reported (never swallowed) and the rest
- * still run: e.g. a failed sync leaves records queued for the SDK's next attempt, while the
- * privacy-critical PRUNE/DESTROY steps run regardless.
+ * still run: a failed sync leaves records queued for the next attempt. The egress gate fails
+ * closed (decision #96): once a PRUNE or DESTROY fails, nothing else in the batch may upload —
+ * SYNC is skipped and a SET_CONFIG that would switch SDK autoSync on is applied with autoSync
+ * off. Uploads resume after the next successful prune (resync, heartbeat or transition).
  */
 export async function executeCommands(
   driver: TrackerDriver,
   state: ControllerState,
   commands: readonly Command[],
   report: (failure: CommandFailure) => void,
-): Promise<void> {
+): Promise<{ egressBlocked: boolean }> {
+  let gateFailed = false;
   for (const command of commands) {
+    if (gateFailed && command.type === 'SYNC') {
+      report({ command: 'SYNC', error: new Error(EGRESS_GATE_FAILED) });
+      continue;
+    }
     try {
       switch (command.type) {
         case 'SET_CONFIG':
-          await driver.setConfig(command.config);
+          await driver.setConfig(gateFailed ? withoutAutoSync(command.config) : command.config);
           break;
         case 'REPLACE_FENCES':
           await driver.replaceFences(command.fences);
@@ -112,7 +131,13 @@ export async function executeCommands(
           break;
       }
     } catch (error) {
+      if (command.type === 'PRUNE' || command.type === 'DESTROY') gateFailed = true;
       report({ command: command.type, error });
     }
   }
+  return { egressBlocked: gateFailed };
+}
+
+function withoutAutoSync(config: Partial<Config>): Partial<Config> {
+  return config.http?.autoSync ? { ...config, http: { ...config.http, autoSync: false } } : config;
 }

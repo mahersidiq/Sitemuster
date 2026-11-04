@@ -6,7 +6,12 @@ import BackgroundGeolocation, {
 } from 'react-native-background-geolocation';
 
 import type { ControllerFence } from './controller';
-import type { DriverHandlers, PermissionSnapshot, TrackerDriver } from './driver';
+import type {
+  DriverHandlers,
+  PermissionSnapshot,
+  StoredAuthorization,
+  TrackerDriver,
+} from './driver';
 import type { QueuedRecord } from './gate';
 
 /**
@@ -148,9 +153,16 @@ export class NativeTrackerDriver implements TrackerDriver {
     return BackgroundGeolocation.getCount();
   }
 
-  async accessToken(): Promise<string | null> {
+  /** `getState()` reads the persisted configuration; it needs no location access (decision #97). */
+  async storedAuthorization(): Promise<StoredAuthorization | null> {
     const state = (await BackgroundGeolocation.getState()) as unknown as Config;
-    return state.authorization?.accessToken ?? null;
+    const token = state.authorization?.accessToken;
+    if (typeof token !== 'string' || token.length === 0) return null;
+    const expires = state.authorization?.expires;
+    return {
+      token,
+      renewAfterEpoch: typeof expires === 'number' && expires > 0 ? expires : null,
+    };
   }
 
   async permission(): Promise<PermissionSnapshot> {

@@ -1,4 +1,7 @@
-import { DeviceRenewResponseSchema, ms, TRACKING_DEFAULTS } from '@sitemuster/shared';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
+
+import { DeviceRenewResponseSchema, iso, ms, TRACKING_DEFAULTS } from '@sitemuster/shared';
 
 /**
  * Device upload secret lifecycle on the phone (docs/spec/03; decision #44). Renewal paths, in
@@ -29,6 +32,16 @@ export function renewalDue(expiresAt: string | null, now: number): boolean {
 /** Epoch second at which the SDK should refresh natively (expiry − 7 days). */
 export function renewAfterEpochSeconds(expiresAt: string): number {
   return Math.floor((ms(expiresAt) - RENEW_BEFORE) / 1000);
+}
+
+/** The expiry implied by the SDK's `expires` (the inverse of renewAfterEpochSeconds). */
+export function expiryFromRenewAfter(renewAfterEpoch: number): string {
+  return iso(renewAfterEpoch * 1000 + RENEW_BEFORE);
+}
+
+/** Identifies a secret without keeping a second copy of it (SHA-256, hex). */
+export function tokenFingerprint(token: string): string {
+  return bytesToHex(sha256(utf8ToBytes(token)));
 }
 
 export type RenewOutcome =

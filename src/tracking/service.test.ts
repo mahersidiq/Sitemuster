@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DeviceRenewResponse } from '@sitemuster/shared';
+import { type DeviceRenewResponse, iso } from '@sitemuster/shared';
 
 import type { StoredDevice } from '../device/device-store';
 import type { ControllerState } from './controller';
+import { renewAfterEpochSeconds } from './credential';
 import type { TrackingPlan } from './plan';
-import { TrackingService, type TrackingServiceDeps, type TrackingStore } from './service';
-import { SimulatedSdk } from './simulated-driver';
+import {
+  type SdkCredentialRecord,
+  TrackingService,
+  type TrackingServiceDeps,
+  type TrackingStore,
+} from './service';
+import { SimulatedSdk, type Transport } from './simulated-driver';
 
 const USER = 'c1000000-0000-4000-8000-000000000001';
 const DEVICE = '5d000000-0000-4000-8000-0000000000a1';
@@ -44,6 +50,13 @@ function plan(overrides: Partial<TrackingPlan> = {}): TrackingPlan {
 class MemoryTrackingStore implements TrackingStore {
   state: ControllerState | null = null;
   plan: TrackingPlan | null = null;
+  sdkCredential: SdkCredentialRecord | null = null;
+  async loadSdkCredential() {
+    return this.sdkCredential;
+  }
+  async saveSdkCredential(record: SdkCredentialRecord) {
+    this.sdkCredential = { ...record };
+  }
   async load() {
     return this.state;
   }
@@ -59,33 +72,42 @@ class MemoryTrackingStore implements TrackingStore {
   async clear() {
     this.state = null;
     this.plan = null;
+    this.sdkCredential = null;
   }
 }
 
 function setup(
   options: {
-    plan?: TrackingPlan | Error;
+    plan?: TrackingPlan | Error | (() => Promise<TrackingPlan>);
     device?: StoredDevice | null;
     permission?: SimulatedSdk['permissionState'];
     renew?: TrackingServiceDeps['renewWithSecret'];
     session?: () => Promise<DeviceRenewResponse>;
+    transport?: Transport;
+    /** Expiry of the secret the app holds (default: the plan's, 20 days ahead). */
+    heldExpiresAt?: number;
   } = {},
 ) {
-  const sdk = new SimulatedSdk(async () => ({ status: 200, json: {} }), '2026-11-04T12:00:00Z');
+  const sdk = new SimulatedSdk(
+    options.transport ?? (async () => ({ status: 200, json: {} })),
+    '2026-11-04T12:00:00Z',
+  );
   if (options.permission) sdk.permissionState = options.permission;
   const store = new MemoryTrackingStore();
   const log: string[] = [];
   const posted: Record<string, unknown>[] = [];
-  const device: StoredDevice | null =
-    options.device === undefined
-      ? {
-          userId: USER,
-          deviceId: DEVICE,
-          badgeSecret: 'b'.repeat(43),
-          uploadToken: 'A'.repeat(43),
-          uploadExpiresAt: new Date(NOW + 20 * DAY).toISOString(),
-        }
-      : options.device;
+  const phone: { device: StoredDevice | null } = {
+    device:
+      options.device === undefined
+        ? {
+            userId: USER,
+            deviceId: DEVICE,
+            badgeSecret: 'b'.repeat(43),
+            uploadToken: 'A'.repeat(43),
+            uploadExpiresAt: new Date(options.heldExpiresAt ?? NOW + 20 * DAY).toISOString(),
+          }
+        : options.device,
+  };
   const originalSetConfig = sdk.setConfig.bind(sdk);
   sdk.setConfig = async (config) => {
     if (config.authorization) log.push(`sdk:${config.authorization.accessToken}`);
@@ -95,12 +117,14 @@ function setup(
   const originalReady = sdk.ready.bind(sdk);
   sdk.ready = async (config) => {
     readyCalls += 1;
+    log.push(`ready:${config.authorization?.accessToken}`);
     await originalReady(config);
   };
   const deps: TrackingServiceDeps = {
     api: {
       getTrackingPlan: async () => {
         if (options.plan instanceof Error) throw options.plan;
+        if (typeof options.plan === 'function') return options.plan();
         return options.plan ?? plan();
       },
       renewDeviceWithSession:
@@ -112,9 +136,12 @@ function setup(
     driver: sdk,
     store,
     devices: {
-      load: async () => device,
-      updateToken: async (_user, token) => {
+      load: async () => (phone.device ? { ...phone.device } : null),
+      // Like the device store: a wiped (signed-out) phone is never written back.
+      updateToken: async (_user, token, expiresAt) => {
         log.push(`store:${token}`);
+        if (phone.device)
+          phone.device = { ...phone.device, uploadToken: token, uploadExpiresAt: expiresAt };
       },
     },
     urls: {
@@ -139,13 +166,30 @@ function setup(
   };
   return {
     service: new TrackingService(deps),
+    /** The same phone after the app was closed and opened again (the SDK keeps its state). */
+    coldStart: (changes: Partial<TrackingServiceDeps> = {}) =>
+      new TrackingService({ ...deps, ...changes }),
+    deps,
     sdk,
     store,
+    phone,
     log,
     posted,
     readyCalls: () => readyCalls,
   };
 }
+
+const sessionRenewal = (token: string, expiresAt: number): DeviceRenewResponse => ({
+  schema_version: 1,
+  request_id: '11111111-1111-4111-8111-111111111111',
+  device_id: DEVICE,
+  upload_token: token,
+  upload_expires_at: new Date(expiresAt).toISOString(),
+  renew_after: new Date(expiresAt - 7 * DAY).toISOString(),
+  access_token: token,
+  refresh_token: token,
+  expires: Math.floor((expiresAt - 7 * DAY) / 1000),
+});
 
 describe('tracking service', () => {
   it('arms the bound fences when everything is in place (ACTIVE)', async () => {
@@ -201,7 +245,7 @@ describe('tracking service', () => {
 
   it('renews inside the last 7 days: the SDK gets the new secret BEFORE the app stores it', async () => {
     const current = plan();
-    const { service, log } = setup({
+    const { service, log, phone } = setup({
       plan: current,
       renew: async () => ({
         ok: true,
@@ -212,7 +256,9 @@ describe('tracking service', () => {
     });
     await service.start(USER); // SDK running with the original secret
     log.length = 0;
-    current.credential = { status: 'OK', expires_at: new Date(NOW + 5 * DAY).toISOString() };
+    const soon = new Date(NOW + 5 * DAY).toISOString();
+    current.credential = { status: 'OK', expires_at: soon };
+    if (phone.device) phone.device.uploadExpiresAt = soon;
     const status = await service.refresh();
     expect(log.slice(0, 2)).toEqual([`sdk:${'N'.repeat(43)}`, `store:${'N'.repeat(43)}`]);
     expect(status.credential).toBe('OK');
@@ -221,6 +267,7 @@ describe('tracking service', () => {
   it('after expiry renews with the signed-in session (the secret alone can no longer renew)', async () => {
     let secretCalls = 0;
     const { service } = setup({
+      heldExpiresAt: NOW - DAY,
       plan: plan({
         credential: { status: 'EXPIRED', expires_at: new Date(NOW - DAY).toISOString() },
       }),
@@ -228,17 +275,7 @@ describe('tracking service', () => {
         secretCalls += 1;
         return { ok: false, code: 'CREDENTIAL_EXPIRED' };
       },
-      session: async () => ({
-        schema_version: 1,
-        request_id: '11111111-1111-4111-8111-111111111111',
-        device_id: DEVICE,
-        upload_token: 'S'.repeat(43),
-        upload_expires_at: new Date(NOW + 30 * DAY).toISOString(),
-        renew_after: new Date(NOW + 23 * DAY).toISOString(),
-        access_token: 'S'.repeat(43),
-        refresh_token: 'S'.repeat(43),
-        expires: Math.floor((NOW + 23 * DAY) / 1000),
-      }),
+      session: async () => sessionRenewal('S'.repeat(43), NOW + 30 * DAY),
     });
     const status = await service.start(USER);
     expect(secretCalls).toBe(0);
@@ -247,6 +284,7 @@ describe('tracking service', () => {
 
   it('when renewal fails after expiry it says so (CREDENTIAL_EXPIRED) instead of pretending', async () => {
     const { service } = setup({
+      heldExpiresAt: NOW - DAY,
       plan: plan({
         credential: { status: 'EXPIRED', expires_at: new Date(NOW - DAY).toISOString() },
       }),
@@ -315,5 +353,187 @@ describe('tracking service', () => {
     expect(service.current).toMatchObject({ phase: 'NO_DEVICE', mode: 'DISARMED' });
     expect(store.plan).toBeNull();
     expect(await sdk.count()).toBe(0);
+  });
+
+  describe('the secret the SDK holds (decision #97)', () => {
+    const C = 'C'.repeat(43);
+    const cExpiry = NOW + 34 * DAY;
+    /** The SDK's own refresh answer (device-renew) during a native upload. */
+    const renewing: Transport = async (url) =>
+      url.endsWith('/device-renew')
+        ? {
+            status: 200,
+            json: {
+              access_token: C,
+              refresh_token: C,
+              expires: renewAfterEpochSeconds(new Date(cExpiry).toISOString()),
+              upload_expires_at: new Date(cExpiry).toISOString(),
+            },
+          }
+        : { status: 200, json: {} };
+
+    it('a cold start keeps the secret the SDK renewed natively while the app was closed', async () => {
+      const server = plan();
+      const rig = setup({ plan: server, transport: renewing });
+      await rig.service.start(USER);
+      rig.service.release(); // the app is closed: no JavaScript sees what the SDK does now
+      rig.sdk.setTime(iso(NOW + 14 * DAY)); // past `expires` (20-day expiry − 7 days)
+      await rig.sdk.moveTo(iso(NOW + 14 * DAY), { ...project(1).center, accuracy: 10 });
+      expect((await rig.sdk.storedAuthorization())?.token).toBe(C);
+      expect(rig.phone.device?.uploadToken).toBe('A'.repeat(43)); // the app never saw it
+      server.credential = { status: 'OK', expires_at: new Date(cExpiry).toISOString() };
+
+      const reopened = rig.coldStart();
+      const status = await reopened.start(USER);
+      expect(rig.log.filter((entry) => entry.startsWith('ready:')).at(-1)).toBe(`ready:${C}`);
+      expect((await rig.sdk.storedAuthorization())?.token).toBe(C);
+      expect(rig.phone.device?.uploadToken).toBe(C);
+      expect(status).toMatchObject({ phase: 'ACTIVE', credential: 'OK' });
+    });
+
+    it("after sign-out and a new activation the old phone's secret in the SDK is never adopted", async () => {
+      const rig = setup();
+      await rig.service.start(USER);
+      await rig.service.stop(); // sign-out: the record of what the SDK holds is dropped
+      expect(rig.store.sdkCredential).toBeNull();
+      const replacement = '5d000000-0000-4000-8000-0000000000a2';
+      rig.phone.device = {
+        userId: USER,
+        deviceId: replacement,
+        badgeSecret: 'c'.repeat(43),
+        uploadToken: 'Y'.repeat(43),
+        uploadExpiresAt: new Date(NOW + 30 * DAY).toISOString(),
+      };
+      const fresh = plan({
+        device_id: replacement,
+        credential: { status: 'OK', expires_at: new Date(NOW + 30 * DAY).toISOString() },
+      });
+      // Even if the sign-out cleanup never ran, a record for another device is ignored.
+      rig.store.sdkCredential = { deviceId: DEVICE, tokenSha256: 'stale' };
+      const next = rig.coldStart({
+        api: { ...rig.deps.api, getTrackingPlan: async () => fresh },
+      });
+      expect((await next.start(USER)).phase).toBe('ACTIVE');
+      expect((await rig.sdk.storedAuthorization())?.token).toBe('Y'.repeat(43));
+      expect(rig.phone.device?.uploadToken).toBe('Y'.repeat(43));
+    });
+
+    it('a secret renewed while the SDK was not running is not replaced by the older one it holds', async () => {
+      const server = plan();
+      const rig = setup({ plan: server });
+      await rig.service.start(USER); // the SDK holds A
+      const soon = new Date(NOW + 5 * DAY).toISOString();
+      server.credential = { status: 'OK', expires_at: soon };
+      if (rig.phone.device) rig.phone.device.uploadExpiresAt = soon;
+      rig.sdk.permissionState = { location: 'WHEN_IN_USE', precise: true, servicesEnabled: true };
+      const n = 'N'.repeat(43);
+      const nExpiry = new Date(NOW + 30 * DAY).toISOString();
+      const reopened = rig.coldStart({
+        renewWithSecret: async () => ({
+          ok: true,
+          token: n,
+          expiresAt: nExpiry,
+          renewAfter: new Date(NOW + 23 * DAY).toISOString(),
+        }),
+      });
+      expect((await reopened.start(USER)).phase).toBe('PERMISSION_REQUIRED');
+      expect(rig.phone.device?.uploadToken).toBe(n);
+      expect((await rig.sdk.storedAuthorization())?.token).toBe('A'.repeat(43)); // not started
+      server.credential = { status: 'OK', expires_at: nExpiry };
+      rig.sdk.permissionState = { location: 'ALWAYS', precise: true, servicesEnabled: true };
+      expect((await rig.coldStart().start(USER)).phase).toBe('ACTIVE');
+      expect((await rig.sdk.storedAuthorization())?.token).toBe(n);
+      expect(rig.phone.device?.uploadToken).toBe(n);
+    });
+
+    it('renews when the server names another active secret than the one held (lost renewal response)', async () => {
+      let secretCalls = 0;
+      const rig = setup({
+        plan: plan({
+          credential: { status: 'OK', expires_at: new Date(NOW + 29 * DAY).toISOString() },
+        }),
+        renew: async (token) => {
+          secretCalls += 1;
+          expect(token).toBe('A'.repeat(43));
+          return {
+            ok: true,
+            token: 'R'.repeat(43),
+            expiresAt: new Date(NOW + 30 * DAY).toISOString(),
+            renewAfter: new Date(NOW + 23 * DAY).toISOString(),
+          };
+        },
+      });
+      const status = await rig.service.start(USER);
+      expect(secretCalls).toBe(1);
+      expect(status).toMatchObject({ phase: 'ACTIVE', credential: 'OK' });
+      expect((await rig.sdk.storedAuthorization())?.token).toBe('R'.repeat(43));
+      expect(rig.phone.device?.uploadToken).toBe('R'.repeat(43));
+    });
+
+    it('if that renewal fails, the held secret is shown as expiring within a day, never as valid', async () => {
+      const rig = setup({
+        plan: plan({
+          credential: { status: 'OK', expires_at: new Date(NOW + 29 * DAY).toISOString() },
+        }),
+        renew: async () => ({ ok: false, code: 'CREDENTIAL_SUPERSEDED' }),
+        session: async () => {
+          throw new Error('session expired');
+        },
+      });
+      const status = await rig.service.start(USER);
+      expect(status.credential).toBe('EXPIRING');
+      expect(Date.parse(status.credentialExpiresAt ?? '')).toBeLessThanOrEqual(NOW + DAY);
+    });
+
+    it('an unreadable SDK configuration falls back to the app copy (reported, never guessed)', async () => {
+      const rig = setup();
+      await rig.service.start(USER);
+      rig.sdk.storedAuthorization = async () => {
+        throw new Error('bridge unavailable');
+      };
+      expect((await rig.coldStart().start(USER)).phase).toBe('ACTIVE');
+      expect(rig.log.at(-1)).toBe(`ready:${'A'.repeat(43)}`);
+    });
+  });
+
+  describe('sign-out while a start is still running', () => {
+    it('cancels it: nothing is saved, renewed, configured or armed after stop()', async () => {
+      let answer: (value: TrackingPlan) => void = () => undefined;
+      const rig = setup({
+        heldExpiresAt: NOW + 2 * DAY, // a renewal would be due
+        plan: () =>
+          new Promise<TrackingPlan>((resolve) => {
+            answer = resolve;
+          }),
+        renew: async () => {
+          throw new Error('must not renew after sign-out');
+        },
+      });
+      const first = rig.service.start(USER);
+      const second = rig.service.start(USER); // e.g. the foreground refresh, queued behind it
+      await Promise.resolve();
+      const stopped = rig.service.stop();
+      answer(
+        plan({ credential: { status: 'OK', expires_at: new Date(NOW + 2 * DAY).toISOString() } }),
+      );
+      await Promise.all([first, second, stopped]);
+      expect(rig.readyCalls()).toBe(0);
+      expect(rig.log).toEqual([]);
+      expect(rig.store.plan).toBeNull();
+      expect(rig.store.sdkCredential).toBeNull();
+      expect(rig.service.current).toMatchObject({ phase: 'NO_DEVICE', mode: 'DISARMED' });
+      expect(await rig.sdk.count()).toBe(0);
+      expect(await rig.service.refresh()).toMatchObject({ phase: 'NO_DEVICE' }); // no user left
+      expect(rig.readyCalls()).toBe(0);
+    });
+
+    it('a start that already armed is disarmed by the stop that follows it', async () => {
+      const rig = setup();
+      const started = rig.service.start(USER);
+      const stopped = rig.service.stop();
+      await Promise.all([started, stopped]);
+      expect(rig.service.current).toMatchObject({ phase: 'NO_DEVICE', mode: 'DISARMED' });
+      expect(rig.store.state).toBeNull();
+    });
   });
 });

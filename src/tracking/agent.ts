@@ -7,6 +7,7 @@ import {
   onGeofence,
   onHeartbeat,
   onLocation,
+  onResync,
   type Transition,
 } from './controller';
 import {
@@ -70,7 +71,7 @@ export class TrackingAgent {
       http: (event) => this.listener.http?.(event.status),
       authorization: (event) => this.listener.authorization?.(event),
       connectivity: (online) => {
-        if (online) void this.step((s) => this.resync(s));
+        if (online) void this.step(onResync);
       },
     };
     return this.driver.subscribe(handlers);
@@ -103,17 +104,12 @@ export class TrackingAgent {
 
   /** Back online / foreground: gate (onsite) and sync what the SDK holds. */
   sync(): Promise<void> {
-    return this.step((s) => this.resync(s));
+    return this.step(onResync);
   }
 
   /** Resolves when every event delivered so far has been handled. */
   idle(): Promise<void> {
     return this.chain;
-  }
-
-  private resync(state: ControllerState): Transition {
-    if (state.mode === 'DISARMED') return { state, commands: [] };
-    return { state, commands: [{ type: 'PRUNE' }, { type: 'SYNC' }] };
   }
 
   private step(next: (state: ControllerState) => Transition): Promise<void> {

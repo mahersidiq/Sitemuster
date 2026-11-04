@@ -209,6 +209,10 @@
   - Native driver (the only SDK import) and the simulated SDK, the CI trace driver with a captured wire; it never ships, and the bundle test guards that.
   - Tracking agent (serialized, persisted) shared with the Android headless task.
   - Tracking service: plan, renewal (SDK first, then storage), permission gating without OS prompts, region budget, offline plan, monitoring reports (decision #95).
+  - Review fixes (PR #7):
+    - The egress gate fails closed: no upload after a failed prune, and the SDK never starts with autoSync on (decision #96).
+    - A cold start adopts the secret the SDK refreshed natively, but only for the same device. The phone renews when the server names another active credential (decision #97).
+    - Sign-out cancels a start that is still running.
   - Encrypted on-phone state; `TrackingProvider` (start, foreground refresh, stop at sign-out).
 - **App.**
   - Worker home card and `/tracking` screen (EN/ES): phase, mode, permission checklist with platform help, key validity, location queue and Sync now, monitored and unmonitored sites. Tracking is armed right after phone setup.
@@ -219,18 +223,27 @@
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
 - `supabase test db`: **18 files, 491** pgTAP tests (`024_device_ingestion`: 61 — derived bindings for consent, employer, project status and phone; credential states incl. rotated overlap; fences = current + open-session version; release gate incl. per-build sign-off; rate limits; terminal recording, coordinate refusal, foreign uuid; renewal paths, supersession, revocation, audit; worker plan; staff health authorization; sign-out revocation).
 - `npm run test:backend`: **110/110** — incl. `device-ingestion.test.ts` (7, real Edge Functions over HTTP: 401/405/415/422, accepted then duplicate with one session, project A/B isolation with zero B rows, whole-batch 503 while the reconciler is unavailable then exactly-once, replaced phone 401 + DEVICE_REPLACED, renewal in the middle of a 25-record queue with zero loss/duplicates and the overlap ending, foreground renewal after expiry) and the 81 database replays through the production ingest handler.
-- Vitest unit **283** (Edge cores 46 incl. instrumented cross-project zero access and mixed 200/503; tracking 26 incl. the full-day captured-wire privacy trace and its negative control, limited mode, overlapping sites, offline queue, native refresh, refusal, disarm, service phases, renewal ordering, region budget, monitoring reports, serialized starts, queue kept when the service is re-created), integration 51, security **78** (incl. the native config gates and the bundle guard), i18n 18, replay **180**; Jest **50** (mobile-unit 11 incl. the tracking screen EN/ES, mobile-integration 39).
+- Vitest unit **294**:
+  - Edge cores 46, incl. instrumented cross-project zero access and mixed 200/503.
+  - Tracking 37, incl.:
+    - the full-day captured-wire privacy trace and its negative control;
+    - limited mode, overlapping sites, offline queue, native refresh, refusal, disarm;
+    - service phases, renewal ordering, region budget, monitoring reports, serialized starts, queue kept when the service is re-created;
+    - review regressions: a failed prune at the exit never sends the crossing position; cold-start adoption of a natively refreshed secret; no adoption after sign-out and re-activation, or after a renewal the SDK never got; renewal on credential mismatch and EXPIRING when it fails; sign-out during a start;
+    - each regression test was checked to fail without its fix.
+
+  Also: integration 51, security **78** (incl. the native config gates and the bundle guard), i18n 18, replay **180**; Jest **50** (mobile-unit 11 incl. the tracking screen EN/ES, mobile-integration 39).
 - typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
-- GitHub Actions: _pending — recorded after the run._
+- GitHub Actions: run 41787601927 on `3651d3b` green (pgTAP 18/491, backend 110/110). The run for the review-fix head is recorded in the Milestone 08 PR.
 
 **NOT VERIFIED (Milestone 07)**
-- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): native background delivery, iOS relaunch and Android headless events, reboot, Force Stop, permission flows, battery, the rendered HTTP wire of the real SDK, its interpretation of `expires` (decision #92), and the egress gate in killed-app conditions. No EAS development build exists yet (needs Expo account, checklist §2).
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): native background delivery, iOS relaunch and Android headless events, reboot, Force Stop, permission flows, battery, the rendered HTTP wire of the real SDK, its interpretation of `expires` (decision #92), reading the persisted secret before `ready()` (decision #97), and the egress gate in killed-app conditions. No EAS development build exists yet (needs Expo account, checklist §2).
 - **Production continuous coordinates stay OFF** (TRACKING_LIMITED) until the real-device privacy sign-off in checklist §10 is recorded per platform and app version (decision #90).
 - Transistorsoft production license (`TS_ANDROID_LICENSE_KEY`, checklist §10): production builds refuse to build without it.
 - Push-based renewal (silent push and the 7/3/1-day reminders) arrives with the push pipeline in Milestone 11; the roster UI that shows CREDENTIAL_EXPIRING comes in Milestone 09.
 - Hosted deployment of the two new Edge Functions (checklist §3).
 
-**Decisions added:** #89 derived device bindings and current/open-session fences, #90 continuous-coordinate release gate (TRACKING_LIMITED), #91 two-mode SDK operation and JavaScript egress gate, #92 native authorization refresh and renewal paths, #93 ingest endpoint details, #94 sign-out revocation and replacement flag, #95 coordinate-free monitoring reports.
+**Decisions added:** #89 derived device bindings and current/open-session fences, #90 continuous-coordinate release gate (TRACKING_LIMITED), #91 two-mode SDK operation and JavaScript egress gate, #92 native authorization refresh and renewal paths, #93 ingest endpoint details, #94 sign-out revocation and replacement flag, #95 coordinate-free monitoring reports, #96 the egress gate fails closed, #97 the phone keeps the secret the SDK holds.
 
 **Next step:** after Milestone 07 merges, start Milestone 08 (kiosk, foreman, manual and visitor fallbacks; operational outbox) on `milestone-08-fallbacks`.
 

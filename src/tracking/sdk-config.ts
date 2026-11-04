@@ -101,6 +101,9 @@ export function buildSdkConfig(input: SdkConfigInput, mode: SdkMode): Config {
       headers: {},
       params: {},
       ...modal.http,
+      // Never upload on start: the queue may still hold records an earlier, failed prune left
+      // behind. Arming prunes first and only then lets the SDK upload (decision #96).
+      autoSync: false,
     },
     authorization: authorizationConfig(input),
     persistence: {

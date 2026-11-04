@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { containsCoordinateKeys, distanceMeters } from '@sitemuster/shared';
 
 import { MemoryControllerStore, TrackingAgent } from './agent';
-import type { ControllerFence } from './controller';
+import { type ControllerFence, DISARMED, disarm, onHeartbeat, onResync } from './controller';
+import { type CommandFailure, EGRESS_GATE_FAILED, executeCommands } from './driver';
 import { egressDecision, recordsToDestroy } from './gate';
 import { buildSdkConfig, modeConfig, PERSIST_MODE_ALL, PERSIST_MODE_GEOFENCE } from './sdk-config';
 import { type CapturedRequest, SimulatedSdk, type Transport } from './simulated-driver';
@@ -49,6 +50,7 @@ interface Rig {
   agent: TrackingAgent;
   requests: CapturedRequest[];
   tokens: string[];
+  failures: CommandFailure[];
   readonly refusals: number;
 }
 
@@ -61,6 +63,7 @@ async function rig(
   } = {},
 ): Promise<Rig> {
   const tokens: string[] = [];
+  const failures: CommandFailure[] = [];
   const counters = { refusals: 0 };
   const accept: Transport = async (url, init) => {
     if (url === RENEW)
@@ -86,6 +89,7 @@ async function rig(
       if (event.token) tokens.push(event.token);
       if (!event.success) counters.refusals += 1;
     },
+    failure: (failure) => failures.push(failure),
   });
   agent.attach();
   const config = input();
@@ -100,6 +104,7 @@ async function rig(
     agent,
     requests: sdk.wire,
     tokens,
+    failures,
     get refusals() {
       return counters.refusals;
     },
@@ -193,7 +198,10 @@ describe('native templates and configuration', () => {
   it('offsite = geofence-only persistence with SDK autoSync; onsite = all records, JS-driven sync', () => {
     const offsite = buildSdkConfig(input(), 'OFFSITE');
     expect(offsite.persistence?.persistMode).toBe(PERSIST_MODE_GEOFENCE);
-    expect(offsite.http?.autoSync).toBe(true);
+    // The SDK never starts uploading by itself: arming prunes first, then enables it (#96).
+    expect(offsite.http?.autoSync).toBe(false);
+    expect(buildSdkConfig(input(), 'ONSITE').http?.autoSync).toBe(false);
+    expect(modeConfig('OFFSITE').http?.autoSync).toBe(true);
     expect(modeConfig('ONSITE')).toMatchObject({
       http: { autoSync: false },
       persistence: { persistMode: PERSIST_MODE_ALL },
@@ -257,6 +265,86 @@ describe('on-device egress gate', () => {
     const stored = { ...enter, coords: { latitude: 1, longitude: 2, accuracy: 3 } };
     expect(egressDecision(stored, [FENCE], true)).toBe('KEEP');
     expect(recordsToDestroy([enter, fix(at(5000)), fix(at(10))], [FENCE], true)).toEqual(['u']);
+  });
+});
+
+describe('the egress gate fails closed (decision #96)', () => {
+  const armed = {
+    ...DISARMED,
+    mode: 'ARMED_OFFSITE' as const,
+    fences: [FENCE],
+    coordinatesAllowed: true,
+  };
+
+  it('after a failed PRUNE nothing in the batch uploads: SYNC skipped, autoSync kept off', async () => {
+    const sdk = new SimulatedSdk(async () => ({ status: 200, json: {} }), '2026-11-04T05:00:00Z');
+    await sdk.ready(buildSdkConfig(input(), 'OFFSITE'));
+    const calls: string[] = [];
+    const setConfig = sdk.setConfig.bind(sdk);
+    sdk.setConfig = async (config) => {
+      calls.push(`setConfig:${JSON.stringify(config.http ?? {})}`);
+      await setConfig(config);
+    };
+    sdk.sync = async () => {
+      calls.push('sync');
+    };
+    sdk.failNext('queued');
+    const failures: CommandFailure[] = [];
+    const result = await executeCommands(sdk, armed, onResync(armed).commands, (failure) =>
+      failures.push(failure),
+    );
+    expect(result).toEqual({ egressBlocked: true });
+    expect(calls).toEqual(['setConfig:{"autoSync":false}']);
+    expect(failures.map((f) => f.command)).toEqual(['PRUNE', 'SYNC']);
+    expect((failures[1]?.error as Error).message).toBe(EGRESS_GATE_FAILED);
+
+    // The next resync prunes successfully and lets uploads resume.
+    calls.length = 0;
+    expect(await executeCommands(sdk, armed, onResync(armed).commands, () => undefined)).toEqual({
+      egressBlocked: false,
+    });
+    expect(calls).toEqual(['setConfig:{"autoSync":true}', 'sync']);
+  });
+
+  it('every offsite sync is preceded by a prune; disarming switches uploads off', () => {
+    expect(onHeartbeat(armed).commands.map((c) => c.type)).toEqual(['PRUNE', 'SET_CONFIG', 'SYNC']);
+    expect(onResync({ ...armed, mode: 'ENTRY_PENDING' }).commands.map((c) => c.type)).toEqual([
+      'PRUNE',
+      'SYNC',
+    ]);
+    expect(disarm().commands[0]).toMatchObject({
+      type: 'SET_CONFIG',
+      config: { http: { autoSync: false } },
+    });
+  });
+
+  it('captured wire: a failing native queue at the exit never sends the crossing position', async () => {
+    const r = await rig();
+    await walk(r, '2026-11-04T06:00:00Z', at(190));
+    await walk(r, '2026-11-04T06:01:00Z', at(60));
+    await walk(r, '2026-11-04T06:12:00Z', at(20));
+    expect(r.agent.current.mode).toBe('ONSITE_ESTIMATED');
+    // Leaving: the SDK stores the crossing position, then both gate paths fail once.
+    r.sdk.failNext('destroy');
+    r.sdk.failNext('queued');
+    await walk(r, '2026-11-04T14:00:00Z', at(420));
+    expect(r.agent.current.mode).toBe('ARMED_OFFSITE');
+    expect(r.failures.map((f) => f.command)).toEqual(['DESTROY', 'PRUNE', 'SYNC']);
+    expect((await r.sdk.queued()).some((x) => x.coords && x.event !== 'geofence')).toBe(true);
+    // Driving home: the SDK must not upload on its own while the queue is unpruned.
+    await walk(r, '2026-11-04T14:10:00Z', at(2500));
+    expect(offsiteCoordinates(r.requests, [FENCE])).toEqual([]);
+    // The next heartbeat prunes, then uploads: only the coordinate-free EXIT leaves the phone.
+    await r.sdk.fireHeartbeat('2026-11-04T14:15:00Z');
+    await r.agent.idle();
+    expect(offsiteCoordinates(r.requests, [FENCE])).toEqual([]);
+    expect(JSON.stringify(r.requests)).not.toContain(at(420).lat.toFixed(6));
+    expect(
+      records(r.requests)
+        .filter((x) => x.event === 'geofence')
+        .map((x) => (x.geofence as { action: string }).action),
+    ).toEqual(['ENTER', 'EXIT']);
+    expect(await r.sdk.count()).toBe(0);
   });
 });
 
@@ -366,7 +454,7 @@ describe('captured wire (simulated SDK + production controller)', () => {
     await walk(r, '2026-11-04T06:00:00Z', at(100));
     await walk(r, '2026-11-04T06:12:00Z', at(10));
     expect(r.tokens).toEqual(['C'.repeat(43)]);
-    expect(await r.sdk.accessToken()).toBe('C'.repeat(43));
+    expect((await r.sdk.storedAuthorization())?.token).toBe('C'.repeat(43));
     expect(used.length).toBeGreaterThan(0);
     expect(used.every((header) => header === `Bearer ${'C'.repeat(43)}`)).toBe(true);
     expect([...accepted.values()].every((n) => n === 1)).toBe(true);

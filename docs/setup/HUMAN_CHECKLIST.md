@@ -121,6 +121,7 @@ Until this is recorded, production phones run **TRACKING_LIMITED**: only coordin
 
   Note anything else the SDK adds.
 - [ ] Force a renewal: in the staging SQL editor run `update app_private.device_upload_credentials set expires_at = now() + interval '6 days' where device_id = '<test device id>' and overlap_until is null;`, then wait for the next upload. Check that the SDK calls `device-renew` with `refresh_token=…` and switches to the new secret, with no upload lost. This confirms the SDK's reading of `expires` (decision #92).
+- [ ] Renewal while the app is closed (decision #97): swipe the app away, run the same SQL again, then walk or wait until the phone uploads in the background and calls `device-renew`. Reopen the app and keep capturing for at least 25 hours. Every later upload must carry the **new** secret: no `401`, and no request that sends the old secret again after the app reopens. This also confirms the app can read the SDK's saved secret before it starts the SDK.
 - [ ] If everything passes, record the sign-off in the **production** SQL editor: `select app_private.record_location_privacy_signoff('IOS', '<app version>', '<your name>', '<where the capture files are kept>');` (and `'ANDROID'` separately). To withdraw it: `select app_private.revoke_location_privacy_signoff('<id>', '<reason>');`. Keep the capture files private: they contain test-site positions.
 
 ## Checklist-to-milestone map

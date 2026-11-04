@@ -3,7 +3,12 @@ import type { Config } from 'react-native-background-geolocation';
 import { distanceMeters, iso, ms } from '@sitemuster/shared';
 
 import type { ControllerFence } from './controller';
-import type { DriverHandlers, PermissionSnapshot, TrackerDriver } from './driver';
+import type {
+  DriverHandlers,
+  PermissionSnapshot,
+  StoredAuthorization,
+  TrackerDriver,
+} from './driver';
 import type { QueuedRecord } from './gate';
 import { PERSIST_MODE_ALL, PERSIST_MODE_GEOFENCE } from './sdk-config';
 import { GEOFENCE_TEMPLATE, LOCATION_TEMPLATE, renderTemplate } from './templates';
@@ -59,6 +64,7 @@ export class SimulatedSdk implements TrackerDriver {
   private position: { lat: number; lng: number; accuracy: number; mock: boolean } | null = null;
   private lastRecorded: { lat: number; lng: number } | null = null;
   private online = true;
+  private readonly faults = { queued: 0, destroy: 0 };
   private now: number;
   private counter = 0;
   /** Pending JS callbacks (the SDK delivers events asynchronously). */
@@ -93,6 +99,23 @@ export class SimulatedSdk implements TrackerDriver {
 
   setNetwork(online: boolean): void {
     this.online = online;
+  }
+
+  /** The next `times` calls of a native queue operation fail (an SQLite or bridge error). */
+  failNext(operation: 'queued' | 'destroy', times = 1): void {
+    this.faults[operation] += times;
+  }
+
+  /** A native refresh while the app is closed: no JavaScript listener sees its result. */
+  async syncWhileClosed(): Promise<void> {
+    const handlers = this.handlers;
+    this.handlers = null;
+    try {
+      await this.upload();
+      await this.settle();
+    } finally {
+      this.handlers = handlers;
+    }
   }
 
   setTime(at: string): void {
@@ -181,10 +204,12 @@ export class SimulatedSdk implements TrackerDriver {
   }
 
   async queued(): Promise<QueuedRecord[]> {
+    this.fault('queued');
     return this.queue.map((record) => this.view(record));
   }
 
   async destroy(uuid: string): Promise<void> {
+    this.fault('destroy');
     this.queue = this.queue.filter((record) => record.uuid !== uuid);
   }
 
@@ -200,8 +225,14 @@ export class SimulatedSdk implements TrackerDriver {
     return this.queue.length;
   }
 
-  async accessToken(): Promise<string | null> {
-    return this.config.authorization?.accessToken ?? null;
+  /** The configuration survives an app restart (the native side keeps it), as on a phone. */
+  async storedAuthorization(): Promise<StoredAuthorization | null> {
+    const auth = this.config.authorization;
+    if (!auth?.accessToken) return null;
+    return {
+      token: auth.accessToken,
+      renewAfterEpoch: typeof auth.expires === 'number' && auth.expires > 0 ? auth.expires : null,
+    };
   }
 
   async permission(): Promise<PermissionSnapshot> {
@@ -220,6 +251,12 @@ export class SimulatedSdk implements TrackerDriver {
   }
 
   // ------------------------------------------------------------------ internals
+
+  private fault(operation: 'queued' | 'destroy'): void {
+    if (this.faults[operation] === 0) return;
+    this.faults[operation] -= 1;
+    throw new Error(`SIMULATED_${operation.toUpperCase()}_FAILURE`);
+  }
 
   private deliver(callback: () => unknown): void {
     this.pending = this.pending.then(() => callback());

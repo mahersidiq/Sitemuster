@@ -134,7 +134,11 @@ export function disarm(): Transition {
   return {
     state: DISARMED,
     commands: [
-      { type: 'SET_CONFIG', config: { persistence: { persistMode: PERSIST_MODE_GEOFENCE } } },
+      // Nothing uploads after disarming, even if dropping the queue below fails.
+      {
+        type: 'SET_CONFIG',
+        config: { http: { autoSync: false }, persistence: { persistMode: PERSIST_MODE_GEOFENCE } },
+      },
       { type: 'STOP' },
       { type: 'REPLACE_FENCES', fences: [] },
       { type: 'CLEAR_QUEUE' },
@@ -216,10 +220,29 @@ export function onLocation(state: ControllerState, record: QueuedRecord): Transi
   return { state: next, commands: [{ type: 'PRUNE' }, { type: 'SYNC' }] };
 }
 
-/** Heartbeat: onsite ask for a fresh (persisted) fix — stationary 5-minute target; else sync. */
+/**
+ * Back online, foreground, offsite heartbeat: gate the queue, then upload. Offsite the SDK may
+ * upload by itself again — after the prune, so a gate failure earlier (decision #96) never lets
+ * an unpruned record leave the phone.
+ */
+export function onResync(state: ControllerState): Transition {
+  if (state.mode === 'DISARMED') return { state, commands: [] };
+  return {
+    state,
+    commands: onsiteMode(state.mode)
+      ? [{ type: 'PRUNE' }, { type: 'SYNC' }]
+      : [
+          { type: 'PRUNE' },
+          { type: 'SET_CONFIG', config: { http: { autoSync: true } } },
+          { type: 'SYNC' },
+        ],
+  };
+}
+
+/** Heartbeat: onsite ask for a fresh (persisted) fix — stationary 5-minute target; else resync. */
 export function onHeartbeat(state: ControllerState): Transition {
   if (state.mode === 'DISARMED') return { state, commands: [] };
   return onsiteMode(state.mode)
     ? { state, commands: [{ type: 'CURRENT_POSITION', persist: true }] }
-    : { state, commands: [{ type: 'SYNC' }] };
+    : onResync(state);
 }

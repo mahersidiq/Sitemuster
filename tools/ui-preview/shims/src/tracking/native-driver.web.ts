@@ -1,7 +1,12 @@
 import type { Config } from 'react-native-background-geolocation';
 
 import type { ControllerFence } from './controller';
-import type { DriverHandlers, PermissionSnapshot, TrackerDriver } from './driver';
+import type {
+  DriverHandlers,
+  PermissionSnapshot,
+  StoredAuthorization,
+  TrackerDriver,
+} from './driver';
 import type { QueuedRecord } from './gate';
 
 /**
@@ -36,8 +41,8 @@ export class NativeTrackerDriver implements TrackerDriver {
   async count(): Promise<number> {
     return 0;
   }
-  async accessToken(): Promise<string | null> {
-    return this.token;
+  async storedAuthorization(): Promise<StoredAuthorization | null> {
+    return this.token ? { token: this.token, renewAfterEpoch: null } : null;
   }
   async permission(): Promise<PermissionSnapshot> {
     const limited =

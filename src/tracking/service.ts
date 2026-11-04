@@ -7,11 +7,13 @@ import type { ControllerFence, TrackingMode } from './controller';
 import {
   credentialState,
   type CredentialState,
+  expiryFromRenewAfter,
   renewAfterEpochSeconds,
   renewalDue,
   type RenewOutcome,
+  tokenFingerprint,
 } from './credential';
-import type { PermissionSnapshot, TrackerDriver } from './driver';
+import type { PermissionSnapshot, StoredAuthorization, TrackerDriver } from './driver';
 import { gateFences, regionBudget, selectMonitoredProjects, type TrackingPlan } from './plan';
 import { authorizationConfig, buildSdkConfig } from './sdk-config';
 
@@ -46,11 +48,36 @@ export interface TrackingStatus {
   planStale: boolean;
 }
 
+/** Which device and secret the SDK was last known to hold (decision #97). */
+export interface SdkCredentialRecord {
+  deviceId: string;
+  /** SHA-256 (hex) of the secret the app last gave the SDK or adopted from it. */
+  tokenSha256: string;
+}
+
 export interface TrackingStore extends ControllerStore {
   loadPlan(): Promise<TrackingPlan | null>;
   savePlan(plan: TrackingPlan): Promise<void>;
+  loadSdkCredential(): Promise<SdkCredentialRecord | null>;
+  saveSdkCredential(record: SdkCredentialRecord): Promise<void>;
   clear(): Promise<void>;
 }
+
+interface HeldCredential {
+  token: string;
+  expiresAt: string;
+}
+
+interface UsableCredential extends HeldCredential {
+  /** A new secret the server just issued: the SDK gets it first, then the app keeps it. */
+  renewed: boolean;
+  state: CredentialState;
+}
+
+/** A start begun or queued before stop(): it must not save, renew or arm anything afterwards. */
+class StartCancelled extends Error {}
+
+const DAY = 86_400_000;
 
 export interface TrackingServiceDeps {
   api: Pick<SiteMusterApi, 'getTrackingPlan' | 'renewDeviceWithSession'>;
@@ -105,6 +132,8 @@ export class TrackingService {
   /** Last permission usability the server was told about (null = not reported yet). */
   private reportedUsable: boolean | null = null;
   private pending: Promise<void> = Promise.resolve();
+  /** Bumped by stop(); a start checks it after every await (decision #97 / sign-out race). */
+  private epoch = 0;
 
   constructor(private readonly deps: TrackingServiceDeps) {
     this.agent = new TrackingAgent(deps.driver, deps.store, {
@@ -139,12 +168,17 @@ export class TrackingService {
    * overlapping triggers (start, foreground, phone set-up) never initialize the SDK twice.
    */
   start(userId: string): Promise<TrackingStatus> {
-    const run = this.pending.then(() => this.startNow(userId));
-    this.pending = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+    const epoch = this.epoch;
+    return this.serialized(async () => {
+      try {
+        return await this.startNow(userId, () => {
+          if (epoch !== this.epoch) throw new StartCancelled();
+        });
+      } catch (error) {
+        if (error instanceof StartCancelled) return this.status;
+        throw error;
+      }
+    });
   }
 
   /** Stop listening without touching the SDK or its queue (the service is being replaced). */
@@ -154,26 +188,42 @@ export class TrackingService {
     this.listeners.clear();
   }
 
-  private async startNow(userId: string): Promise<TrackingStatus> {
+  private serialized<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.pending.then(task);
+    this.pending = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** `live()` throws once stop() was called: checked after every await, before any write. */
+  private async startNow(userId: string, live: () => void): Promise<TrackingStatus> {
+    live();
     this.userId = userId;
     if (!this.restored) {
       await this.agent.restore();
       this.restored = true;
     }
+    live();
     this.detach ??= this.agent.attach();
     const device = await this.deps.devices.load(userId);
+    live();
     if (!device) return this.stopWith('NO_DEVICE');
 
     let plan: TrackingPlan | null = null;
     let planStale = false;
     try {
       plan = await this.deps.api.getTrackingPlan(this.deps.appVersion);
+      live();
       await this.deps.store.savePlan(plan);
     } catch (error) {
+      if (error instanceof StartCancelled) throw error;
       this.deps.report({ area: 'tracking', step: 'plan', error: errorText(error) });
       plan = await this.deps.store.loadPlan();
       planStale = true;
     }
+    live();
     if (!plan) return this.patch({ phase: 'UNAVAILABLE', planStale: true });
     if (plan.device_id !== device.deviceId) return this.stopWith('DEVICE_REVOKED');
     if (plan.projects.length === 0) {
@@ -186,10 +236,11 @@ export class TrackingService {
       });
     }
 
-    const token = await this.currentToken(device, plan);
-    const credential = await this.renewIfDue(device, token, plan, planStale);
+    const held = await this.heldCredential(userId, device, live);
+    const credential = await this.renewIfDue(held, plan, planStale, live);
 
     const permission = await this.deps.driver.permission();
+    live();
     const budget = regionBudget(this.deps.platform);
     const selection = selectMonitoredProjects({
       plan,
@@ -210,7 +261,7 @@ export class TrackingService {
     const names = new Map(plan.projects.map((p) => [p.project_id, p.project_name]));
     this.patch({
       permission,
-      credential: credentialState(credential.expiresAt, this.deps.now()),
+      credential: credential.state,
       credentialExpiresAt: credential.expiresAt,
       coordinatesAllowed: plan.coordinates_allowed,
       monitored: selection.monitored.map((id) => ({ id, name: names.get(id) ?? id })),
@@ -231,33 +282,49 @@ export class TrackingService {
 
     // No automatic OS prompt: the SDK starts only after SiteMuster's own permission screens.
     await this.reportMonitoring(permission);
+    live();
     if (!permissionUsable(permission)) {
+      // The SDK is not (re)started: a running SDK gets a renewed secret now, else at next start.
+      if (credential.renewed) {
+        if (this.ready) await this.giveSdkCredential(device.deviceId, credential);
+        await this.deps.devices.updateToken(userId, credential.token, credential.expiresAt);
+      }
       return this.patch({ phase: 'PERMISSION_REQUIRED', queued: await this.safeCount() });
     }
-    const sdkInput = {
-      ingestUrl: this.deps.urls.ingest,
-      renewUrl: this.deps.urls.renew,
-      token: credential.token,
-      renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
-      notification: this.deps.notification(),
-    };
     if (!this.ready) {
       const onsite =
         this.agent.current.mode === 'ENTRY_PENDING' ||
         this.agent.current.mode === 'ONSITE_ESTIMATED';
-      await this.deps.driver.ready(buildSdkConfig(sdkInput, onsite ? 'ONSITE' : 'OFFSITE'));
+      await this.deps.driver.ready(
+        buildSdkConfig(
+          {
+            ingestUrl: this.deps.urls.ingest,
+            renewUrl: this.deps.urls.renew,
+            token: credential.token,
+            renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
+            notification: this.deps.notification(),
+          },
+          onsite ? 'ONSITE' : 'OFFSITE',
+        ),
+      );
       this.ready = true;
+      await this.rememberSdkCredential(device.deviceId, credential.token);
     } else {
-      await this.deps.driver.setConfig({ authorization: authorizationConfig(sdkInput) });
+      await this.giveSdkCredential(device.deviceId, credential);
     }
+    // The SDK has the secret before the app keeps it (decision #44).
+    if (credential.renewed) {
+      await this.deps.devices.updateToken(userId, credential.token, credential.expiresAt);
+    }
+    live();
     await this.agent.arm(fences, plan.coordinates_allowed);
-    const expired = credentialState(credential.expiresAt, this.deps.now()) === 'EXPIRED';
     return this.patch({
-      phase: expired
-        ? 'CREDENTIAL_EXPIRED'
-        : plan.coordinates_allowed
-          ? 'ACTIVE'
-          : 'TRACKING_LIMITED',
+      phase:
+        credential.state === 'EXPIRED'
+          ? 'CREDENTIAL_EXPIRED'
+          : plan.coordinates_allowed
+            ? 'ACTIVE'
+            : 'TRACKING_LIMITED',
       queued: await this.safeCount(),
     });
   }
@@ -277,14 +344,21 @@ export class TrackingService {
     return this.patch({ queued: await this.safeCount() });
   }
 
-  /** Signed out / consent withdrawn: stop, drop the queue and the cached plan. */
+  /**
+   * Signed out / consent withdrawn: stop, drop the queue and the cached plan. A start that is
+   * running or queued is cancelled first and finishes (at its next await) before the disarm.
+   */
   async stop(): Promise<void> {
-    await this.agent.disarm();
-    this.detach?.();
-    this.detach = null;
-    await this.deps.store.clear();
+    this.epoch += 1;
     this.userId = null;
-    this.patch({ ...INITIAL, phase: 'NO_DEVICE' });
+    await this.serialized(async () => {
+      await this.agent.disarm();
+      this.detach?.();
+      this.detach = null;
+      await this.deps.store.clear();
+      this.reportedUsable = null;
+      this.patch({ ...INITIAL, phase: 'NO_DEVICE' });
+    });
   }
 
   // ------------------------------------------------------------------------------------------
@@ -297,35 +371,85 @@ export class TrackingService {
     return this.patch({ ...INITIAL, phase, mode: 'DISARMED', ...extra });
   }
 
-  /** The SDK may have refreshed its secret natively while the app was closed: adopt it. */
-  private async currentToken(device: StoredDevice, plan: TrackingPlan): Promise<string> {
-    if (!this.ready) return device.uploadToken;
-    const native = await this.deps.driver.accessToken();
-    if (native && native !== device.uploadToken && this.userId) {
-      await this.deps.devices.updateToken(
-        this.userId,
-        native,
-        plan.credential.expires_at ?? device.uploadExpiresAt,
-      );
-      return native;
-    }
-    return device.uploadToken;
+  private async giveSdkCredential(deviceId: string, credential: HeldCredential): Promise<void> {
+    await this.deps.driver.setConfig({
+      authorization: authorizationConfig({
+        token: credential.token,
+        renewUrl: this.deps.urls.renew,
+        renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
+      }),
+    });
+    await this.rememberSdkCredential(deviceId, credential.token);
   }
 
-  private async renewIfDue(
+  /** Which secret the SDK now holds, so a later native refresh can be told apart (#97). */
+  private rememberSdkCredential(deviceId: string, token: string): Promise<void> {
+    return this.deps.store.saveSdkCredential({ deviceId, tokenSha256: tokenFingerprint(token) });
+  }
+
+  /**
+   * The secret this phone should use. The SDK may have refreshed it natively — also while the app
+   * was closed — and the app must not overwrite that with its older copy. The SDK's persisted
+   * secret is adopted only when it belongs to this same device and is not the one the app last
+   * knew it held (decision #97): after a sign-out and a new activation the SDK still holds the old
+   * phone's revoked secret, and after a renewal the SDK never received it holds the replaced one.
+   */
+  private async heldCredential(
+    userId: string,
     device: StoredDevice,
-    token: string,
+    live: () => void,
+  ): Promise<HeldCredential> {
+    const own = { token: device.uploadToken, expiresAt: device.uploadExpiresAt };
+    const known = await this.deps.store.loadSdkCredential();
+    live();
+    if (!known || known.deviceId !== device.deviceId) return own;
+    let native: StoredAuthorization | null;
+    try {
+      native = await this.deps.driver.storedAuthorization();
+    } catch (error) {
+      this.deps.report({ area: 'tracking', step: 'sdk-credential', error: errorText(error) });
+      return own;
+    }
+    live();
+    if (!native || native.token === own.token) return own;
+    const fingerprint = tokenFingerprint(native.token);
+    if (fingerprint === known.tokenSha256) return own;
+    const expiresAt =
+      native.renewAfterEpoch === null
+        ? own.expiresAt
+        : expiryFromRenewAfter(native.renewAfterEpoch);
+    await this.deps.devices.updateToken(userId, native.token, expiresAt);
+    await this.rememberSdkCredential(device.deviceId, native.token);
+    return { token: native.token, expiresAt };
+  }
+
+  /**
+   * Renews inside the last 7 days, after expiry, and whenever the downloaded plan names another
+   * active credential than the one this phone holds — e.g. a renewal response that never arrived:
+   * the held secret then stops working when its 24-hour overlap ends (decision #97). Offline
+   * (stale plan) nothing is renewed.
+   */
+  private async renewIfDue(
+    held: HeldCredential,
     plan: TrackingPlan,
     planStale: boolean,
-  ): Promise<{ token: string; expiresAt: string }> {
-    const expiresAt = plan.credential.expires_at ?? device.uploadExpiresAt;
-    if (planStale || !renewalDue(expiresAt, this.deps.now()) || !this.userId) {
-      return { token, expiresAt };
-    }
+    live: () => void,
+  ): Promise<UsableCredential> {
+    const now = this.deps.now();
+    const active = planStale ? null : plan.credential.expires_at;
+    const replaced =
+      active !== null && renewAfterEpochSeconds(active) !== renewAfterEpochSeconds(held.expiresAt);
+    const keep: UsableCredential = {
+      ...held,
+      renewed: false,
+      state: credentialState(held.expiresAt, now),
+    };
+    if (planStale || (!replaced && !renewalDue(held.expiresAt, now))) return keep;
     let outcome: RenewOutcome =
-      credentialState(expiresAt, this.deps.now()) === 'EXPIRED'
+      keep.state === 'EXPIRED'
         ? { ok: false, code: 'CREDENTIAL_EXPIRED' }
-        : await this.deps.renewWithSecret(token);
+        : await this.deps.renewWithSecret(held.token);
+    live();
     if (!outcome.ok) {
       // The signed-in session proves who the worker is (also after expiry).
       try {
@@ -338,34 +462,44 @@ export class TrackingService {
         };
       } catch (error) {
         this.deps.report({ area: 'tracking', step: 'renew', error: errorText(error) });
-        return { token, expiresAt };
+        live();
+        if (!replaced) return keep;
+        // A replaced secret ends with its overlap (24 hours at most): never shown as valid.
+        const overlapEnd = new Date(Math.min(Date.parse(held.expiresAt), now + DAY)).toISOString();
+        return { ...held, expiresAt: overlapEnd, renewed: false, state: 'EXPIRING' };
       }
+      live();
     }
-    // The SDK must send the new secret before its next sync, then the app keeps it.
-    if (this.ready) {
-      await this.deps.driver.setConfig({
-        authorization: authorizationConfig({
-          token: outcome.token,
-          renewUrl: this.deps.urls.renew,
-          renewAfterEpochSeconds: renewAfterEpochSeconds(outcome.expiresAt),
-        }),
-      });
-    }
-    await this.deps.devices.updateToken(this.userId, outcome.token, outcome.expiresAt);
-    return { token: outcome.token, expiresAt: outcome.expiresAt };
+    return {
+      token: outcome.token,
+      expiresAt: outcome.expiresAt,
+      renewed: true,
+      state: credentialState(outcome.expiresAt, now),
+    };
   }
 
+  /** The SDK refreshed its secret natively while the app runs: keep it and remember it. */
   private async onNativeRefresh(event: {
     success: boolean;
     token: string | null;
+    renewAfterEpoch: number | null;
     expiresAt: string | null;
   }): Promise<void> {
-    if (!event.success || !event.token || !this.userId) {
+    const userId = this.userId;
+    if (!event.success || !event.token || !userId) {
       this.patch({ lastHttpStatus: 401 });
       return;
     }
-    const expiresAt = event.expiresAt ?? this.status.credentialExpiresAt;
-    if (expiresAt) await this.deps.devices.updateToken(this.userId, event.token, expiresAt);
+    const expiresAt =
+      event.expiresAt ??
+      (event.renewAfterEpoch === null
+        ? this.status.credentialExpiresAt
+        : expiryFromRenewAfter(event.renewAfterEpoch));
+    const device = await this.deps.devices.load(userId);
+    if (device && userId === this.userId) {
+      await this.rememberSdkCredential(device.deviceId, event.token);
+      if (expiresAt) await this.deps.devices.updateToken(userId, event.token, expiresAt);
+    }
     this.patch({
       credential: credentialState(expiresAt, this.deps.now()),
       credentialExpiresAt: expiresAt,
