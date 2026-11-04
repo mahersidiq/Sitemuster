@@ -62,6 +62,8 @@ export interface IngestDeps {
   store: AttendanceStore;
   /** Safe structured log line (ids truncated, counts and codes only). */
   log?(entry: Record<string, unknown>): void;
+  /** Observer for the full per-record outcomes, incl. review flags (replay harness). */
+  onResults?(results: readonly ItemResult[]): void;
 }
 
 const BEARER = /^Bearer ([A-Za-z0-9_-]{43})$/;
@@ -337,6 +339,7 @@ export async function handleIngest(req: Request, deps: IngestDeps): Promise<Resp
       { records: records.length },
     );
   }
+  deps.onResults?.(results);
   const tally: Record<string, number> = {};
   for (const result of results) {
     const key = result.reason ? `${result.status}:${result.reason}` : result.status;

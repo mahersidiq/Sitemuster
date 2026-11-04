@@ -306,6 +306,27 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
     ]);
   }
 
+  async recordTerminals(
+    requestId: string,
+    rows: readonly ReceiptRow[],
+    quarantine: readonly Record<string, unknown>[],
+  ): Promise<void> {
+    await this.service('select public.edge_record_location_terminals($1, $2, $3) as value', [
+      requestId,
+      JSON.stringify(rows),
+      JSON.stringify(quarantine),
+    ]);
+  }
+
+  async receiptOwners(eventUuids: readonly string[]): Promise<Map<string, string>> {
+    if (eventUuids.length === 0) return new Map();
+    const result = await this.db.query<{ event_uuid: string; device_id: string }>(
+      'select event_uuid::text, device_id::text from app_private.location_event_receipts where event_uuid = any($1::uuid[])',
+      [eventUuids],
+    );
+    return new Map(result.rows.map((row) => [row.event_uuid, row.device_id]));
+  }
+
   async insertReceipts(rows: readonly ReceiptRow[]): Promise<void> {
     await this.service('select public.edge_insert_location_receipts($1) as value', [
       JSON.stringify(rows),

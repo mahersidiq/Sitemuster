@@ -52,6 +52,13 @@ export interface ServerBackend {
   registerKiosk(kioskId: string, projectId: string): Promise<void>;
   /** Terminal receipts decided before the engine (normalizer rejections, proof-of-life). */
   insertReceipts(rows: readonly ReceiptRow[]): Promise<void>;
+  /** Production ingest hooks: durable outcomes (+ quarantine copies) and receipt ownership. */
+  recordTerminals(
+    requestId: string,
+    rows: readonly ReceiptRow[],
+    quarantine: readonly Record<string, unknown>[],
+  ): Promise<void>;
+  receiptOwners(eventUuids: readonly string[]): Promise<Map<string, string>>;
   /** The scheduled close-out sweep at `now` (time rules only). */
   sweep(now: string): Promise<void>;
   visitorEvent(event: VisitorEvent): Promise<ItemResult>;
