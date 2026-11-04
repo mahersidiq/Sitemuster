@@ -1,0 +1,58 @@
+{
+  "fixture_version": 1,
+  "id": "offline-badge-phone-and-kiosk-offline",
+  "description": "Worker phone and kiosk both offline: the badge is generated on the phone, queued at the kiosk, verified on sync with the scan time.",
+  "spec_case": 56,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "NOT_ARMED",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "NETWORK_DOWN"
+    },
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "NETWORK_DOWN",
+      "target": "KIOSK"
+    },
+    {
+      "at_utc": "2026-11-03T12:30:00Z",
+      "type": "KIOSK_SCAN",
+      "direction": "ENTRY",
+      "badge_kind": "DYNAMIC_APP",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000005601"
+    },
+    {
+      "at_utc": "2026-11-03T13:00:00Z",
+      "type": "NETWORK_UP",
+      "target": "KIOSK"
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-03T12:30:00Z",
+    "sessions": [
+      {
+        "start_at": "2026-11-03T12:30:00Z",
+        "status": "OPEN",
+        "start_source": "KIOSK_DYNAMIC_BADGE"
+      }
+    ],
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000005601": {
+        "status": "accepted"
+      }
+    }
+  }
+}

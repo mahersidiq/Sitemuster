@@ -18,3 +18,4 @@ export * from './providers/registry.ts';
 export * from './providers/fakes.ts';
 export * from './privacy/coordinates.ts';
 export * from './privacy/redact.ts';
+export * from './attendance/index.ts';

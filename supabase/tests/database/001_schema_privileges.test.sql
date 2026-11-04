@@ -103,7 +103,7 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['accept_invitation', 'address_lookup_allowed', 'bulk_approve_enrollments', 'bulk_confirm_employer',
+  array['accept_invitation', 'address_lookup_allowed', 'attendance_counts', 'bulk_approve_enrollments', 'bulk_confirm_employer',
         'check_project_site', 'close_orientation_session', 'complete_orientation', 'create_managed_worker',
         'create_organization', 'create_project', 'decide_enrollment', 'get_my_access',
         'get_my_emergency_contact', 'get_my_profile', 'get_orientation_session', 'get_project_detail',
@@ -122,8 +122,10 @@ select is(
     where n.nspname = 'public' and p.proname like 'edge\_%'
       and has_function_privilege('service_role', p.oid, 'EXECUTE')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['edge_activate_device', 'edge_badge_device', 'edge_redeem_badge_step'],
-  'device activation and badge redemption are callable only by the Edge Functions (service_role)'
+  array['edge_activate_device', 'edge_attendance_commit', 'edge_attendance_load', 'edge_attendance_sweep',
+        'edge_badge_device', 'edge_insert_location_receipts', 'edge_redeem_badge_step', 'edge_visitor_commit',
+        'edge_visitor_load'],
+  'device activation, badge redemption and the attendance reconciler are callable only by the Edge Functions (service_role)'
 );
 
 select is(

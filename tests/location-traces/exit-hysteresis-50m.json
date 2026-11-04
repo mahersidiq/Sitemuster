@@ -1,0 +1,86 @@
+{
+  "fixture_version": 1,
+  "id": "exit-hysteresis-50m",
+  "description": "Fixes at 180-195 m (beyond the 150 m circle, inside the 200 m native fence) do not end the session; the native EXIT at 13:00 does.",
+  "spec_case": 6,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:20:00Z",
+      "type": "FIX",
+      "lat": 29.7620188,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:30:00Z",
+      "type": "FIX",
+      "lat": 29.7621537,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:40:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:55:00Z",
+      "type": "FIX",
+      "lat": 29.7620188,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T13:00:00Z",
+      "type": "EVENT_EXIT",
+      "accuracy_m": 20
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-03T12:01:00Z",
+    "departure_at": "2026-11-03T13:00:00Z",
+    "sessions": [
+      {
+        "start_at": "2026-11-03T12:01:00Z",
+        "end_at": "2026-11-03T13:00:00Z",
+        "status": "CLOSED",
+        "end_source": "GEOFENCE"
+      }
+    ]
+  }
+}

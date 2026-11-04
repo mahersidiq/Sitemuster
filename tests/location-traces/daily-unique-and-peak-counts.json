@@ -1,0 +1,80 @@
+{
+  "fixture_version": 1,
+  "id": "daily-unique-and-peak-counts",
+  "description": "Three crew members over the day: daily unique 3, peak overlap 2, 5 h of estimated presence.",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "other_workers": [
+    {
+      "key": "B",
+      "has_phone": false
+    },
+    {
+      "key": "C",
+      "has_phone": false
+    }
+  ],
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A"]
+    },
+    {
+      "at_utc": "2026-11-03T13:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["B"]
+    },
+    {
+      "at_utc": "2026-11-03T14:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "EXIT",
+      "workers": ["A"]
+    },
+    {
+      "at_utc": "2026-11-03T15:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "EXIT",
+      "workers": ["B"]
+    },
+    {
+      "at_utc": "2026-11-03T16:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["C"]
+    },
+    {
+      "at_utc": "2026-11-03T17:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "EXIT",
+      "workers": ["C"]
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "days": [
+      {
+        "local_date": "2026-11-03",
+        "daily_unique_count": 3,
+        "peak_estimated_count": 2,
+        "estimated_worker_seconds": 18000
+      }
+    ]
+  }
+}

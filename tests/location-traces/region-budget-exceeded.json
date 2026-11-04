@@ -1,0 +1,63 @@
+{
+  "fixture_version": 1,
+  "id": "region-budget-exceeded",
+  "description": "21 enrolled projects, 15 native regions: the site is first not monitored (no ENTER); opening the app re-prioritizes by proximity and the already-inside check recovers.",
+  "spec_case": 30,
+  "project": {
+    "id": "ffffffff-ffff-4fff-bfff-ffffffffffff",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "device": {
+    "region_budget": 15,
+    "extra_enrolled_projects": 20
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:05:00Z",
+      "type": "APP_FOREGROUND"
+    },
+    {
+      "at_utc": "2026-11-03T12:06:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:16:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-03T12:06:00Z",
+    "egress": {
+      "geofence_records_sent": 0,
+      "coordinate_records_sent": 2
+    }
+  }
+}

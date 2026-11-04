@@ -1,0 +1,140 @@
+{
+  "fixture_version": 1,
+  "id": "duplicate-exit",
+  "description": "The EXIT is processed but its reply is lost and a second native EXIT follows: the session closes once, at the first EXIT.",
+  "spec_case": 23,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:16:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:21:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:31:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:36:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:46:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:51:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:59:00Z",
+      "type": "SERVER_RESPONSE",
+      "http_status": 504
+    },
+    {
+      "at_utc": "2026-11-03T13:00:00Z",
+      "type": "EVENT_EXIT",
+      "accuracy_m": 20,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000002301"
+    },
+    {
+      "at_utc": "2026-11-03T13:01:00Z",
+      "type": "EVENT_EXIT",
+      "accuracy_m": 20,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000002302"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "departure_at": "2026-11-03T13:00:00Z",
+    "duplicate_responses": 1,
+    "sessions": [
+      {
+        "start_at": "2026-11-03T12:01:00Z",
+        "end_at": "2026-11-03T13:00:00Z",
+        "status": "CLOSED"
+      }
+    ],
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000002301": {
+        "status": "accepted"
+      },
+      "eeeeeeee-0000-4000-8000-000000002302": {
+        "status": "accepted"
+      }
+    }
+  }
+}

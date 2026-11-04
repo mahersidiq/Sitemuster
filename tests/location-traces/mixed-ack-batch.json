@@ -1,0 +1,118 @@
+{
+  "fixture_version": 1,
+  "id": "mixed-ack-batch",
+  "description": "One HTTP 200 carries accepted, rejected and duplicate outcomes: every record is terminal and the whole batch leaves the phone queue.",
+  "spec_case": 40,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "other_projects": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "lat": 29.8053661,
+      "lng": -95.3698,
+      "radius_m": 150,
+      "bound": false
+    }
+  ],
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:15:00Z",
+      "type": "NETWORK_DOWN"
+    },
+    {
+      "at_utc": "2026-11-03T12:16:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004001"
+    },
+    {
+      "at_utc": "2026-11-03T12:17:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004002",
+      "project_id": "00000000-0000-4000-8000-000000000002"
+    },
+    {
+      "at_utc": "2026-11-03T12:18:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004003"
+    },
+    {
+      "at_utc": "2026-11-03T12:20:00Z",
+      "type": "SERVER_RESPONSE",
+      "http_status": 504
+    },
+    {
+      "at_utc": "2026-11-03T12:21:00Z",
+      "type": "NETWORK_UP"
+    },
+    {
+      "at_utc": "2026-11-03T12:22:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004004"
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "queue_remaining": 0,
+    "duplicate_responses": 3,
+    "rejected_reasons": ["PROJECT_NOT_AUTHORIZED"],
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000004001": {
+        "status": "accepted"
+      },
+      "eeeeeeee-0000-4000-8000-000000004002": {
+        "status": "rejected",
+        "reason": "PROJECT_NOT_AUTHORIZED"
+      },
+      "eeeeeeee-0000-4000-8000-000000004003": {
+        "status": "accepted"
+      },
+      "eeeeeeee-0000-4000-8000-000000004004": {
+        "status": "accepted"
+      }
+    },
+    "other_project": {
+      "session_count": 0,
+      "receipts": 0
+    }
+  }
+}

@@ -118,10 +118,15 @@ export const ATTENDANCE_VERIFICATION_STATUSES = [
   'CORRECTED',
 ] as const;
 export const EVIDENCE_CONFIDENCE_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+/**
+ * ENDED_UNVERIFIED (Milestone 06, decision #79): the session has ended — a later session began —
+ * but its end time is not verified; it is excluded from definite hours and needs close-out review.
+ */
 export const SESSION_STATUSES = [
   'OPEN',
   'PENDING_APPROVAL',
   'UNRESOLVED',
+  'ENDED_UNVERIFIED',
   'CLOSED',
   'VOID',
 ] as const;
