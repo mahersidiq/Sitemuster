@@ -203,6 +203,8 @@ export class FakeWorld {
   readonly channels = new Map<string, Set<ProjectChannelListener>>();
   /** What a new project subscription reports once it is authorized. */
   channelMode: ChannelStatus = 'SUBSCRIBED';
+  /** No signal on the staff phone: dashboard, roster and map reads fail with NETWORK. */
+  readsOffline = false;
   private broadcastVersion = 0;
 
   constructor(
@@ -1411,6 +1413,7 @@ export class FakeSiteMusterApi implements SiteMusterApi {
 
   async projectDashboard(projectId: string): Promise<ProjectDashboard> {
     this.before('projectDashboard');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
     if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
     const p = this.project(projectId);
     const members = this.members(projectId);
@@ -1471,12 +1474,14 @@ export class FakeSiteMusterApi implements SiteMusterApi {
 
   async workforceRoster(projectId: string): Promise<WorkforceMember[]> {
     this.before('workforceRoster');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
     if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
     return this.after(this.members(projectId));
   }
 
   async projectMap(projectId: string): Promise<ProjectMap> {
     this.before('projectMap');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
     if (!this.canViewLocations(projectId)) throw new ApiError('FORBIDDEN');
     const version = this.project(projectId).versions.at(-1);
     return this.after({

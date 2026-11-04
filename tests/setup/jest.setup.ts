@@ -5,7 +5,12 @@ import { beforeEach, jest } from '@jest/globals';
  * Node; they are test doubles only and are never bundled into the app.
  */
 
-type TestGlobals = typeof globalThis & { __deviceLocale?: string; __appEnv?: string };
+type TestGlobals = typeof globalThis & {
+  __deviceLocale?: string;
+  __appEnv?: string;
+  /** Milestone 09: the native map fails to render (no map key, provider error). */
+  __mapFails?: boolean;
+};
 
 const mockSecureStore = new Map<string, string>();
 
@@ -36,11 +41,16 @@ jest.mock('react-native-maps', () => {
     ref: React.Ref<{ animateToRegion: () => void }>,
   ) {
     React.useImperativeHandle(ref, () => ({ animateToRegion: () => undefined }));
+    if ((globalThis as TestGlobals).__mapFails) throw new Error('map provider failed');
     return React.createElement(View, { testID: 'native-map' }, props.children);
   });
   const Circle = (props: { radius: number }) =>
     React.createElement(View, { testID: `map-circle-${props.radius}` });
-  const Marker = () => React.createElement(View, { testID: 'map-marker' });
+  const Marker = (props: { title?: string; description?: string }) =>
+    React.createElement(View, {
+      testID: 'map-marker',
+      accessibilityLabel: [props.title, props.description].filter(Boolean).join(': '),
+    });
   return {
     __esModule: true,
     default: MapView,
@@ -69,6 +79,7 @@ beforeEach(() => {
   mockSecureStore.clear();
   (globalThis as TestGlobals).__deviceLocale = 'en-US';
   (globalThis as TestGlobals).__appEnv = 'development';
+  (globalThis as TestGlobals).__mapFails = false;
 });
 
 // expo-sqlite / expo-crypto doubles (in-memory; tests never touch a device database).
