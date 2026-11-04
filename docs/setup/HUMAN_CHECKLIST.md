@@ -31,6 +31,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Store `SUPABASE_DB_PASSWORD_STAGING` / `SUPABASE_DB_PASSWORD_PRODUCTION` ONLY in protected CI/environment secret store if automation absolutely requires a DB password; never in mobile.
 - [ ] Supabase Edge Functions private environment secrets: `SUPABASE_SERVICE_ROLE_KEY` (backend only), `DEVICE_CREDENTIAL_PEPPER` (if implementation uses keyed hash enhancement), `BADGE_SECRET_ENCRYPTION_KEY` (32-byte random key used to encrypt per-device badge secrets at rest), `GOOGLE_PLACES_SERVER_KEY` (created Step 5), `GOOGLE_GEOCODING_SERVER_KEY` (Step 5). Supabase supplies project-specific URLs/keys; do not mix staging/prod secrets.
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
+- [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
+- [ ] In **both** projects open *Realtime → Settings* and turn **off** "Allow public access" so only private, policy-checked channels work (decision #19).
 - [ ] Confirm `supabase start`/pgTAP tests run in GitHub Actions; local Docker for Claude Code is optional.
 
 ## 4. Twilio and A2P 10DLC (`TW`)

@@ -73,7 +73,9 @@ export const REPORT_STATUSES = [
   'PENDING_CONFIRMATION',
   'CONFIRMED',
   'DISPUTED',
+  'CORRECTION_REQUESTED',
   'NOT_CONFIRMED',
+  'SUPERSEDED',
 ] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
@@ -90,3 +92,75 @@ export const LEGAL_REVIEW_STATUSES = [
   'RETIRED',
 ] as const;
 export type LegalReviewStatus = (typeof LEGAL_REVIEW_STATUSES)[number];
+
+export const ORG_STATUSES = ['ACTIVE', 'SUSPENDED', 'CLOSED'] as const;
+export const MEMBERSHIP_STATUSES = ['ACTIVE', 'REVOKED'] as const;
+export const COMPANY_VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED'] as const;
+export const PROJECT_COMPANY_STATUSES = ['PENDING', 'APPROVED', 'REMOVED'] as const;
+export const MEMBER_VERIFICATION_STATUSES = ['PENDING', 'VERIFIED', 'REJECTED', 'REVOKED'] as const;
+export const CONSENT_METHODS = ['DIGITAL', 'SUPERVISED'] as const;
+export const LEGAL_DOCUMENT_TYPES = [
+  'WORKER_LOCATION_DISCLOSURE',
+  'GC_CUSTOM_NOTICE',
+  'ACCOUNT_DELETION_RETENTION',
+  'MUSTER_SAFETY_LIMITATIONS',
+] as const;
+export const ORIENTATION_SESSION_STATUSES = ['OPEN', 'CLOSED', 'EXPIRED', 'REVOKED'] as const;
+export const ORIENTATION_INVITE_KINDS = ['ROTATING', 'STATIC'] as const;
+export const DEVICE_PLATFORMS = ['IOS', 'ANDROID'] as const;
+export const KIOSK_STATUSES = ['ACTIVE', 'REVOKED'] as const;
+export const ATTENDANCE_VERIFICATION_STATUSES = [
+  'PROVISIONAL',
+  'SYSTEM_CONFIRMED',
+  'WITNESSED',
+  'REVIEW_REQUIRED',
+  'DISPUTED',
+  'CORRECTED',
+] as const;
+export const EVIDENCE_CONFIDENCE_LEVELS = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export const SESSION_STATUSES = [
+  'OPEN',
+  'PENDING_APPROVAL',
+  'UNRESOLVED',
+  'CLOSED',
+  'VOID',
+] as const;
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
+export const CORRECTION_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+export const CORRECTION_CHANNELS = ['WORKER_REQUEST', 'FOREMAN_REQUEST', 'STAFF_MANUAL'] as const;
+export const QUALIFICATION_STATES = [
+  'QUALIFIED',
+  'POOR_ACCURACY',
+  'CLOCK_SKEW_REVIEW',
+  'LATE_REVIEW',
+  'MOCK_FLAGGED',
+  'NOT_APPLICABLE',
+] as const;
+export const VISITOR_IDENTITY_STATUSES = ['UNVERIFIED', 'ID_CHECKED'] as const;
+export const VISITOR_VISIT_STATUSES = ['OPEN', 'CLOSED', 'UNRESOLVED'] as const;
+export const MUSTER_STATUSES = ['ACTIVE', 'CLOSED'] as const;
+export const MUSTER_RESPONSE_ACTIONS = [
+  'SELF_REPORT',
+  'PHYSICAL_VERIFICATION',
+  'STATUS_UPDATE',
+] as const;
+export const MUSTER_CHANNELS = [
+  'APP',
+  'NOTIFICATION_ACTION',
+  'KIOSK',
+  'FOREMAN',
+  'SAFETY_STAFF',
+] as const;
+export const PLATFORM_OPERATOR_ACTIONS = [
+  'ORG_LOOKUP',
+  'REVOKE_DEVICE_CREDENTIAL',
+  'RESEND_INVITE',
+  'HEALTH_CHECK',
+] as const;
+export const AUDIT_ACTOR_TYPES = [
+  'USER',
+  'DEVICE',
+  'KIOSK',
+  'SYSTEM',
+  'PLATFORM_OPERATOR',
+] as const;

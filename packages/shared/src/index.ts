@@ -1,4 +1,5 @@
 export * from './enums.ts';
+export * from './db-enums.ts';
 export * from './locale.ts';
 export * from './app-env.ts';
 export * from './config/tracking-defaults.ts';
