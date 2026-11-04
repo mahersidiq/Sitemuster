@@ -173,6 +173,10 @@ $$;
 alter table public.orientation_sessions add column idempotency_key uuid;
 create unique index orientation_sessions_idempotency_uq on public.orientation_sessions (project_id, idempotency_key)
   where idempotency_key is not null;
+-- One open session per project, enforced by the database (review finding on PR #5); starting a
+-- session also locks the project row so concurrent starts replace each other instead of failing.
+create unique index orientation_sessions_one_open_uq on public.orientation_sessions (project_id)
+  where status = 'OPEN';
 
 -- Session-scoped secrets live only while the session is open (purged on close/expiry).
 create table app_private.orientation_session_secrets (
@@ -183,6 +187,24 @@ create table app_private.orientation_session_secrets (
 );
 alter table app_private.orientation_session_secrets enable row level security;
 revoke all on app_private.orientation_session_secrets from anon, authenticated, service_role;
+
+-- A worker who scanned a valid code receives a join pass bound to their own account and to that
+-- session, so reading the notice and filling in the form never races the 60-second QR rotation
+-- (review finding on PR #5). Only the SHA-256 of the pass is stored; passes expire with the session
+-- (kept, already expired, so a late submit is told the session ended; a caller's expired passes are
+-- deleted on their next scan).
+create table app_private.orientation_join_grants (
+  token_hash bytea primary key check (length(token_hash) = 32),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  session_id uuid not null references public.orientation_sessions (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  constraint orientation_join_grants_window_ck check (expires_at >= created_at)
+);
+create index orientation_join_grants_session_idx on app_private.orientation_join_grants (session_id);
+create index orientation_join_grants_user_idx on app_private.orientation_join_grants (user_id, expires_at);
+alter table app_private.orientation_join_grants enable row level security;
+revoke all on app_private.orientation_join_grants from anon, authenticated, service_role;
 
 create function app_private.session_is_open(p_session public.orientation_sessions)
 returns boolean
@@ -216,6 +238,8 @@ as $$
   update public.orientation_sessions set status = p_status, closed_at = coalesce(closed_at, now())
    where id = p_session_id and status = 'OPEN';
   delete from app_private.orientation_session_secrets where session_id = p_session_id;
+  update app_private.orientation_join_grants set expires_at = least(expires_at, now())
+   where session_id = p_session_id;
 $$;
 
 create function public.start_orientation_session(p_project_id uuid, p_idempotency_key uuid)
@@ -236,6 +260,8 @@ begin
   if p_idempotency_key is null then
     raise exception 'IDEMPOTENCY_KEY_REQUIRED' using errcode = '22023';
   end if;
+  -- Serialize starts per project: a concurrent start waits, then replaces this session.
+  perform 1 from public.projects where id = p_project_id for update;
   select * into v_session from public.orientation_sessions
    where project_id = p_project_id and idempotency_key = p_idempotency_key;
   if v_session.id is not null then
@@ -396,6 +422,41 @@ begin
 end;
 $$;
 
+-- Validates the caller's join pass from preview_orientation. Failures are returned as data, like
+-- code checks, so the rate limit keeps counting (decision #72).
+create function app_private.orientation_grant_session(p_token text, out o_session_id uuid, out o_error text)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_grant app_private.orientation_join_grants;
+  v_session public.orientation_sessions;
+begin
+  if p_token is null or p_token !~ '^[A-Za-z0-9_-]{43}$' then
+    o_error := 'ORIENTATION_CODE_INVALID';
+    return;
+  end if;
+  select * into v_grant from app_private.orientation_join_grants
+   where token_hash = pg_catalog.sha256(convert_to(p_token, 'UTF8'));
+  if v_grant.token_hash is null or v_grant.user_id is distinct from auth.uid() then
+    o_error := 'ORIENTATION_CODE_INVALID';
+    return;
+  end if;
+  select * into v_session from public.orientation_sessions where id = v_grant.session_id;
+  if v_grant.expires_at <= now() or not app_private.session_is_open(v_session) then
+    o_error := 'ORIENTATION_SESSION_CLOSED';
+    return;
+  end if;
+  if (select status from public.projects where id = v_session.project_id) <> 'ACTIVE' then
+    o_error := 'PROJECT_NOT_ACTIVE';
+    return;
+  end if;
+  o_session_id := v_session.id;
+end;
+$$;
+
 -- Company chosen at join: an existing company on the project, or a new name (PENDING; GC
 -- verification is separate and never self-granted).
 create function app_private.resolve_join_company(p_project uuid, p_company_id uuid, p_company_name text, p_actor uuid)
@@ -534,6 +595,7 @@ declare
   v_session public.orientation_sessions;
   v_notice public.legal_notice_versions;
   v_worker uuid;
+  v_token text;
 begin
   if v_uid is null or not app_private.tenant_access_allowed() then
     raise exception 'FORBIDDEN' using errcode = '42501';
@@ -551,7 +613,13 @@ begin
     raise exception 'NOTICE_UNAVAILABLE' using errcode = '22023';
   end if;
   v_worker := app_private.current_worker_id();
+  -- Join pass for this person and this session (the scanned QR may rotate while they read).
+  delete from app_private.orientation_join_grants where user_id = v_uid and expires_at <= now();
+  v_token := app_private.b64url(extensions.gen_random_bytes(32));
+  insert into app_private.orientation_join_grants (token_hash, user_id, session_id, expires_at)
+  values (pg_catalog.sha256(convert_to(v_token, 'UTF8')), v_uid, v_session.id, v_session.expires_at);
   return jsonb_build_object(
+    'join_token', v_token,
     'session_id', v_session.id,
     'project_id', v_session.project_id,
     'project_name', (select name from public.projects where id = v_session.project_id),
@@ -576,7 +644,7 @@ $$;
 
 -- Worker completes orientation: ORIENTATION_COMPLETED + acknowledgement + PENDING enrollment.
 create function public.complete_orientation(
-  p_code text,
+  p_join_token text,
   p_locale public.locale_code,
   p_legal_name text,
   p_company_id uuid,
@@ -609,7 +677,7 @@ begin
   if not app_private.consume_rate_limit('orientation_join', v_uid::text, 30, 60) then
     return jsonb_build_object('error', 'RATE_LIMITED');
   end if;
-  select * into v_check from app_private.orientation_code_session(p_code);
+  select * into v_check from app_private.orientation_grant_session(p_join_token);
   if v_check.o_error is not null then
     return jsonb_build_object('error', v_check.o_error);
   end if;
@@ -968,6 +1036,10 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- Printed badges: opaque permanent identifier (no PII), attended issuance, hash only stored
 -- ---------------------------------------------------------------------------------------------
+-- At most one active printed badge per worker, enforced by the database (review finding on PR #5).
+create unique index worker_badges_one_active_printed_uq on public.worker_badges (worker_id)
+  where badge_kind = 'PRINTED' and active;
+
 create function public.issue_printed_badge(p_project_id uuid, p_worker_id uuid)
 returns jsonb
 language plpgsql
@@ -989,6 +1061,8 @@ begin
   if not app_private.consume_rate_limit('badge_issue', v_uid::text, 30, 60) then
     raise exception 'RATE_LIMITED' using errcode = '22023';
   end if;
+  -- Serialize replacement per worker (any project): a concurrent issue waits, then replaces this badge.
+  perform 1 from public.worker_profiles where id = p_worker_id for update;
   update public.worker_badges set active = false, revoked_at = now()
    where worker_id = p_worker_id and badge_kind = 'PRINTED' and active;
   v_code := 'SMP1.' || app_private.b64url(extensions.gen_random_bytes(24));
@@ -1179,7 +1253,8 @@ revoke all on function
   app_private.assert_notice_acceptable(uuid, public.locale_code, uuid, boolean),
   app_private.can_run_orientation(uuid), app_private.session_is_open(public.orientation_sessions),
   app_private.session_json(uuid), app_private.close_session_internal(uuid, public.orientation_session_status),
-  app_private.orientation_code_session(text), app_private.resolve_join_company(uuid, uuid, text, uuid),
+  app_private.orientation_code_session(text), app_private.orientation_grant_session(text),
+  app_private.resolve_join_company(uuid, uuid, text, uuid),
   app_private.assert_worker_details(text, text, text, text, text),
   app_private.record_orientation(uuid, uuid, uuid, uuid, uuid, text, public.legal_notice_versions, public.consent_method),
   app_private.replace_emergency_contact(uuid, text, text, text)

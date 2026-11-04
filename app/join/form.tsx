@@ -54,6 +54,11 @@ function JoinForm() {
         return api.previewOrientation(code, activeLocale);
       },
       retry: false,
+      // One scan per visit: the join pass stays valid while the session is open, but the scanned
+      // rotating code does not, so the preview must not be re-fetched in the background.
+      staleTime: Infinity,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     }),
   );
   const [step, setStep] = useState<Step>('details');
@@ -86,7 +91,7 @@ function JoinForm() {
     try {
       await api.completeOrientation({
         ...details,
-        code,
+        joinToken: data.join_token,
         locale: activeLocale,
         noticeVersionId: data.notice.id,
         accept: accepted,

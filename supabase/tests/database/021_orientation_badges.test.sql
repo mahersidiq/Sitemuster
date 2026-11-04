@@ -2,11 +2,12 @@
 -- PENDING (never approval), notice gating, bulk approval ≤ 100, employer confirmation, supervised
 -- no-phone profiles, printed badges, device activation and badge-step replay protection.
 begin;
-select plan(78);
+select plan(87);
 select tests.seed_world();
 
 select tests.create_user('99000000-0000-4000-8000-0000000000b1', null, '15550001111');
 select tests.create_user('99000000-0000-4000-8000-0000000000b2', null, '15550001112');
+select tests.create_user('99000000-0000-4000-8000-0000000000b3', null, '15550001113');
 
 -- Rotating code for a session and step, computed independently of the app (test superuser only).
 create function pg_temp.rot(p_session uuid, p_step bigint) returns text language sql as $$
@@ -53,26 +54,31 @@ select is(public.preview_orientation(current_setting('t.rot_old'), 'en-US') ->> 
 select is(public.preview_orientation(regexp_replace(current_setting('t.rot'), '.$', case when right(current_setting('t.rot'), 1) = 'A' then 'B' else 'A' end), 'en-US') ->> 'error',
           'ORIENTATION_CODE_INVALID', 'a forged rotating code is rejected');
 select is(public.preview_orientation('https://evil.example/join', 'en-US') ->> 'error', 'ORIENTATION_CODE_INVALID', 'anything that is not a SiteMuster code is rejected');
+select set_config('t.join_static', public.preview_orientation(current_setting('t.static'), 'en-US') ->> 'join_token', false);
+select set_config('t.join_rot', public.preview_orientation(current_setting('t.rot'), 'en-US') ->> 'join_token', false);
+select ok(current_setting('t.join_static') ~ '^[A-Za-z0-9_-]{43}$', 'a valid scan returns a join pass for this person');
 
 -- Completing orientation.
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', %L, false)$$, current_setting('t.static'), tests.id('n_en')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', %L, false)$$, current_setting('t.join_static'), tests.id('n_en')),
   '22023', 'CONSENT_REQUIRED', 'acknowledging the disclosure is required');
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', %L, true)$$, current_setting('t.static'), current_setting('t.es_notice')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', %L, true)$$, current_setting('t.join_static'), current_setting('t.es_notice')),
   '22023', 'NOTICE_OUTDATED', 'the accepted notice must be the current one for the chosen language');
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', '', '', null, %L, true)$$, current_setting('t.static'), tests.id('n_en')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', '', '', null, %L, true)$$, current_setting('t.join_static'), tests.id('n_en')),
   '22023', 'EMERGENCY_CONTACT_REQUIRED', 'an emergency contact is required');
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, null, 'Drywall', 'Luis Worker', '+15550002222', null, %L, true)$$, current_setting('t.static'), tests.id('n_en')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, null, 'Drywall', 'Luis Worker', '+15550002222', null, %L, true)$$, current_setting('t.join_static'), tests.id('n_en')),
   '22023', 'COMPANY_REQUIRED', 'an employer is required');
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', %L, null, 'Drywall', 'Luis Worker', '+15550002222', null, %L, true)$$, current_setting('t.static'), tests.id('c_b'), tests.id('n_en')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', %L, null, 'Drywall', 'Luis Worker', '+15550002222', null, %L, true)$$, current_setting('t.join_static'), tests.id('c_b'), tests.id('n_en')),
   '22023', 'COMPANY_NOT_ON_PROJECT', 'a company from another project cannot be claimed');
-select is(public.complete_orientation(current_setting('t.static'), 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', tests.id('n_en'), true) ->> 'enrollment_status',
+select is(public.complete_orientation(current_setting('t.join_static'), 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', tests.id('n_en'), true) ->> 'enrollment_status',
   'PENDING', 'the printed QR leads to ORIENTATION_COMPLETED + PENDING, never approval');
 select is(public.my_enrollments() -> 0 ->> 'employer_status', 'PENDING_CONFIRMATION', 'the claimed employer is unconfirmed');
-select is(public.complete_orientation(current_setting('t.rot'), 'en-US', 'Ana Worker', null, 'acme drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', tests.id('n_en'), true) ->> 'enrollment_status',
+select is(public.complete_orientation(current_setting('t.join_rot'), 'en-US', 'Ana Worker', null, 'acme drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', tests.id('n_en'), true) ->> 'enrollment_status',
   'PENDING', 'the rotating QR also never approves');
 select is(jsonb_array_length(public.my_enrollments()), 1, 'joining again does not create a second enrollment');
 select is(public.get_my_emergency_contact() ->> 'name', 'Luis Worker', 'the worker reads their own emergency contact');
 select lives_ok($$select public.update_my_emergency_contact('Rosa Worker', '+15550004444', 'Sister')$$, 'the worker can replace their emergency contact');
+select is(public.complete_orientation(current_setting('t.rot'), 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', 'Brother', tests.id('n_en'), true) ->> 'error',
+  'ORIENTATION_CODE_INVALID', 'completing needs the join pass from the scan, never a raw QR code');
 
 select tests.as_postgres();
 select set_config('t.w_new', (select id::text from public.worker_profiles where auth_user_id = '99000000-0000-4000-8000-0000000000b1'), false);
@@ -83,17 +89,31 @@ select is((select phone from public.worker_profiles where id = current_setting('
 select is((select verified_status::text from public.subcontractor_companies where canonical_name = 'Acme Drywall'), 'PENDING', 'a new company is created once and stays unverified');
 select is((select count(*)::int from public.emergency_contacts where worker_profile_id = current_setting('t.w_new')::uuid), 1, 'one emergency contact is kept per worker');
 
+-- The join pass is bound to the person and the open session, not to the 60-second QR step
+-- (review finding on PR #5): reading the notice for half an hour does not lock the worker out.
+select ok((select count(*) = 1 from app_private.orientation_join_grants
+            where token_hash = pg_catalog.sha256(convert_to(current_setting('t.join_rot'), 'UTF8'))), 'only the hash of the join pass is stored');
+update app_private.orientation_join_grants set created_at = now() - interval '30 minutes'
+ where token_hash = pg_catalog.sha256(convert_to(current_setting('t.join_rot'), 'UTF8'));
+select tests.authenticate_as('99000000-0000-4000-8000-0000000000b3', 'aal1');
+select is(public.complete_orientation(current_setting('t.join_rot'), 'en-US', 'Eve Other', null, 'Acme Drywall', 'Drywall', 'Luis Worker', '+15550002222', null, tests.id('n_en'), true) ->> 'error',
+  'ORIENTATION_CODE_INVALID', 'another person cannot use someone else''s join pass');
+select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
+select is(public.complete_orientation(current_setting('t.join_rot'), 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', 'Sister', tests.id('n_en'), true) ->> 'enrollment_status',
+  'PENDING', 'a worker who spent 30 minutes on the form still completes with their join pass');
+select tests.as_postgres();
+
 -- Production refuses draft notices; an unmarked database is production.
 delete from app_private.settings;
 select is(app_private.deployment_environment(), 'production', 'an unmarked database is treated as production');
 select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
-select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.rot'), tests.id('n_en')),
+select throws_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.join_rot'), tests.id('n_en')),
   '22023', 'CONSENT_NOTICE_NOT_APPROVED', 'production refuses acceptance of a draft notice');
 select is((public.preview_orientation(current_setting('t.rot'), 'en-US') ->> 'notice_acceptable')::boolean, false, 'preview tells the app the notice cannot be accepted yet');
 select tests.as_postgres();
 update public.legal_notice_versions set review_status = 'APPROVED', approved_at = now() where id = tests.id('n_en');
 select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
-select lives_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.rot'), tests.id('n_en')),
+select lives_ok(format($$select public.complete_orientation(%L, 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, %L, true)$$, current_setting('t.join_rot'), tests.id('n_en')),
   'an approved notice is accepted in production');
 select tests.as_postgres();
 insert into app_private.settings (key, value) values ('environment', 'development');
@@ -103,11 +123,16 @@ select tests.authenticate_as(tests.id('u_a_super'));
 select lives_ok(format($$select public.close_orientation_session(%L)$$, current_setting('t.s1')), 'staff closes the session');
 select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
 select is(public.preview_orientation(current_setting('t.static'), 'en-US') ->> 'error', 'ORIENTATION_SESSION_CLOSED', 'the printed QR stops working when the session closes');
+select is(public.complete_orientation(current_setting('t.join_static'), 'en-US', 'Ana Worker', null, 'Acme Drywall', 'Drywall', 'Rosa Worker', '+15550004444', null, tests.id('n_en'), true) ->> 'error',
+  'ORIENTATION_SESSION_CLOSED', 'a join pass stops working when the session closes');
 select tests.as_postgres();
 select is((select count(*)::int from app_private.orientation_session_secrets where session_id = current_setting('t.s1')::uuid), 0, 'session secrets are deleted when the session closes');
+select is((select count(*)::int from app_private.orientation_join_grants where session_id = current_setting('t.s1')::uuid and expires_at > now()), 0, 'join passes expire when the session closes');
 select tests.authenticate_as(tests.id('u_a_safety'));
 select set_config('t.s2', public.start_orientation_session(tests.id('p_a1'), gen_random_uuid()) ->> 'session_id', false);
 select tests.as_postgres();
+select throws_ok(format($$insert into public.orientation_sessions (project_id, expires_at) values (%L, now() + interval '1 hour')$$, tests.id('p_a1')),
+  '23505', null, 'the database allows only one open orientation session per project');
 select set_config('t.static2', (select 'SMS1.' || session_id || '.' || static_code from app_private.orientation_session_secrets where session_id = current_setting('t.s2')::uuid), false);
 update public.orientation_sessions set starts_at = now() - interval '3 hours', expires_at = now() - interval '1 hour' where id = current_setting('t.s2')::uuid;
 select tests.authenticate_as('99000000-0000-4000-8000-0000000000b1', 'aal1');
@@ -171,6 +196,8 @@ select tests.authenticate_as(tests.id('u_a_attendant'));
 select set_config('t.badge2', public.issue_printed_badge(tests.id('p_a1'), tests.id('w_managed'))::text, false);
 select tests.as_postgres();
 select is((select count(*)::int from public.worker_badges where worker_id = tests.id('w_managed') and badge_kind = 'PRINTED' and active), 1, 'reissuing revokes the previous printed badge');
+select throws_ok(format($$insert into public.worker_badges (worker_id, badge_kind, opaque_badge_hash) values (%L, 'PRINTED', extensions.gen_random_bytes(32))$$, tests.id('w_managed')),
+  '23505', null, 'the database allows only one active printed badge per worker');
 select tests.authenticate_as(tests.id('u_b_owner'));
 select throws_ok(format($$select public.issue_printed_badge(%L, %L)$$, tests.id('p_a1'), tests.id('w_managed')), '42501', 'FORBIDDEN', 'another GC cannot issue badges for this project');
 select tests.authenticate_as(tests.id('u_a_attendant'));

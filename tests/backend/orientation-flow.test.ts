@@ -96,11 +96,15 @@ describe('orientation, approval and offline badge (local stack)', () => {
     );
     const preview = await worker.rpc('preview_orientation', { p_code: code, p_locale: 'es-US' });
     expect(preview.error).toBeNull();
-    const notice = (preview.data as { notice: { id: string; review_status: string } }).notice;
+    const { notice, join_token: joinToken } = preview.data as {
+      notice: { id: string; review_status: string };
+      join_token: string;
+    };
     expect(notice.review_status).toBe('DRAFT_REQUIRES_HUMAN_REVIEW');
 
+    // Completing uses the join pass from the scan, never the scanned code (which rotates).
     const joined = await worker.rpc('complete_orientation', {
-      p_code: code,
+      p_join_token: joinToken,
       p_locale: 'es-US',
       p_legal_name: 'Ana Trabajadora',
       p_company_id: null,

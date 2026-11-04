@@ -298,7 +298,7 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
       enrollment_id: string;
       enrollment_status: MyEnrollment['enrollment_status'];
     }>('complete_orientation', {
-      p_code: input.code,
+      p_join_token: input.joinToken,
       p_locale: input.locale,
       p_legal_name: input.legalName,
       p_company_id: input.companyId,

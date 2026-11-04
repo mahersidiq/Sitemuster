@@ -173,6 +173,8 @@ export interface OrientationSessionSummary {
 }
 
 export interface OrientationPreview {
+  /** Pass bound to this person and session; lets them finish after the QR has rotated. */
+  join_token: string;
   session_id: string;
   project_id: string;
   project_name: string;
@@ -199,7 +201,8 @@ export interface WorkerDetailsInput {
 }
 
 export interface JoinInput extends WorkerDetailsInput {
-  code: string;
+  /** The join pass from previewOrientation (never the scanned QR, which rotates every minute). */
+  joinToken: string;
   locale: Locale;
   noticeVersionId: string;
   accept: boolean;

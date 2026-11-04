@@ -160,6 +160,7 @@ export class FakeWorld {
   readonly enrollments: FakeEnrollment[];
   readonly companies: { id: string; name: string; projectId: string }[];
   readonly printedBadges: { id: string; workerId: string; active: boolean }[];
+  readonly joinPasses: Map<string, { sessionId: string; userId: string }>;
   readonly calls: string[] = [];
   device: DeviceActivateResponse | null = null;
 
@@ -176,6 +177,7 @@ export class FakeWorld {
     this.enrollments = shared?.enrollments ?? [];
     this.companies = shared?.companies ?? [];
     this.printedBadges = shared?.printedBadges ?? [];
+    this.joinPasses = shared?.joinPasses ?? new Map();
   }
 
   /** Test helper: a worker (with or without an app account) enrolled in a project. */
@@ -834,7 +836,13 @@ export class FakeSiteMusterApi implements SiteMusterApi {
             e.status !== 'REJECTED',
         )
       : undefined;
+    const joinToken = randomUUID().replace(/-/g, '').padEnd(43, 'J');
+    this.world.joinPasses.set(joinToken, {
+      sessionId: session.session_id,
+      userId: this.world.access.user_id,
+    });
     return {
+      join_token: joinToken,
       session_id: session.session_id,
       project_id: session.project_id,
       project_name: project?.name ?? '',
@@ -854,7 +862,12 @@ export class FakeSiteMusterApi implements SiteMusterApi {
 
   async completeOrientation(input: JoinInput) {
     this.before('completeOrientation');
-    const session = this.sessionFromCode(input.code);
+    const pass = this.world.joinPasses.get(input.joinToken);
+    if (!pass || pass.userId !== this.world.access.user_id) {
+      throw new ApiError('ORIENTATION_CODE_INVALID');
+    }
+    const session = this.world.sessions.find((s) => s.session_id === pass.sessionId);
+    if (!session?.open) throw new ApiError('ORIENTATION_SESSION_CLOSED');
     this.checkDetails(input);
     if (FAKE_NOTICES[input.locale].id !== input.noticeVersionId)
       throw new ApiError('NOTICE_OUTDATED');
