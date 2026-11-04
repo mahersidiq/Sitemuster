@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import expoConfig, {
+  ANDROID_BLOCKED_PERMISSIONS,
   assertPublicEnvSafe,
   BUNDLE_IDS,
+  IOS_PRIVACY_MANIFEST,
+  NATIVE_SDK_PINS,
   PRODUCTION_REQUIRED_BUILD_ENV,
   PRODUCTION_REQUIRED_PUBLIC_ENV,
   readAppEnv,
@@ -38,17 +41,20 @@ describe('app.config.ts security gates', () => {
 
   it('fails closed for a production build missing required public configuration', () => {
     process.env.APP_ENV = 'production';
+    process.env.EAS_BUILD = 'true';
     for (const name of PRODUCTION_REQUIRED_PUBLIC_ENV) delete process.env[name];
     expect(() => evaluate()).toThrow(/fail closed/);
   });
 
   it('builds production only with complete https configuration', () => {
     process.env.APP_ENV = 'production';
+    process.env.EAS_BUILD = 'true';
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
     process.env.GOOGLE_MAPS_ANDROID_API_KEY = 'android-restricted-maps-key';
     process.env.TS_ANDROID_LICENSE_KEY = 'transistorsoft-release-license';
+    process.env.SITEMUSTER_CLEARED_APP_ID = 'com.sitemuster.app';
     const config = evaluate();
     expect(config.ios?.bundleIdentifier).toBe('com.sitemuster.app');
     expect(config.name).toBe('SiteMuster');
@@ -76,6 +82,7 @@ describe('app.config.ts security gates', () => {
     expect(PRODUCTION_REQUIRED_BUILD_ENV).toContain('GOOGLE_MAPS_ANDROID_API_KEY');
     expect(() =>
       assertPublicEnvSafe('production', {
+        EAS_BUILD: 'true',
         EXPO_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
         EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-anon-key',
         EXPO_PUBLIC_SENTRY_DSN: 'https://public@o0.ingest.sentry.io/0',
@@ -102,6 +109,7 @@ describe('app.config.ts security gates', () => {
 
   it('fails closed for a production build without the Transistorsoft Android license', () => {
     process.env.APP_ENV = 'production';
+    process.env.EAS_BUILD = 'true';
     process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
@@ -134,5 +142,109 @@ describe('app.config.ts security gates', () => {
 
   it('rejects unknown APP_ENV values instead of guessing', () => {
     expect(() => readAppEnv({ APP_ENV: 'prod' })).toThrow();
+  });
+});
+
+describe('release configuration (Milestone 13)', () => {
+  const production = {
+    EAS_BUILD: 'true',
+    EXPO_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: 'public-anon-key',
+    EXPO_PUBLIC_SENTRY_DSN: 'https://public@o0.ingest.sentry.io/0',
+    GOOGLE_MAPS_ANDROID_API_KEY: 'android-restricted-maps-key',
+    TS_ANDROID_LICENSE_KEY: 'transistorsoft-release-license',
+  };
+
+  it('refuses a production build until the cleared app id is recorded (brand clearance)', () => {
+    expect(PRODUCTION_REQUIRED_BUILD_ENV).toContain('SITEMUSTER_CLEARED_APP_ID');
+    expect(() => assertPublicEnvSafe('production', production)).toThrow(
+      /SITEMUSTER_CLEARED_APP_ID/,
+    );
+    expect(() =>
+      assertPublicEnvSafe('production', {
+        ...production,
+        SITEMUSTER_CLEARED_APP_ID: 'com.sitemuster.app.dev',
+      }),
+    ).toThrow(/cleared production id com\.sitemuster\.app/);
+    expect(() =>
+      assertPublicEnvSafe('production', {
+        ...production,
+        SITEMUSTER_CLEARED_APP_ID: 'com.sitemuster.app',
+      }),
+    ).not.toThrow();
+    // Development and staging builds keep working before clearance.
+    expect(() => assertPublicEnvSafe('staging', {})).not.toThrow();
+  });
+
+  it('lets the EAS CLI read the project before upload, but still refuses leaked secrets there', () => {
+    // EAS CLI evaluates the config locally with only the profile env (no EAS_BUILD): no throw,
+    // so the build can start; the EAS build server then enforces every gate.
+    expect(() => assertPublicEnvSafe('production', { APP_ENV: 'production' })).not.toThrow();
+    expect(() =>
+      assertPublicEnvSafe('production', { EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: 'x' }),
+    ).toThrow(/Refusing to build/);
+    expect(() =>
+      assertPublicEnvSafe('production', { ...production, EAS_BUILD: undefined }),
+    ).not.toThrow();
+    expect(() => assertPublicEnvSafe('production', production)).toThrow(
+      /SITEMUSTER_CLEARED_APP_ID/,
+    );
+  });
+
+  it('pins the Transistorsoft native SDKs to exact versions in every build', () => {
+    delete process.env.APP_ENV;
+    const config = evaluate();
+    expect(NATIVE_SDK_PINS.tslocationmanagerAndroid).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(NATIVE_SDK_PINS.tslocationmanagerIos).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(config.plugins).toContainEqual([
+      './plugins/with-pinned-native-sdks.js',
+      {
+        android: NATIVE_SDK_PINS.tslocationmanagerAndroid,
+        ios: NATIVE_SDK_PINS.tslocationmanagerIos,
+      },
+    ]);
+  });
+
+  it('declares no tracking, the required-reason APIs and the collected data on iOS', () => {
+    delete process.env.APP_ENV;
+    const config = evaluate();
+    expect(config.ios?.privacyManifests).toEqual(IOS_PRIVACY_MANIFEST);
+    expect(IOS_PRIVACY_MANIFEST.NSPrivacyTracking).toBe(false);
+    expect(IOS_PRIVACY_MANIFEST.NSPrivacyTrackingDomains).toEqual([]);
+    expect(
+      IOS_PRIVACY_MANIFEST.NSPrivacyCollectedDataTypes.every(
+        (entry) => entry.NSPrivacyCollectedDataTypeTracking === false,
+      ),
+    ).toBe(true);
+    expect(
+      IOS_PRIVACY_MANIFEST.NSPrivacyCollectedDataTypes.map((e) => e.NSPrivacyCollectedDataType),
+    ).toContain('NSPrivacyCollectedDataTypePreciseLocation');
+  });
+
+  it('blocks storage, microphone and (in production) overlay permissions, and turns off Android backup', () => {
+    delete process.env.APP_ENV;
+    const development = evaluate();
+    expect(development.android?.allowBackup).toBe(false);
+    expect(development.android?.blockedPermissions).toEqual([...ANDROID_BLOCKED_PERMISSIONS]);
+    Object.assign(process.env, production, {
+      APP_ENV: 'production',
+      SITEMUSTER_CLEARED_APP_ID: 'com.sitemuster.app',
+    });
+    const release = evaluate();
+    expect(release.android?.allowBackup).toBe(false);
+    expect(release.android?.blockedPermissions).toEqual(
+      expect.arrayContaining([
+        'android.permission.SYSTEM_ALERT_WINDOW',
+        'android.permission.RECORD_AUDIO',
+        'android.permission.READ_EXTERNAL_STORAGE',
+        'android.permission.WRITE_EXTERNAL_STORAGE',
+      ]),
+    );
+    // A blocked permission is never also requested.
+    expect(
+      (release.android?.permissions ?? []).some((name) =>
+        (release.android?.blockedPermissions ?? []).includes(`android.permission.${name}`),
+      ),
+    ).toBe(false);
   });
 });

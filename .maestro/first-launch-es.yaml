@@ -1,0 +1,16 @@
+# Release smoke test (Milestone 13, decision #151): the same first launch in Spanish. Not executed
+# by the build agent; run `maestro test .maestro/` on a device or simulator.
+appId: com.sitemuster.app.dev
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'language-screen'
+- tapOn:
+    id: 'choose-es-US'
+- assertVisible:
+    id: 'sign-in-screen'
+- assertVisible: 'Iniciar sesión con teléfono'
+- assertVisible: 'Iniciar sesión con correo'
+- assertNotVisible:
+    id: 'backend-unavailable'

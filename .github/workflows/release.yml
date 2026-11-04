@@ -1,0 +1,109 @@
+name: release
+
+# Native builds and store test submissions on the owner's EAS account (Milestone 13; decisions
+# #146, #149; docs/release/native-builds.md). Started by hand only: nothing here runs on a pull
+# request or a push. Every job fails closed without its credentials, builds only a commit whose
+# required CI passed, makes production builds only from main, and submits only as a TestFlight /
+# Play internal-testing draft. Publishing to the public stores stays a human action in App Store
+# Connect and Play Console.
+"on":
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile (preview = staging backend, production = production backend)
+        type: choice
+        options: [preview, production]
+        required: true
+      platform:
+        description: Platforms to build
+        type: choice
+        options: [all, ios, android]
+        default: all
+      submit:
+        description: Send the production build to TestFlight and Play internal testing (draft only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Production builds come from main only
+        if: inputs.profile == 'production' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Production builds are made only from main (this run: ${GITHUB_REF})."
+          exit 1
+      - name: Only a production build can be submitted
+        if: inputs.submit && inputs.profile != 'production'
+        run: |
+          echo "::error::Store submission is for production builds only."
+          exit 1
+      - name: Required CI passed on this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for check in code-quality database; do
+            passed="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?check_name=${check}" \
+              --jq '[.check_runs[] | select(.conclusion == "success")] | length')"
+            if [ "${passed:-0}" -lt 1 ]; then
+              echo "::error::Required check '${check}' has not passed on ${GITHUB_SHA}. Nothing was built."
+              exit 1
+            fi
+          done
+
+  build:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    environment: ${{ inputs.profile == 'production' && 'production' || 'staging' }}
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+      EXPO_OWNER: ${{ vars.EXPO_OWNER }}
+    steps:
+      - name: Release credentials are configured (fail closed)
+        run: |
+          missing=""
+          [ -n "${EXPO_TOKEN}" ] || missing="${missing} EXPO_TOKEN (secret)"
+          [ -n "${EAS_PROJECT_ID}" ] || missing="${missing} EAS_PROJECT_ID (variable)"
+          [ -n "${EXPO_OWNER}" ] || missing="${missing} EXPO_OWNER (variable)"
+          if [ -n "${missing}" ]; then
+            echo "::error::Not configured in this GitHub environment:${missing}. Nothing was built (HUMAN_CHECKLIST §2)."
+            exit 1
+          fi
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node (pinned, the same version as the EAS build servers)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.4'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: EAS CLI (pinned)
+        uses: expo/expo-github-action@9da89d3617bb88139671bad31b09c65714c2ee06 # 9.0.1
+        with:
+          eas-version: 25.3.0
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build on EAS
+        env:
+          PROFILE: ${{ inputs.profile }}
+          PLATFORM: ${{ inputs.platform }}
+        run: eas build --profile "${PROFILE}" --platform "${PLATFORM}" --non-interactive --wait
+      - name: Submit to TestFlight and Play internal testing (draft)
+        if: inputs.submit && inputs.profile == 'production'
+        env:
+          PLATFORM: ${{ inputs.platform }}
+        run: eas submit --profile production --platform "${PLATFORM}" --latest --non-interactive
