@@ -1,6 +1,9 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import { DeviceActivateRequestSchema } from '../../../packages/shared/src/api/orientation.ts';
+import { deriveUuid } from '../../../packages/shared/src/attendance/config.ts';
+import { iso } from '../../../packages/shared/src/attendance/time.ts';
+import type { Evidence } from '../../../packages/shared/src/attendance/types.ts';
 import { base64UrlEncode } from '../../../packages/shared/src/crypto/encoding.ts';
 import { BADGE_KEY_VERSION, encryptBadgeSecret, resolveBadgeKey, toPgHex } from './badge-crypto.ts';
 import { apiError, json, newRequestId, readJsonBody } from './http.ts';
@@ -18,6 +21,47 @@ export interface DeviceDeps {
   activate(args: Record<string, unknown>): Promise<RpcResult>;
   randomBytes(length: number): Uint8Array;
   newDeviceId(): string;
+  /**
+   * Decision #27: a replacement flags the worker's active sessions for review — projects with an
+   * active session (service role) and the reconciler that applies MONITORING REPLACED evidence.
+   */
+  openSessionProjects?(workerId: string): Promise<string[]>;
+  flagReplacement?(evidence: Evidence[]): Promise<void>;
+  now?(): number;
+  log?(entry: Record<string, unknown>): void;
+}
+
+/** Best effort after a committed activation: never turns a successful activation into a failure. */
+async function flagActiveSessions(
+  deps: DeviceDeps,
+  workerId: string,
+  deviceId: string,
+): Promise<void> {
+  if (!deps.openSessionProjects || !deps.flagReplacement) return;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const projects = await deps.openSessionProjects(workerId);
+      if (projects.length === 0) return;
+      const at = iso(deps.now?.() ?? Date.now());
+      await deps.flagReplacement(
+        projects.map((projectId) => ({
+          kind: 'MONITORING' as const,
+          eventUuid: deriveUuid('device-replaced', `${deviceId}|${projectId}`),
+          projectId,
+          workerId,
+          deviceId,
+          observedAt: at,
+          receivedAt: at,
+          change: 'REPLACED' as const,
+          reason: 'DEVICE_REPLACED',
+        })),
+      );
+      return;
+    } catch {
+      deps.log?.({ fn: 'device-activate', outcome: 'replacement_review_retry', attempt });
+    }
+  }
+  deps.log?.({ fn: 'device-activate', outcome: 'replacement_review_failed' });
 }
 
 export async function handleDeviceActivate(req: Request, deps: DeviceDeps): Promise<Response> {
@@ -58,7 +102,14 @@ export async function handleDeviceActivate(req: Request, deps: DeviceDeps): Prom
     if (result.code === 'FORBIDDEN') return apiError(403, 'FORBIDDEN', requestId, 'Not allowed.');
     return apiError(503, 'TEMPORARILY_UNAVAILABLE', requestId, 'Try again shortly.');
   }
-  const data = result.data as { replaced_device_id?: string | null; upload_expires_at?: string };
+  const data = result.data as {
+    replaced_device_id?: string | null;
+    upload_expires_at?: string;
+    worker_id?: string;
+  };
+  if (data.replaced_device_id && data.worker_id) {
+    await flagActiveSessions(deps, data.worker_id, deviceId);
+  }
   return json(200, {
     schema_version: 1,
     request_id: requestId,

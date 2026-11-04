@@ -254,6 +254,11 @@ export class MemoryBackend implements ServerBackend, AttendanceStore {
     }
   }
 
+  /** The device that owns a durable receipt (ingest duplicate / foreign-uuid detection). */
+  receiptDevice(eventUuid: string): string | null {
+    return this.receiptRows.get(eventUuid)?.device_id ?? null;
+  }
+
   async sweep(now: string): Promise<void> {
     for (const track of [...this.tracks.values()]) {
       await sweepTrack(this, track.projectId, track.workerId, now);

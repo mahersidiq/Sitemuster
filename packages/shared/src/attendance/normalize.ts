@@ -24,6 +24,12 @@ export interface DeviceContext {
   workerId: string;
   /** Fences of every bound project: current version plus versions of still-open sessions. */
   fences: readonly DeviceFence[];
+  /**
+   * false while continuous coordinates are not released for this platform/build (decision #90):
+   * any record that carries coordinates is rejected and nothing about the position is kept.
+   * Defaults to true.
+   */
+  coordinatesAllowed?: boolean;
 }
 
 export type NormalizedRecord =
@@ -222,6 +228,18 @@ export function normalizeSdkRecord(
     return terminal(device, raw, uuid, observedAt, receivedAt, 'accepted', null);
   }
 
+  if (device.coordinatesAllowed === false) {
+    return terminal(
+      device,
+      raw,
+      uuid,
+      observedAt,
+      receivedAt,
+      'rejected',
+      'COORDINATES_NOT_PERMITTED',
+      'ONSITE_FIX',
+    );
+  }
   const point = { lat: wire.coords.latitude, lng: wire.coords.longitude };
   const inside = projectsOf(device).filter((projectId) =>
     device.fences.some(

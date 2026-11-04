@@ -130,6 +130,35 @@ describe('SDK record normalization', () => {
     });
   });
 
+  it('refuses every coordinate while continuous coordinates are not released (decision #90)', () => {
+    const gated: DeviceContext = { ...device, coordinatesAllowed: false };
+    const fix = {
+      ...base,
+      event: 'location',
+      coords: { latitude: 29.7604, longitude: -95.3698, accuracy: 10 },
+    };
+    const out = normalizeSdkRecord(gated, fix, NOW);
+    expect(out).toMatchObject({
+      kind: 'terminal',
+      result: { status: 'rejected', reason: 'COORDINATES_NOT_PERMITTED' },
+      receipt: { event_type: 'ONSITE_FIX', terminal_result: 'rejected' },
+    });
+    if (out.kind === 'terminal')
+      expect(JSON.stringify(out.quarantine)).not.toMatch(/29\.76|-95\.36/);
+    // Coordinate-free geofence metadata still works in limited mode.
+    const enter = normalizeSdkRecord(
+      gated,
+      {
+        ...base,
+        event: 'geofence',
+        geofence: { identifier: 'sm_p', action: 'ENTER' },
+        accuracy: 12,
+      },
+      NOW,
+    );
+    expect(enter.kind).toBe('evidence');
+  });
+
   it('marks a fix inside two overlapping projects as ambiguous for both (derived uuids)', () => {
     const out = normalizeSdkRecord(
       device,

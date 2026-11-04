@@ -425,6 +425,15 @@ verify_jwt = true
 [functions.device-activate]
 verify_jwt = true
 
+# The ONLY functions without gateway JWT verification (decision #24/#39): they authenticate the
+# 32-byte device upload secret themselves (device-renew also accepts a Supabase session, which it
+# confirms with the Auth server).
+[functions.ingest-location-batch]
+verify_jwt = false
+
+[functions.device-renew]
+verify_jwt = false
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false

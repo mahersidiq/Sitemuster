@@ -9,3 +9,4 @@ export * from './visitors.ts';
 export * from './normalize.ts';
 export * from './reconcile.ts';
 export * from './regions.ts';
+export * from './store-codec.ts';
