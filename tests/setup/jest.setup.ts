@@ -43,3 +43,31 @@ beforeEach(() => {
   (globalThis as TestGlobals).__deviceLocale = 'en-US';
   (globalThis as TestGlobals).__appEnv = 'development';
 });
+
+// expo-sqlite / expo-crypto doubles (in-memory; tests never touch a device database).
+jest.mock('expo-sqlite', () => ({
+  openDatabaseAsync: jest.fn(async () => {
+    const rows = new Map<string, string>();
+    return {
+      execAsync: jest.fn(async () => undefined),
+      getFirstAsync: jest.fn(async (_sql: string, params: string[]) => {
+        const value = rows.get(params[0] ?? '');
+        return value === undefined ? null : { value };
+      }),
+      getAllAsync: jest.fn(async () => [...rows.keys()].map((key) => ({ key }))),
+      runAsync: jest.fn(async (sql: string, params: (string | number)[] = []) => {
+        if (sql.startsWith('insert')) rows.set(String(params[0]), String(params[1]));
+        else if (sql.includes('where key')) rows.delete(String(params[0]));
+        else rows.clear();
+      }),
+    };
+  }),
+}));
+
+jest.mock('expo-crypto', () => ({
+  getRandomBytes: (length: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { randomBytes } = require('node:crypto') as typeof import('node:crypto');
+    return new Uint8Array(randomBytes(length));
+  },
+}));

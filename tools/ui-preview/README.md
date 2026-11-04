@@ -8,7 +8,11 @@ screens through React Native Web in headless Chromium** at a phone-sized viewpor
   `react-native-web` and enables the `web` platform **only in that copy**; the shipped app
   configuration stays `platforms: ["ios", "android"]`.
 - Native modules without a web implementation are replaced in the copy by the shims in `shims/`
-  (for example, in-memory language preference instead of the iOS/Android secure store).
+  (mirroring repository paths; e.g. in-memory storage instead of the iOS/Android secure store and
+  SQLite). The encryption code itself is the real implementation.
+- Scenarios that sign in (Milestone 03+) talk to the **local** Supabase stack (`supabase start`),
+  reading development SMS codes from the local database and staff email codes from local Mailpit.
+  Export `API_URL`, `ANON_KEY`, `DB_URL`, `MAILPIT_URL` from `supabase status -o env` first.
 - Screenshots are labelled "web render" in PRs. They prove layout and EN/ES copy, never native
   behaviour (permissions, background location, secure storage, camera, push). Physical-device
   checks stay `NOT_EXECUTED_PHYSICAL_DEVICE` until the owner runs them.

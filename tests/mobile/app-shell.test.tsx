@@ -26,7 +26,7 @@ describe('EN/ES role shell (Milestone 01)', () => {
     expect(await SecureStore.getItemAsync('sitemuster.locale.v1')).toBe('es-US');
   });
 
-  it('keeps real sign-in disabled (no fake success) until Milestone 03', async () => {
+  it('keeps sign-in disabled when no backend is configured (no fake success)', async () => {
     await SecureStore.setItemAsync('sitemuster.locale.v1', 'en-US');
     await renderRouter('./app', { initialUrl: '/sign-in' });
     expect(await screen.findByTestId('sign-in-screen')).toBeTruthy();
@@ -36,7 +36,7 @@ describe('EN/ES role shell (Milestone 01)', () => {
     expect(screen.getByTestId('staff-sign-in').props.accessibilityState).toEqual({
       disabled: true,
     });
-    expect(screen.getByText('Not available in this build yet.')).toBeTruthy();
+    expect(screen.getByTestId('backend-unavailable')).toBeTruthy();
   });
 
   it('shows the worker tabs in Spanish through the development preview', async () => {

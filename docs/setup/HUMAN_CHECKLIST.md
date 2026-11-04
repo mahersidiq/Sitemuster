@@ -33,7 +33,15 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
 - [ ] In **both** projects open *Realtime → Settings* and turn **off** "Allow public access" so only private, policy-checked channels work (decision #19).
+- [ ] In **both** projects, *Authentication → Providers*: enable **Phone** (Twilio, see §4) with signups on; *Authentication → Sign In / MFA*: enable **TOTP** (verify and enroll), maximum **2** factors per user; *Authentication → Settings*: SMS OTP length **6**, SMS OTP expiry **600 s**, email OTP expiry **600 s**, minimum interval between OTP requests **60 s**; *Authentication → Rate limits*: SMS sent per hour **≥ 400** (orientation needs ≥ 200 sign-ins/hour). Do **not** configure any `send_sms` hook in hosted projects (decision #59).
+- [ ] *Authentication → Emails*: paste the bilingual template from `supabase/templates/sign-in-code.html` for "Magic link" and "Confirm signup" (both send the 6-digit code), subject "SiteMuster sign-in code / código de acceso".
 - [ ] Confirm `supabase start`/pgTAP tests run in GitHub Actions; local Docker for Claude Code is optional.
+
+## 3b. Email sending provider for staff sign-in codes (`EM`) — new, required before staff can sign in on hosted projects
+
+- [ ] Create an account with a transactional email provider that offers SMTP (for example Postmark, Resend, Amazon SES or SendGrid). Verify the sending domain (SPF and DKIM DNS records) after the brand/domain is cleared (§9); a staging subdomain can be used before that.
+- [ ] In each Supabase project open *Authentication → Emails → SMTP settings* and enter the provider's SMTP host, port, user and sender address; store the SMTP password only there (never in Git, CI or the app).
+- [ ] Raise the project's email rate limit to match staff sign-in volume, then send yourself a staff sign-in code on staging and confirm it arrives within a minute in English and Spanish.
 
 ## 4. Twilio and A2P 10DLC (`TW`)
 
@@ -89,7 +97,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 
 ## Checklist-to-milestone map
 
-`01 GH`; `02 SB/local CI`; `03 SB+TW`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL`; `13 GH+EX+SB+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+physical devices`.
+`01 GH`; `02 SB/local CI`; `03 SB+TW+EM`; `04 SB+GC`; `05 SB+TW+EX`; `06 SB/local CI`; `07 EX+SB+TS dev integration`; `08 EX+SB`; `09 SB+GC`; `10 SB+EX`; `11 EX+SB`; `12 SE+SB+LEGAL`; `13 GH+EX+SB+EM+TW+GC+SE+AP+GP+BRAND+TS+LEGAL+physical devices`.
 
 ## No-account development rules
 

@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
 | 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
-| 03 | Authentication, MFA and English/Spanish | not started | | |
+| 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
 | 04 | GC organizations, projects, shifts and circles | not started | | |
 | 05 | Orientation sessions, badges, approval | not started | | |
 | 06 | Attendance state machine and deterministic replay | not started | | |
@@ -70,7 +70,36 @@
 
 **Decisions added:** #53 org OWNER vs ADMIN access, #54 single push-token store, #55 raw fixes ≤24 h after receipt, #56 approval requires orientation / attendance requires approval + employer verification, #57 no client writes + `app_private` + no service-role table access, #58 settings only in versions; emergency contacts protected by RLS + platform encryption.
 
-**Next step:** after Milestone 02 merges, start Milestone 03 (auth, MFA, EN/ES) on `milestone-03-auth-mfa`.
+**Next step:** done — Milestone 03 started.
+
+## Milestone 03 — Authentication, MFA and English/Spanish
+
+**What was built**
+- Worker sign-in: SMS 6-digit code (Supabase Phone Auth), E.164 normalization, masked destination, wrong/expired code messages, server-driven 60 s resend cooldown with countdown, SMS-down fallback message pointing to kiosk/foreman.
+- Staff sign-in: passwordless 6-digit email code → mandatory TOTP enrollment (QR + setup key) or challenge on every sign-in; staff screens open only at aal2.
+- Encrypted session store: AES-256-GCM (`@noble/ciphers`) ciphertext in `expo-sqlite`, random per-install key in `expo-secure-store` (AFTER_FIRST_UNLOCK); slot-bound envelopes; tamper/orphan/locked-key handling; key rotation; wipe on sign-out.
+- Role-aware routing from the server `get_my_access()` summary: worker shell, staff shell (MFA), choose-context (both), join-project (worker without profile), no-organization (verified staff), operator refusal, explicit offline screen; encrypted cached access for offline use (stale-labelled).
+- Language: first-launch choice persists; saved to the worker profile (`set_my_language`) and auth metadata after sign-in.
+- Server: `get_my_access`, `get_my_profile`, `set_my_language` owner-only RPCs; local Auth config (bilingual SMS/email templates, 60 s cooldowns, 600 s email codes, TOTP on, ≤2 factors, 400 SMS/h); development SMS capture hook in `seed.sql` (local only).
+- Recovery guidance screen; supervised no-phone identity design (`docs/design/no-phone-identity.md`).
+
+**Test results (local)**
+- `supabase test db`: 13 files, **216** pgTAP tests pass (adds owner-only RPC checks).
+- `npm run test:backend` against the real local Auth server: **8/8** — SMS sign-in, wrong code, 60 s cooldown, expired code, single-use code, phone-only user blocked from staff RPC; staff email code → aal1 denied → TOTP enroll → aal2 → org created → next sign-in requires TOTP; email cooldown.
+- Vitest unit **143**, integration 51, security 64, i18n 10, replay 3; Jest mobile-unit 7 + mobile-integration **18** (10 new sign-in flow tests); typecheck/lint/format/expo config/audit pass. Flaky tamper test found and fixed (25 consecutive passes).
+- Web-render screenshots (`docs/screenshots/m03`) captured against the local Auth server.
+- GitHub Actions run 41751877095: `code-quality` success; `database` success — pgTAP 216 pass and `npm run test:backend` 8/8 against the CI Supabase stack.
+
+**NOT VERIFIED (Milestone 03)**
+- Real Twilio SMS delivery, A2P 10DLC and ≥200 sign-ins/hour provider throughput (HUMAN_CHECKLIST §4).
+- Real staff email delivery — needs an SMTP provider (new checklist §3b `EM`).
+- Hosted Supabase Auth settings (checklist §3) not applied; no hosted projects yet.
+- Physical-device checks: SecureStore AFTER_FIRST_UNLOCK behaviour, SMS autofill, restart/session restore on iOS/Android, `@supabase/supabase-js` URL handling on Hermes (`NOT_EXECUTED_PHYSICAL_DEVICE`).
+- Staff MFA reset for lost authenticators is a documented supervised process; the operator tooling arrives in Milestone 12.
+
+**Decisions added:** #59 local SMS capture hook (seed-only) + placeholder provider slot, #60 passwordless staff email code + TOTP (≤2 factors, supervised reset), #61 encrypted offline access cache, #62 language persistence + bilingual SMS template.
+
+**Next step:** after Milestone 03 merges, start Milestone 04 (organizations, projects, shifts, circles) on `milestone-04-projects`.
 
 ## Environment notes for future sessions (Linux build agent)
 
@@ -80,3 +109,5 @@
 - `api.expo.dev` is blocked: run Expo CLI commands with `EXPO_OFFLINE=1`.
 - Playwright is preinstalled for CommonJS `require('playwright')` (used by `tools/ui-preview`).
 - shellcheck: `pip install shellcheck-py` (CI runners have it preinstalled).
+- Backend E2E: `eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|DB_URL|MAILPIT_URL|FUNCTIONS_URL)=' | sed 's/^/export /')" && npm run test:backend` (local stack only; refuses remote URLs).
+- Screenshots that sign in: export the same variables, then `bash tools/ui-preview/capture.sh mNN docs/screenshots/mNN <scratch-dir>`.

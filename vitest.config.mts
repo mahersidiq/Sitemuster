@@ -29,6 +29,16 @@ export default defineConfig({
       { test: { ...shared, name: 'security', include: ['tests/security/**/*.test.ts'] } },
       { test: { ...shared, name: 'i18n', include: ['tests/i18n/**/*.test.ts'] } },
       { test: { ...shared, name: 'replay', include: ['tests/location-replay/**/*.test.ts'] } },
+      {
+        // Runs only against a local Supabase stack (CI `database` job or developer Docker).
+        test: {
+          ...shared,
+          name: 'backend',
+          include: ['tests/backend/**/*.test.ts'],
+          testTimeout: 30_000,
+          fileParallelism: false,
+        },
+      },
     ],
   },
 });

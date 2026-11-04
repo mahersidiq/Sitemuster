@@ -163,7 +163,7 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = ["https://127.0.0.1:3000", "sitemuster-dev://auth", "sitemuster://auth"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -201,7 +201,8 @@ password_requirements = ""
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
 email_sent = 2
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
-sms_sent = 30
+# Orientation needs >=200 sign-ins/hour (decision #3); 400 leaves headroom for resends.
+sms_sent = 400
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
 anonymous_users = 30
 # Number of sessions that can be refreshed in a 5 minute interval per IP address.
@@ -230,11 +231,20 @@ enable_confirmations = false
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
-max_frequency = "1s"
+max_frequency = "60s"
 # Number of characters used in the email OTP.
 otp_length = 6
-# Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Number of seconds before the email OTP expires (staff codes: 10 minutes, like worker SMS codes).
+otp_expiry = 600
+
+# Bilingual staff sign-in code emails (decision #2).
+[auth.email.template.magic_link]
+subject = "SiteMuster sign-in code / código de acceso"
+content_path = "./supabase/templates/sign-in-code.html"
+
+[auth.email.template.confirmation]
+subject = "SiteMuster sign-in code / código de acceso"
+content_path = "./supabase/templates/sign-in-code.html"
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]
@@ -258,14 +268,14 @@ otp_expiry = 3600
 # content_path = "./supabase/templates/password_changed_notification.html"
 
 [auth.sms]
-# Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+# Workers sign up and sign in with a 6-digit SMS code (decision #3).
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
 enable_confirmations = false
-# Template for sending OTP to users
-template = "Your code is {{ .Code }}"
-# Controls the minimum amount of time that must pass before sending another sms otp.
-max_frequency = "5s"
+# Bilingual template (the provider cannot localize per recipient).
+template = "SiteMuster: {{ .Code }} is your code / es su codigo. 10 min."
+# 60-second resend cooldown (decision #3).
+max_frequency = "60s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # Keys are the phone number with country code and without the + prefix.
@@ -279,6 +289,13 @@ max_frequency = "5s"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 
+# LOCAL DEVELOPMENT ONLY: SMS codes are captured by a database hook installed by supabase/seed.sql
+# (which never runs on hosted projects). Hosted staging/production configure Twilio in the
+# Supabase dashboard instead (HUMAN_CHECKLIST §4). Without the seed, this hook fails closed.
+[auth.hook.send_sms]
+enabled = true
+uri = "pg-functions://postgres/app_private/dev_send_sms_hook"
+
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
 # [auth.hook.before_user_created]
 # enabled = true
@@ -291,21 +308,22 @@ max_frequency = "5s"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
-enabled = false
-account_sid = ""
-message_service_sid = ""
-# DO NOT commit your Twilio auth token to git. Use environment variable substitution instead:
-auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
+# LOCAL ONLY: the provider must be enabled for the local Auth server to accept phone sign-ins, but
+# every message is intercepted by the development send_sms hook above, so these placeholder values
+# are never used and contain no secret. Hosted projects configure Twilio in the dashboard.
+enabled = true
+account_sid = "local-placeholder-not-used"
+message_service_sid = "local-placeholder-not-used"
+auth_token = "env(SITEMUSTER_LOCAL_SMS_PLACEHOLDER)"
 
-# Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
-# Control how many MFA factors can be enrolled at once per user.
-max_enrolled_factors = 10
+# Control how many MFA factors can be enrolled at once per user (primary + backup authenticator).
+max_enrolled_factors = 2
 
-# Control MFA via App Authenticator (TOTP)
+# Staff sign-in requires an authenticator app (TOTP) after the email code (decision #3).
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]
