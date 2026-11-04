@@ -5,6 +5,7 @@ import {
   TRACKING_DEFAULTS,
   type DeviceActivateRequest,
   type DeviceActivateResponse,
+  type BroadcastMessage,
   type DeviceRenewResponse,
   type IngestOperationsRequest,
   type IngestOperationsResponse,
@@ -46,6 +47,15 @@ import {
   type SiteCheck,
   type SiteConfigInput,
   type SiteMusterApi,
+  type AttendanceSourceCode,
+  type ChannelStatus,
+  type MapMarker,
+  type ProjectChannelListener,
+  type ProjectDashboard,
+  type ProjectMap,
+  type RosterPresence,
+  type TrackingHealth,
+  type WorkforceMember,
 } from '../../src/api/types';
 import { isValidTimeZone } from '../../src/projects/format';
 import type { TrackingPlan } from '../../src/tracking/plan';
@@ -187,6 +197,15 @@ export class FakeWorld {
   readonly redeemedBadges = new Set<string>();
   /** Airplane mode for the outbox: ingestOperations fails with NETWORK. */
   operationsOffline = false;
+  // Milestone 09 fake server state: live presence per enrollment, map markers, project channels.
+  readonly presence = new Map<string, FakePresence>();
+  readonly markers = new Map<string, MapMarker[]>();
+  readonly channels = new Map<string, Set<ProjectChannelListener>>();
+  /** What a new project subscription reports once it is authorized. */
+  channelMode: ChannelStatus = 'SUBSCRIBED';
+  /** No signal on the staff phone: dashboard, roster and map reads fail with NETWORK. */
+  readsOffline = false;
+  private broadcastVersion = 0;
 
   constructor(
     public access: Access,
@@ -249,7 +268,68 @@ export class FakeWorld {
     };
     return id;
   }
+
+  /** Test helper (Milestone 09): what the server currently knows about one enrolled worker. */
+  setPresence(enrollmentId: string, presence: Partial<FakePresence>): void {
+    this.presence.set(enrollmentId, {
+      ...DEFAULT_PRESENCE,
+      ...this.presence.get(enrollmentId),
+      ...presence,
+    });
+  }
+
+  /** Test helper: the database sends a private Broadcast for this project (ids and counts only). */
+  emitBroadcast(projectId: string, type: BroadcastMessage['type'] = 'WORKFORCE_CHANGED'): void {
+    this.broadcastVersion += 1;
+    const approved = this.enrollments.filter(
+      (e) => e.projectId === projectId && e.status === 'APPROVED',
+    );
+    const message: BroadcastMessage = {
+      schema_version: 1,
+      type,
+      project_id: projectId,
+      aggregate_version: this.broadcastVersion,
+      counts: {
+        estimated_onsite: approved.filter((e) => this.presence.get(e.id)?.counted).length,
+        presence_unknown: approved.filter(
+          (e) => this.presence.get(e.id)?.presence === 'PRESENCE_UNKNOWN',
+        ).length,
+        approved_roster: approved.length,
+        visitors_onsite: this.visits.length,
+      },
+      changed_ids: [],
+      occurred_at: new Date().toISOString(),
+    };
+    for (const listener of this.channels.get(projectId) ?? []) listener.onMessage(message);
+  }
+
+  /** Test helper: the channel connects, drops or is refused (e.g. access revoked). */
+  setChannelStatus(projectId: string, status: ChannelStatus): void {
+    for (const listener of this.channels.get(projectId) ?? []) listener.onStatus(status);
+  }
 }
+
+export interface FakePresence {
+  presence: RosterPresence;
+  counted: boolean;
+  source: AttendanceSourceCode | null;
+  witnessed: boolean;
+  arrivedAt: string | null;
+  lastSeenAt: string | null;
+  needsReview: boolean;
+  tracking: TrackingHealth;
+}
+
+const DEFAULT_PRESENCE: FakePresence = {
+  presence: 'NONE',
+  counted: false,
+  source: null,
+  witnessed: false,
+  arrivedAt: null,
+  lastSeenAt: null,
+  needsReview: false,
+  tracking: 'NO_PHONE',
+};
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -1285,6 +1365,161 @@ export class FakeSiteMusterApi implements SiteMusterApi {
     this.before('workerAttendanceSessions');
     if (!this.canCorrectAttendance(projectId)) throw new ApiError('FORBIDDEN');
     return this.world.correctable.get(`${projectId}|${workerId}`) ?? [];
+  }
+
+  // ---------------------------------------------------------------- Milestone 09
+
+  /** Mirrors can_view_locations: the organization OWNER or assigned PM/SUPER/SAFETY (MFA). */
+  private canViewLocations(projectId: string) {
+    const project = this.world.projects.find((p) => p.id === projectId);
+    if (!project) return false;
+    const role = this.projectRole(projectId);
+    const owner = this.world.access.org_roles.some(
+      (r) => r.organization_id === project.organizationId && r.role === 'OWNER',
+    );
+    return owner || role === 'PM' || role === 'SUPER' || role === 'SAFETY';
+  }
+
+  private members(projectId: string): WorkforceMember[] {
+    return this.world.enrollments
+      .filter((e) => e.projectId === projectId && e.status === 'APPROVED')
+      .map((e) => {
+        const worker = this.world.workers.find((w) => w.id === e.workerId);
+        const p = { ...DEFAULT_PRESENCE, ...this.world.presence.get(e.id) };
+        return {
+          worker_id: e.workerId,
+          enrollment_id: e.id,
+          legal_name: worker?.legalName ?? '',
+          managed_identity: worker?.managed ?? false,
+          company_id: e.companyId,
+          company_name: this.world.companies.find((c) => c.id === e.companyId)?.name ?? null,
+          trade: e.trade,
+          employer_status: e.employer,
+          presence: p.presence,
+          counted: p.counted,
+          source: p.source,
+          witnessed: p.witnessed,
+          arrived_at: p.arrivedAt,
+          last_seen_at: p.lastSeenAt,
+          session_status: p.counted ? 'OPEN' : null,
+          needs_review: p.needsReview,
+          tracking: p.tracking,
+        };
+      })
+      .sort(
+        (a, b) => Number(b.counted) - Number(a.counted) || a.legal_name.localeCompare(b.legal_name),
+      );
+  }
+
+  async projectDashboard(projectId: string): Promise<ProjectDashboard> {
+    this.before('projectDashboard');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    const p = this.project(projectId);
+    const members = this.members(projectId);
+    const counted = members.filter((m) => m.counted);
+    const bySource: ProjectDashboard['counts']['onsite_by_source'] = {};
+    for (const m of counted) if (m.source) bySource[m.source] = (bySource[m.source] ?? 0) + 1;
+    const group = <K extends string | null>(key: (m: WorkforceMember) => K) => {
+      const map = new Map<K, WorkforceMember[]>();
+      for (const m of members) map.set(key(m), [...(map.get(key(m)) ?? []), m]);
+      return [...map.entries()];
+    };
+    const now = new Date().toISOString();
+    return this.after({
+      project: { id: p.id, name: p.name, status: p.status, iana_timezone: p.timeZone },
+      counts: {
+        approved_roster: members.length,
+        estimated_onsite: counted.length,
+        onsite_by_source: bySource,
+        manually_verified: counted.filter((m) => m.witnessed).length,
+        presence_unknown: members.filter((m) => m.presence === 'PRESENCE_UNKNOWN').length,
+        arriving: members.filter((m) => m.presence === 'ARRIVING').length,
+        unscheduled_pending: members.filter((m) => m.presence === 'UNSCHEDULED_PENDING').length,
+        departure_pending: members.filter((m) => m.presence === 'DEPARTURE_PENDING').length,
+        unresolved_sessions: members.filter((m) => m.needs_review).length,
+        visitors_onsite: this.world.visits.filter((v) => v.status === 'OPEN').length,
+        visitors_unresolved: this.world.visits.filter((v) => v.status === 'UNRESOLVED').length,
+        evaluated_at: now,
+      },
+      today: {
+        local_date: now.slice(0, 10),
+        arrivals: members.filter((m) => m.arrived_at).length,
+        departures: 0,
+      },
+      companies: group((m) => m.company_id).map(([companyId, rows]) => ({
+        company_id: companyId,
+        company_name: rows[0]?.company_name ?? null,
+        approved: rows.length,
+        estimated_onsite: rows.filter((m) => m.counted).length,
+        manually_verified: rows.filter((m) => m.counted && m.witnessed).length,
+        presence_unknown: rows.filter((m) => m.presence === 'PRESENCE_UNKNOWN').length,
+      })),
+      trades: group((m) => m.trade).map(([trade, rows]) => ({
+        trade,
+        approved: rows.length,
+        estimated_onsite: rows.filter((m) => m.counted).length,
+      })),
+      approvals: {
+        pending_enrollments: this.world.enrollments.filter(
+          (e) => e.projectId === projectId && e.status === 'PENDING',
+        ).length,
+        employer_pending: members.filter((m) => m.employer_status === 'PENDING_CONFIRMATION')
+          .length,
+      },
+      can_view_map: this.canViewLocations(projectId),
+      evaluated_at: now,
+    });
+  }
+
+  async workforceRoster(projectId: string): Promise<WorkforceMember[]> {
+    this.before('workforceRoster');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    return this.after(this.members(projectId));
+  }
+
+  async projectMap(projectId: string): Promise<ProjectMap> {
+    this.before('projectMap');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    if (!this.canViewLocations(projectId)) throw new ApiError('FORBIDDEN');
+    const version = this.project(projectId).versions.at(-1);
+    return this.after({
+      site: version
+        ? {
+            center_lat: version.centerLat,
+            center_lng: version.centerLng,
+            radius_m: version.radiusM,
+            exit_hysteresis_m: 50,
+          }
+        : null,
+      fresh_seconds: 600,
+      // Like project_map: only workers whose enrollment is still approved.
+      markers: (this.world.markers.get(projectId) ?? []).filter((marker) =>
+        this.world.enrollments.some(
+          (e) =>
+            e.projectId === projectId && e.workerId === marker.worker_id && e.status === 'APPROVED',
+        ),
+      ),
+      evaluated_at: new Date().toISOString(),
+    });
+  }
+
+  subscribeProject(projectId: string, listener: ProjectChannelListener): () => void {
+    this.world.calls.push('subscribeProject');
+    const listeners = this.world.channels.get(projectId) ?? new Set<ProjectChannelListener>();
+    listeners.add(listener);
+    this.world.channels.set(projectId, listeners);
+    let active = true;
+    const authorized = this.canViewRoster(projectId);
+    // Like Realtime, the join answers asynchronously.
+    setTimeout(() => {
+      if (active) listener.onStatus(authorized ? this.world.channelMode : 'DENIED');
+    }, 0);
+    return () => {
+      active = false;
+      listeners.delete(listener);
+    };
   }
 
   async renewDeviceWithSession(_appVersion: string): Promise<DeviceRenewResponse> {

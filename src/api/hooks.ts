@@ -30,6 +30,9 @@ export const queryKeys = {
   openVisits: (projectId: string) => ['open-visits', projectId] as const,
   correctable: (projectId: string, workerId: string) =>
     ['correctable', projectId, workerId] as const,
+  dashboard: (projectId: string) => ['dashboard', projectId] as const,
+  workforce: (projectId: string) => ['workforce', projectId] as const,
+  projectMap: (projectId: string) => ['project-map', projectId] as const,
 };
 
 export function useOrganizations() {
@@ -115,6 +118,42 @@ export function useCorrectableSessions(projectId: string, workerId: string) {
     useQuery({
       queryKey: queryKeys.correctable(projectId, workerId),
       queryFn: () => api.workerAttendanceSessions(projectId, workerId),
+    }),
+  );
+}
+
+// Milestone 09: dashboard, roster and map. The live channel invalidates these (src/realtime);
+// while it is paused they refetch every minute (dashboard data, never the phone's location).
+
+export function useProjectDashboard(projectId: string | null) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.dashboard(projectId ?? ''),
+      queryFn: () => api.projectDashboard(projectId ?? ''),
+      enabled: Boolean(projectId),
+    }),
+  );
+}
+
+export function useWorkforceRoster(projectId: string | null) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.workforce(projectId ?? ''),
+      queryFn: () => api.workforceRoster(projectId ?? ''),
+      enabled: Boolean(projectId),
+    }),
+  );
+}
+
+export function useProjectMap(projectId: string | null, enabled: boolean) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.projectMap(projectId ?? ''),
+      queryFn: () => api.projectMap(projectId ?? ''),
+      enabled: Boolean(projectId) && enabled,
     }),
   );
 }

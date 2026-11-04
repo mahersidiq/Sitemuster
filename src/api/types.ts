@@ -1,4 +1,5 @@
 import type {
+  BroadcastMessage,
   DeviceActivateRequest,
   DeviceActivateResponse,
   DeviceRenewResponse,
@@ -360,6 +361,16 @@ export interface SiteMusterApi {
   foremanCrew(projectId: string, companyId: string): Promise<CrewMember[]>;
   openVisitorVisits(projectId: string): Promise<OpenVisit[]>;
   workerAttendanceSessions(projectId: string, workerId: string): Promise<CorrectableSession[]>;
+  // Milestone 09: dashboard, roster and map (the server authorizes each read).
+  projectDashboard(projectId: string): Promise<ProjectDashboard>;
+  workforceRoster(projectId: string): Promise<WorkforceMember[]>;
+  /** Location roles only (owner, PM, superintendent, safety manager with MFA). */
+  projectMap(projectId: string): Promise<ProjectMap>;
+  /**
+   * The private Broadcast channel `project:{uuid}` (decision #19). Messages only say "something
+   * changed"; screens refetch authorized rows. Returns the unsubscribe function.
+   */
+  subscribeProject(projectId: string, listener: ProjectChannelListener): () => void;
 }
 
 export interface KioskRegistration {
@@ -393,6 +404,116 @@ export interface OpenVisit {
   purpose: string;
   checked_in_at: string;
   status: 'OPEN' | 'UNRESOLVED';
+}
+
+// Milestone 09 — dashboard, roster and map (all estimates; never a verified headcount).
+
+export type AttendanceSourceCode =
+  'GEOFENCE' | 'KIOSK_DYNAMIC_BADGE' | 'KIOSK_PRINTED_BADGE' | 'FOREMAN' | 'MANUAL';
+
+export interface ProjectCounts {
+  approved_roster: number;
+  estimated_onsite: number;
+  onsite_by_source: Partial<Record<AttendanceSourceCode, number>>;
+  manually_verified: number;
+  presence_unknown: number;
+  arriving: number;
+  unscheduled_pending: number;
+  departure_pending: number;
+  unresolved_sessions: number;
+  visitors_onsite: number;
+  visitors_unresolved: number;
+  evaluated_at: string;
+}
+
+export interface ProjectDashboard {
+  project: { id: string; name: string; status: ProjectStatus; iana_timezone: string };
+  counts: ProjectCounts;
+  today: { local_date: string; arrivals: number; departures: number };
+  companies: {
+    company_id: string | null;
+    company_name: string | null;
+    approved: number;
+    estimated_onsite: number;
+    manually_verified: number;
+    presence_unknown: number;
+  }[];
+  trades: { trade: string | null; approved: number; estimated_onsite: number }[];
+  approvals: { pending_enrollments: number; employer_pending: number };
+  can_view_map: boolean;
+  evaluated_at: string;
+}
+
+export type RosterPresence =
+  | 'ARRIVING'
+  | 'ONSITE_ESTIMATED'
+  | 'UNSCHEDULED_PENDING'
+  | 'PRESENCE_UNKNOWN'
+  | 'DEPARTURE_PENDING'
+  | 'OFFSITE'
+  | 'UNRESOLVED'
+  | 'NONE';
+
+export type TrackingHealth =
+  | 'ACTIVE'
+  | 'NO_PHONE'
+  | 'NOT_MONITORED'
+  | 'MONITORING_UNAVAILABLE'
+  | 'CREDENTIAL_EXPIRING'
+  | 'CREDENTIAL_EXPIRED';
+
+export interface WorkforceMember {
+  worker_id: string;
+  enrollment_id: string;
+  legal_name: string;
+  managed_identity: boolean;
+  company_id: string | null;
+  company_name: string | null;
+  trade: string | null;
+  employer_status: EmployerStatus;
+  presence: RosterPresence;
+  counted: boolean;
+  source: AttendanceSourceCode | null;
+  witnessed: boolean;
+  arrived_at: string | null;
+  last_seen_at: string | null;
+  session_status: string | null;
+  needs_review: boolean;
+  tracking: TrackingHealth;
+}
+
+export interface MapMarker {
+  worker_id: string;
+  legal_name: string;
+  company_name: string | null;
+  /** Rounded to about 11 m on the server; shown with its accuracy circle. */
+  lat: number;
+  lng: number;
+  accuracy_m: number;
+  observed_at: string;
+  expires_at: string;
+  /** Fresh when the server answered; the phone re-checks against the clock (useMarkerAges). */
+  fresh: boolean;
+}
+
+export interface ProjectMap {
+  site: {
+    center_lat: number;
+    center_lng: number;
+    radius_m: number;
+    exit_hysteresis_m: number;
+  } | null;
+  fresh_seconds: number;
+  markers: MapMarker[];
+  evaluated_at: string;
+}
+
+/** Status of the private project channel as screens show it. */
+export type ChannelStatus = 'SUBSCRIBED' | 'DISCONNECTED' | 'DENIED';
+
+export interface ProjectChannelListener {
+  onMessage(message: BroadcastMessage): void;
+  onStatus(status: ChannelStatus): void;
 }
 
 export interface CorrectableSession {

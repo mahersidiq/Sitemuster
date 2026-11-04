@@ -1,5 +1,6 @@
 -- Private Realtime Broadcast authorization (decision #19): receive-only for project staff (MFA)
--- and verified foremen of that project; never workers, outsiders or operators.
+-- who may read the whole roster; never foremen (the project topic carries every company's counts,
+-- decision #104), workers, outsiders or operators.
 begin;
 select plan(13);
 select tests.seed_world();
@@ -22,7 +23,7 @@ select ok(not app_private.can_receive_project_broadcast(tests.id('p_b1')), 'GC A
 select tests.authenticate_as(tests.id('u_a_super'), 'aal1');
 select ok(not app_private.can_receive_project_broadcast(tests.id('p_a1')), 'staff without MFA may not receive');
 select tests.authenticate_as(tests.id('u_foreman_a'), 'aal1');
-select ok(app_private.can_receive_project_broadcast(tests.id('p_a1')), 'verified foreman of an approved company may receive');
+select ok(not app_private.can_receive_project_broadcast(tests.id('p_a1')), 'a verified foreman does not receive the project-wide topic (decision #104)');
 select tests.authenticate_as(tests.id('u_worker_a1'), 'aal1');
 select ok(not app_private.can_receive_project_broadcast(tests.id('p_a1')), 'plain workers do not join the workforce channel');
 select tests.authenticate_as(tests.id('u_operator'));

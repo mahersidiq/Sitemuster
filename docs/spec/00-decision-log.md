@@ -304,3 +304,46 @@ Reason: CLAUDE.md "no data-loss outbox"; spec 07 "Kiosk offline during rush".
 - **Names.** When an accepted scan names a worker the kiosk's cached list does not know (approved at the gate after the kiosk opened), the list is reloaded.
 
 Reason: spec 02 "Kiosk device has unique device registration"; spec 07 printed-badge row.
+
+**104.** Private project Broadcast (Milestone 09):
+- **Who receives.** The project-wide topic `project:{uuid}` carries counts for every company, so only project staff who may read the whole roster receive it: owner, PM, superintendent, safety manager or kiosk attendant, with MFA. Foremen no longer join it (Milestone 02 allowed them). A foreman topic, if one is needed, is company-scoped.
+- **When it is sent.** Changes to presence, sessions, latest positions and visitor visits send `WORKFORCE_CHANGED`. Enrollments send `ENROLLMENT_CHANGED`. A project's configuration, status, name or time zone sends `PROJECT_CONFIG_CHANGED`. Each transaction sends ONE message per project and type, at commit, through a deferred constraint trigger, so the counts it carries are final.
+- **What it carries.** Only the contract keys: version, type, project, the four aggregate counts and at most 100 changed ids. An empty id list means "refetch everything".
+- **Version and delivery.** The version comes from one global sequence (monotonic, no per-project row lock at commit). `realtime.send` never raises, so a lost message can never undo attendance; clients resynchronize.
+- **Parsing.** Supabase adds a transport `id` to every payload. The client removes only that key, then validates strictly and drops anything else.
+
+Reason: spec 11 "Supabase private Realtime Broadcast contract" and decision #19; spec 02 "Foreman sees company-only roster"; safest for privacy.
+
+**105.** Worker map:
+- **Who sees it.** Owner, PM, superintendent or safety manager of the project, with MFA (`can_view_locations`). Never attendants, foremen (no foreman map in V1), other GCs or the platform operator.
+- **Which positions.** Only positions the reconciler kept (onsite, qualified, privacy-approved), not yet expired, of workers with an approved enrollment on that project.
+- **How they are shown.** Each position comes with its time and accuracy and is rounded to 4 decimal places (about 11 m). It is drawn with its accuracy circle and labelled "stale, not live" after `location_fresh_seconds`, judged on server time so a wrong phone clock cannot make it look live. Past its expiry it is hidden on the phone even before a refetch.
+- **Never shown.** The staff member's own location is never requested.
+- **Map failure.** A map that cannot render is replaced by a notice; the attendance numbers and the position list stay.
+- **Revocation.** When an enrollment stops being approved, or the employer is rejected, the worker's latest position is deleted at once (spec 03 "clear latest worker location visibility after … revocation"), so no direct read can show it. The deletion also sends WORKFORCE_CHANGED, and the map also refetches on ENROLLMENT_CHANGED.
+- **Moved site.** When a new configuration moves the site, the open map moves its view with it (review findings on PR #9).
+
+Reason: spec 01 "a stale map marker is not live"; spec 03 "latest_onsite_positions used for map only when fresh, authorized"; spec 09 location visibility; acceptance "maps failure retains attendance".
+
+**106.** Live updates on the phone (`ProjectLiveSync`):
+- **Messages.** Only messages newer than the last version seen count, and each refetches only the reads it names. A burst refetches at once, then at most once per 2 seconds.
+- **Dropped channel.** The screens show "Live updates paused". The phone refetches every minute and on returning to the app, and joins again after 5, 15, 30 and then 60 seconds.
+- **Joining again.** Every join (first or again) refetches everything, so a message missed while away is never lost.
+- **Refused join.** When the database refuses the join (access removed), the phone stops and refetches. The reads answer FORBIDDEN, and the screens hide what they showed.
+- **Offline line.** The offline line follows the latest failed attempt, not only the final error.
+- **One channel per app.** The app holds ONE live provider, above the navigator, for the selected project. The navigator can keep several copies of the staff tabs mounted; each copy reads the same live state.
+- **Fresh channel object.** supabase-js hands back the existing channel object for a topic it still knows, so a subscription creates its channel only after the previous one for that topic is removed. A second simultaneous subscription is told DISCONNECTED instead of hanging. The preview found this; a backend test covers it.
+- **Not location polling.** These timers refetch dashboard data. They are not location polling: the phone's own location is never requested.
+
+Reason: spec 11 "React Query invalidates/refetches authorized rows after reconnect/notification; treat DB as source of truth"; acceptance "realtime reconnect resync".
+
+**107.** Dashboard and roster rules:
+- **Selected project.** The person picks it explicitly; it is picked automatically when they have one project. It is remembered per person on the phone (project id only), forgotten at sign-out, and dropped when the person can no longer open the project.
+- **Counts.** The counts are decision #87's live counts, now computed in one place (`app_private.live_tracks`) for the counts, the dashboard, the per-company and per-trade lines and the roster.
+- **Today.** "Today" is the project-local calendar day.
+- **Roster presence.** A stale GPS worker is shown as "presence unknown", never as gone.
+- **Tracking health.** Each worker shows one of: `NO_PHONE`, `NOT_MONITORED`, `MONITORING_UNAVAILABLE`, `CREDENTIAL_EXPIRING` (≤ 3 days, spec 03) or `CREDENTIAL_EXPIRED` (also when no credential is left).
+- **Last signal.** "Last signal" is an absolute time in the project's zone.
+- **Foreman kiosk grants.** The screen for granting a foreman kiosk use is not in Milestone 09's scope. It moves to Milestone 10 with the other foreman workflows; the database grant and the server rule already exist.
+
+Reason: spec 01 navigation ("explicit organization/project context selector and cache wipe on switch/revocation") and "Availability & status UX"; spec 04 aggregations.

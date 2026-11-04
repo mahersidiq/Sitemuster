@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BroadcastSchema, projectTopic } from './broadcast.ts';
+import { BroadcastSchema, parseBroadcastPayload, projectTopic } from './broadcast.ts';
 
 const example = {
   schema_version: 1,
@@ -42,5 +42,19 @@ describe('BroadcastSchema (decision #19)', () => {
   it('builds private project topics only from valid UUIDs', () => {
     expect(projectTopic(example.project_id)).toBe(`project:${example.project_id}`);
     expect(() => projectTopic('project-b')).toThrow();
+  });
+
+  it('reads a realtime.send payload: only the transport id is removed, the rest stays strict', () => {
+    const sent = { ...example, id: '99999999-9999-4999-8999-999999999999' };
+    expect(parseBroadcastPayload(sent)).toEqual(example);
+    expect(parseBroadcastPayload(example)).toEqual(example);
+    expect(parseBroadcastPayload({ ...sent, legal_name: 'Ana Acosta' })).toBeNull();
+    expect(
+      parseBroadcastPayload({ ...sent, counts: { estimated_onsite: 1, lng: -95.3 } }),
+    ).toBeNull();
+    expect(parseBroadcastPayload({ ...sent, id: 42 })).toBeNull();
+    expect(parseBroadcastPayload(null)).toBeNull();
+    expect(parseBroadcastPayload([example])).toBeNull();
+    expect(parseBroadcastPayload({ ...example, schema_version: 2 })).toBeNull();
   });
 });
