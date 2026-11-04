@@ -75,6 +75,40 @@ describe('redact', () => {
   });
 });
 
+describe('serialized diagnostics (review finding on PR #1)', () => {
+  it('redacts coordinates inside JSON-serialized messages', () => {
+    const message = JSON.stringify({
+      coords: { latitude: 29.7604, longitude: -95.3698 },
+      ok: true,
+    });
+    const out = redactString(message);
+    expect(out).not.toContain('29.7604');
+    expect(out).not.toContain('-95.3698');
+    expect(JSON.parse(out)).toEqual({ coords: '[REDACTED]', ok: true });
+  });
+
+  it('redacts keyed coordinates in non-JSON text and nested JSON strings', () => {
+    for (const text of [
+      'fix lat=29.7604 lng=-95.3698 acc=12',
+      "position {'lat': 29.7604, 'lng': -95.3698}",
+      'Error: bad payload {"latitude":29.76,"longitude":-95.37',
+    ]) {
+      const out = redactString(text);
+      expect(out, text).not.toMatch(/29\.76|95\.3/);
+    }
+    const nested = redact({
+      breadcrumb: JSON.stringify({ data: JSON.stringify({ lat: 29.7604 }) }),
+    });
+    expect(JSON.stringify(nested)).not.toContain('29.7604');
+  });
+
+  it('keeps ordinary numbers in diagnostics', () => {
+    expect(redactString('retry 3 of 5 after 1.5 s (latency 250 ms)')).toBe(
+      'retry 3 of 5 after 1.5 s (latency 250 ms)',
+    );
+  });
+});
+
 describe('coordinate key helpers', () => {
   it('detects and strips coordinate keys at any depth', () => {
     const payload = { uuid: 'u', extras: { site: { lat: 1, lng: 2 } }, accuracy: 9 };

@@ -66,6 +66,7 @@ function ProjectDetailBody() {
               {t('projects.number', { number: data.project.project_number })}
             </Text>
           ) : null}
+          <WorkforceCard detail={data} />
           <SiteCard detail={data} />
           <ScheduleCard detail={data} />
           <HistoryCard detail={data} />
@@ -80,6 +81,39 @@ function ProjectDetailBody() {
         testID="project-back"
       />
     </Screen>
+  );
+}
+
+function WorkforceCard({ detail }: { detail: ProjectDetail }) {
+  const { t } = useTranslation();
+  const { permissions, project } = detail;
+  if (!permissions.can_view_roster && !permissions.can_run_orientation) return null;
+  return (
+    <Card testID="workforce-card">
+      <Heading>{t('project.workforceTitle')}</Heading>
+      {permissions.can_run_orientation && project.status === 'ACTIVE' ? (
+        <AppButton
+          label={t('project.runOrientation')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/orientation', params: { id: project.id } })
+          }
+          testID="run-orientation"
+        />
+      ) : null}
+      {permissions.can_run_orientation && project.status !== 'ACTIVE' ? (
+        <Text style={styles.hint}>{t('project.orientationNeedsActive')}</Text>
+      ) : null}
+      {permissions.can_view_roster ? (
+        <AppButton
+          variant="secondary"
+          label={t('project.workersAndApprovals')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/workers', params: { id: project.id } })
+          }
+          testID="open-workers"
+        />
+      ) : null}
+    </Card>
   );
 }
 

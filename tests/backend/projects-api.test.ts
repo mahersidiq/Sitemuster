@@ -66,7 +66,12 @@ describe('project API (app client → PostgREST → Postgres)', () => {
       local_end_time: '04:00',
       crosses_midnight: true,
     });
-    expect(v1.permissions).toEqual({ can_configure: true, can_assign_staff: true });
+    expect(v1.permissions).toEqual({
+      can_configure: true,
+      can_assign_staff: true,
+      can_run_orientation: true,
+      can_view_roster: true,
+    });
     expect(v1.staff.map((s) => s.role)).toEqual(['PM']);
 
     const check = await api.checkSite({
@@ -170,7 +175,12 @@ describe('project API (app client → PostgREST → Postgres)', () => {
     expect(invitation).toMatchObject({ project_id: projectId, project_role: 'SUPER' });
     await invitee.acceptInvitation(invitation?.invitation_id ?? '');
     const seen = await invitee.getProject(projectId);
-    expect(seen.permissions).toEqual({ can_configure: true, can_assign_staff: false });
+    expect(seen.permissions).toEqual({
+      can_configure: true,
+      can_assign_staff: false,
+      can_run_orientation: true,
+      can_view_roster: true,
+    });
     expect(seen.invitations).toEqual([]);
     await expect(invitee.acceptInvitation(invitation?.invitation_id ?? '')).rejects.toMatchObject({
       code: 'INVITATION_NOT_ACTIVE',

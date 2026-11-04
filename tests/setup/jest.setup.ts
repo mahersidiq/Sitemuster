@@ -103,3 +103,55 @@ jest.mock('expo-crypto', () => ({
     return new Uint8Array(randomBytes(length));
   },
 }));
+
+// expo-camera: tests drive scanning through the typed-code fallback; permission is configurable.
+type CameraGlobals = typeof globalThis & { __cameraGranted?: boolean };
+jest.mock('expo-camera', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react') as typeof import('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { View } = require('react-native') as typeof import('react-native');
+  return {
+    CameraView: (props: { testID?: string }) => React.createElement(View, { testID: props.testID }),
+    useCameraPermissions: () => [
+      { granted: (globalThis as CameraGlobals).__cameraGranted ?? true, canAskAgain: true },
+      jest.fn(),
+    ],
+  };
+});
+
+// QR rendering: expose the encoded value as text so tests can assert exactly what is shown.
+jest.mock('react-native-qrcode-svg', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react') as typeof import('react');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Text } = require('react-native') as typeof import('react-native');
+  return {
+    __esModule: true,
+    // Like the real component, hand back a ref on every render (catches render loops in callers).
+    default: (props: { value: string; getRef?: (ref: unknown) => void }) => {
+      props.getRef?.({ toDataURL: (callback: (png: string) => void) => callback('iVBORw0KGgo=') });
+      return React.createElement(Text, { testID: 'qr-value' }, props.value);
+    },
+  };
+});
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(async () => true),
+  shareAsync: jest.fn(async () => undefined),
+}));
+
+jest.mock('expo-file-system', () => ({
+  Paths: { cache: 'cache' },
+  File: jest.fn().mockImplementation(() => ({
+    exists: false,
+    uri: 'file:///cache/qr.png',
+    create: jest.fn(),
+    delete: jest.fn(),
+    write: jest.fn(async () => undefined),
+  })),
+}));
+
+beforeEach(() => {
+  (globalThis as CameraGlobals).__cameraGranted = true;
+});

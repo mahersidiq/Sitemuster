@@ -416,6 +416,15 @@ verify_jwt = true
 [functions.address-resolve]
 verify_jwt = true
 
+[functions.orientation-session]
+verify_jwt = true
+
+[functions.enrollment-bulk-approve]
+verify_jwt = true
+
+[functions.device-activate]
+verify_jwt = true
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false

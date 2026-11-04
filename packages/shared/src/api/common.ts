@@ -21,6 +21,13 @@ export const ApiErrorCodeSchema = z.enum([
   'CONFIGURATION_ERROR',
   'CONSENT_NOTICE_NOT_APPROVED',
   'INTERNAL_ERROR',
+  // Domain refusals passed through from database functions (Milestone 05).
+  'IDEMPOTENCY_KEY_REQUIRED',
+  'PROJECT_NOT_ACTIVE',
+  'ORIENTATION_SESSION_CLOSED',
+  'NO_ENROLLMENTS',
+  'TOO_MANY_ENROLLMENTS',
+  'WORKER_PROFILE_REQUIRED',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

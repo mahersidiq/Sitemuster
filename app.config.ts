@@ -133,6 +133,16 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
           },
         },
       ],
+      // QR scanning only (orientation codes and kiosk badges); no microphone.
+      [
+        'expo-camera',
+        {
+          cameraPermission:
+            'SiteMuster uses the camera only to scan orientation and badge QR codes.',
+          microphonePermission: false,
+          recordAudioAndroid: false,
+        },
+      ],
       // Apple Maps on iOS (no iOS Google key, by design); Google Maps on Android.
       [
         'react-native-maps',
@@ -149,6 +159,11 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
         },
       ],
     ],
+    // Native permission texts in English and Spanish (docs/spec/08-i18n.md).
+    locales: {
+      en: './locales/native/en.json',
+      es: './locales/native/es.json',
+    },
     extra: {
       appEnv,
       ...(process.env.EAS_PROJECT_ID ? { eas: { projectId: process.env.EAS_PROJECT_ID } } : {}),

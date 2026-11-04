@@ -11,7 +11,12 @@ export default function StaffMoreScreen() {
   const { t } = useTranslation();
   const { api } = useAuth();
   return (
-    <ShellScreen testID="staff-more" title={t('staff.more.title')} body={t('staff.more.body')}>
+    <ShellScreen
+      testID="staff-more"
+      preview={api === null}
+      title={t('staff.more.title')}
+      body={t('staff.more.body')}
+    >
       {api ? (
         <AppButton
           variant="secondary"

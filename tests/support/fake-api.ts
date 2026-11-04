@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import {
   normalizeWorkWindows,
   TRACKING_DEFAULTS,
+  type DeviceActivateRequest,
+  type DeviceActivateResponse,
   type Locale,
   type ProjectStaffRole,
   type ProjectStatus,
@@ -12,6 +14,19 @@ import {
 import type { Access } from '../../src/auth/access';
 import {
   ApiError,
+  type BulkResult,
+  type EmergencyContact,
+  type EnrollmentStatus,
+  type EmployerStatus,
+  type JoinInput,
+  type ManagedWorkerInput,
+  type MyEnrollment,
+  type Notice,
+  type OrientationPreview,
+  type OrientationSessionInfo,
+  type OrientationSessionSummary,
+  type PrintedBadge,
+  type RosterEntry,
   type CreateProjectInput,
   type InviteStaffInput,
   type MyInvitation,
@@ -81,11 +96,73 @@ interface Invitation {
  * One signed-in user's view of a shared fake server. Pass another world as `shared` to model a
  * second user (e.g. an invitee) on the same data.
  */
+interface FakeSession extends OrientationSessionInfo {
+  open: boolean;
+  completed: number;
+}
+
+interface FakeWorker {
+  id: string;
+  userId: string | null;
+  legalName: string;
+  managed: boolean;
+  emergency: EmergencyContact | null;
+}
+
+interface FakeEnrollment {
+  id: string;
+  projectId: string;
+  workerId: string;
+  companyId: string;
+  trade: string | null;
+  status: EnrollmentStatus;
+  employer: EmployerStatus;
+  consent: 'DIGITAL' | 'SUPERVISED';
+  oriented: boolean;
+}
+
+/** Deterministic notice per language (draft, like the real seeded drafts). */
+export const FAKE_NOTICES: Record<Locale, Notice> = {
+  'en-US': {
+    id: '33333333-0000-4000-8000-0000000000e1',
+    document_id: 'WORKER_LOCATION_DISCLOSURE_EN_V1',
+    version: 1,
+    locale: 'en-US',
+    review_status: 'DRAFT_REQUIRES_HUMAN_REVIEW',
+    content: 'DRAFT notice: this project keeps an estimated attendance record.',
+    content_hash: 'e'.repeat(64),
+  },
+  'es-US': {
+    id: '33333333-0000-4000-8000-0000000000e2',
+    document_id: 'WORKER_LOCATION_DISCLOSURE_ES_V1',
+    version: 1,
+    locale: 'es-US',
+    review_status: 'DRAFT_REQUIRES_HUMAN_REVIEW',
+    content: 'Aviso BORRADOR: este proyecto lleva un registro estimado de asistencia.',
+    content_hash: 'f'.repeat(64),
+  },
+};
+
+/** 32-byte rotating secret used by fake sessions (base64url). */
+export const FAKE_ROTATING_SECRET = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA';
+export const FAKE_BADGE_SECRET = 'ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8';
+
+/**
+ * One signed-in user's view of a shared fake server. Pass another world as `shared` to model a
+ * second user (e.g. an invitee) on the same data.
+ */
 export class FakeWorld {
   readonly orgs: { id: string; name: string; idempotencyKey: string }[];
   readonly projects: Project[];
   readonly invitations: Invitation[];
+  readonly sessions: FakeSession[];
+  readonly workers: FakeWorker[];
+  readonly enrollments: FakeEnrollment[];
+  readonly companies: { id: string; name: string; projectId: string }[];
+  readonly printedBadges: { id: string; workerId: string; active: boolean }[];
+  readonly joinPasses: Map<string, { sessionId: string; userId: string }>;
   readonly calls: string[] = [];
+  device: DeviceActivateResponse | null = null;
 
   constructor(
     public access: Access,
@@ -95,6 +172,48 @@ export class FakeWorld {
     this.orgs = shared?.orgs ?? [];
     this.projects = shared?.projects ?? [];
     this.invitations = shared?.invitations ?? [];
+    this.sessions = shared?.sessions ?? [];
+    this.workers = shared?.workers ?? [];
+    this.enrollments = shared?.enrollments ?? [];
+    this.companies = shared?.companies ?? [];
+    this.printedBadges = shared?.printedBadges ?? [];
+    this.joinPasses = shared?.joinPasses ?? new Map();
+  }
+
+  /** Test helper: a worker (with or without an app account) enrolled in a project. */
+  addEnrollment(
+    projectId: string,
+    legalName: string,
+    status: EnrollmentStatus = 'PENDING',
+    userId: string | null = null,
+  ): FakeEnrollment {
+    const worker: FakeWorker = {
+      id: randomUUID(),
+      userId,
+      legalName,
+      managed: userId === null,
+      emergency: null,
+    };
+    this.workers.push(worker);
+    const company = this.companies.find((c) => c.projectId === projectId) ?? {
+      id: randomUUID(),
+      name: 'Acme Concrete',
+      projectId,
+    };
+    if (!this.companies.includes(company)) this.companies.push(company);
+    const enrollment: FakeEnrollment = {
+      id: randomUUID(),
+      projectId,
+      workerId: worker.id,
+      companyId: company.id,
+      trade: 'Concrete',
+      status,
+      employer: 'PENDING_CONFIRMATION',
+      consent: userId ? 'DIGITAL' : 'SUPERVISED',
+      oriented: true,
+    };
+    this.enrollments.push(enrollment);
+    return enrollment;
   }
 
   addOrganization(name: string, role: 'OWNER' | 'ADMIN' = 'OWNER'): string {
@@ -303,7 +422,12 @@ export class FakeSiteMusterApi implements SiteMusterApi {
               expires_at: '2026-11-11T12:00:00Z',
             }))
         : [],
-      permissions: { can_configure: this.canConfigure(p), can_assign_staff: canAssign },
+      permissions: {
+        can_configure: this.canConfigure(p),
+        can_assign_staff: canAssign,
+        can_run_orientation: this.canRunOrientation(p.id),
+        can_view_roster: this.canViewRoster(p.id),
+      },
     };
   }
 
@@ -585,5 +709,401 @@ export class FakeSiteMusterApi implements SiteMusterApi {
       attribution: 'Development fake (no provider)',
       provider: 'development_fake' as const,
     };
+  }
+
+  // ---------------------------------------------------------------- Milestone 05
+
+  private canRunOrientation(projectId: string) {
+    const project = this.world.projects.find((p) => p.id === projectId);
+    if (!project) return false;
+    const role = this.projectRole(projectId);
+    return (
+      this.isOrgAdmin(project.organizationId) ||
+      role === 'PM' ||
+      role === 'SUPER' ||
+      role === 'SAFETY'
+    );
+  }
+
+  private canViewRoster(projectId: string) {
+    return this.canRunOrientation(projectId) || this.projectRole(projectId) === 'ATTENDANT';
+  }
+
+  private myWorker() {
+    return this.world.workers.find((w) => w.userId === this.world.access.user_id) ?? null;
+  }
+
+  private sessionFromCode(code: string): FakeSession {
+    const [kind, sessionId] = code.split('.');
+    const session = this.world.sessions.find((s) => s.session_id === sessionId);
+    if ((kind !== 'SMO1' && kind !== 'SMS1') || !session)
+      throw new ApiError('ORIENTATION_CODE_INVALID');
+    if (!session.open) throw new ApiError('ORIENTATION_SESSION_CLOSED');
+    return session;
+  }
+
+  private checkDetails(input: {
+    legalName: string;
+    companyId: string | null;
+    companyName: string;
+    emergencyName: string;
+    emergencyPhone: string;
+  }) {
+    if (!input.legalName.trim()) throw new ApiError('NAME_REQUIRED');
+    if (!input.emergencyName.trim() || input.emergencyPhone.trim().length < 7) {
+      throw new ApiError('EMERGENCY_CONTACT_REQUIRED');
+    }
+    if (!input.companyId && !input.companyName.trim()) throw new ApiError('COMPANY_REQUIRED');
+  }
+
+  private companyFor(projectId: string, companyId: string | null, companyName: string) {
+    if (companyId) {
+      const found = this.world.companies.find(
+        (c) => c.id === companyId && c.projectId === projectId,
+      );
+      if (!found) throw new ApiError('COMPANY_NOT_ON_PROJECT');
+      return found.id;
+    }
+    const existing = this.world.companies.find(
+      (c) => c.projectId === projectId && c.name.toLowerCase() === companyName.trim().toLowerCase(),
+    );
+    if (existing) return existing.id;
+    const created = { id: randomUUID(), name: companyName.trim(), projectId };
+    this.world.companies.push(created);
+    return created.id;
+  }
+
+  async startOrientation(projectId: string, _idempotencyKey: string) {
+    this.before('startOrientation');
+    if (!this.canRunOrientation(projectId)) throw new ApiError('FORBIDDEN');
+    const project = this.world.projects.find((p) => p.id === projectId);
+    if (project?.status !== 'ACTIVE') throw new ApiError('PROJECT_NOT_ACTIVE');
+    for (const s of this.world.sessions) if (s.project_id === projectId) s.open = false;
+    const session: FakeSession = {
+      session_id: randomUUID(),
+      project_id: projectId,
+      starts_at: '2026-11-04T14:00:00Z',
+      expires_at: '2026-11-04T16:00:00Z',
+      rotating_secret: FAKE_ROTATING_SECRET,
+      static_code: 'S'.repeat(43),
+      open: true,
+      completed: 0,
+    };
+    this.world.sessions.push(session);
+    return this.after({ ...session });
+  }
+
+  async getOrientationSession(sessionId: string) {
+    this.before('getOrientationSession');
+    const session = this.world.sessions.find((s) => s.session_id === sessionId);
+    if (!session || !this.canRunOrientation(session.project_id)) throw new ApiError('FORBIDDEN');
+    if (!session.open) throw new ApiError('ORIENTATION_SESSION_CLOSED');
+    return { ...session };
+  }
+
+  async listOrientationSessions(projectId: string): Promise<OrientationSessionSummary[]> {
+    this.before('listOrientationSessions');
+    if (!this.canRunOrientation(projectId)) throw new ApiError('FORBIDDEN');
+    return this.world.sessions
+      .filter((s) => s.project_id === projectId)
+      .reverse()
+      .map((s) => ({
+        session_id: s.session_id,
+        starts_at: s.starts_at,
+        expires_at: s.expires_at,
+        open: s.open,
+        completed_count: s.completed,
+      }));
+  }
+
+  async closeOrientation(projectId: string, sessionId: string) {
+    this.before('closeOrientation');
+    if (!this.canRunOrientation(projectId)) throw new ApiError('FORBIDDEN');
+    const session = this.world.sessions.find((s) => s.session_id === sessionId);
+    if (session) session.open = false;
+  }
+
+  async previewOrientation(code: string, locale: Locale): Promise<OrientationPreview> {
+    this.before('previewOrientation');
+    const session = this.sessionFromCode(code);
+    const project = this.world.projects.find((p) => p.id === session.project_id);
+    const worker = this.myWorker();
+    const existing = worker
+      ? this.world.enrollments.find(
+          (e) =>
+            e.workerId === worker.id &&
+            e.projectId === session.project_id &&
+            e.status !== 'REJECTED',
+        )
+      : undefined;
+    const joinToken = randomUUID().replace(/-/g, '').padEnd(43, 'J');
+    this.world.joinPasses.set(joinToken, {
+      sessionId: session.session_id,
+      userId: this.world.access.user_id,
+    });
+    return {
+      join_token: joinToken,
+      session_id: session.session_id,
+      project_id: session.project_id,
+      project_name: project?.name ?? '',
+      organization_name: this.world.orgs.find((o) => o.id === project?.organizationId)?.name ?? '',
+      session_expires_at: session.expires_at,
+      notice: FAKE_NOTICES[locale],
+      notice_acceptable: true,
+      companies: this.world.companies
+        .filter((c) => c.projectId === session.project_id)
+        .map(({ id, name }) => ({ id, name })),
+      profile: worker ? { legal_name: worker.legalName, primary_language: locale } : null,
+      existing_enrollment: existing
+        ? { enrollment_status: existing.status, employer_status: existing.employer }
+        : null,
+    };
+  }
+
+  async completeOrientation(input: JoinInput) {
+    this.before('completeOrientation');
+    const pass = this.world.joinPasses.get(input.joinToken);
+    if (!pass || pass.userId !== this.world.access.user_id) {
+      throw new ApiError('ORIENTATION_CODE_INVALID');
+    }
+    const session = this.world.sessions.find((s) => s.session_id === pass.sessionId);
+    if (!session?.open) throw new ApiError('ORIENTATION_SESSION_CLOSED');
+    this.checkDetails(input);
+    if (FAKE_NOTICES[input.locale].id !== input.noticeVersionId)
+      throw new ApiError('NOTICE_OUTDATED');
+    if (!input.accept) throw new ApiError('CONSENT_REQUIRED');
+    let worker = this.myWorker();
+    if (!worker) {
+      worker = {
+        id: randomUUID(),
+        userId: this.world.access.user_id,
+        legalName: input.legalName,
+        managed: false,
+        emergency: null,
+      };
+      this.world.workers.push(worker);
+      this.world.access = { ...this.world.access, worker_profile_id: worker.id };
+    }
+    worker.legalName = input.legalName.trim();
+    worker.emergency = {
+      name: input.emergencyName.trim(),
+      phone: input.emergencyPhone.trim(),
+      relationship: input.emergencyRelationship.trim() || null,
+    };
+    const companyId = this.companyFor(session.project_id, input.companyId, input.companyName);
+    session.completed += 1;
+    let enrollment = this.world.enrollments.find(
+      (e) =>
+        e.workerId === worker.id &&
+        e.projectId === session.project_id &&
+        (e.status === 'PENDING' || e.status === 'APPROVED'),
+    );
+    if (!enrollment) {
+      enrollment = {
+        id: randomUUID(),
+        projectId: session.project_id,
+        workerId: worker.id,
+        companyId,
+        trade: input.trade.trim() || null,
+        status: 'PENDING',
+        employer: 'PENDING_CONFIRMATION',
+        consent: 'DIGITAL',
+        oriented: true,
+      };
+      this.world.enrollments.push(enrollment);
+    }
+    return this.after({ enrollment_id: enrollment.id, enrollment_status: enrollment.status });
+  }
+
+  async myEnrollments(): Promise<MyEnrollment[]> {
+    this.before('myEnrollments');
+    const worker = this.myWorker();
+    if (!worker) return [];
+    return this.world.enrollments
+      .filter((e) => e.workerId === worker.id)
+      .map((e) => {
+        const project = this.world.projects.find((p) => p.id === e.projectId);
+        return {
+          enrollment_id: e.id,
+          project_id: e.projectId,
+          project_name: project?.name ?? '',
+          organization_name:
+            this.world.orgs.find((o) => o.id === project?.organizationId)?.name ?? '',
+          project_status: project?.status ?? 'ACTIVE',
+          iana_timezone: project?.timeZone ?? 'America/Chicago',
+          enrollment_status: e.status,
+          employer_status: e.employer,
+          company_name: this.world.companies.find((c) => c.id === e.companyId)?.name ?? null,
+          trade: e.trade,
+          orientation_completed_at: '2026-11-04T14:30:00Z',
+        };
+      });
+  }
+
+  async getMyEmergencyContact() {
+    this.before('getMyEmergencyContact');
+    return this.myWorker()?.emergency ?? null;
+  }
+
+  async updateMyEmergencyContact(contact: EmergencyContact) {
+    this.before('updateMyEmergencyContact');
+    const worker = this.myWorker();
+    if (!worker) throw new ApiError('WORKER_PROFILE_REQUIRED');
+    if (!contact.name.trim() || contact.phone.trim().length < 7)
+      throw new ApiError('EMERGENCY_CONTACT_REQUIRED');
+    worker.emergency = { ...contact };
+  }
+
+  async listEnrollments(projectId: string): Promise<RosterEntry[]> {
+    this.before('listEnrollments');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    return this.world.enrollments
+      .filter((e) => e.projectId === projectId)
+      .map((e) => {
+        const worker = this.world.workers.find((w) => w.id === e.workerId);
+        return {
+          enrollment_id: e.id,
+          worker_id: e.workerId,
+          legal_name: worker?.legalName ?? '',
+          managed_identity: worker?.managed ?? false,
+          company_id: e.companyId,
+          company_name: this.world.companies.find((c) => c.id === e.companyId)?.name ?? null,
+          trade: e.trade,
+          enrollment_status: e.status,
+          employer_status: e.employer,
+          orientation_completed_at: '2026-11-04T14:30:00Z',
+          consent_method: e.consent,
+          printed_badge_active: this.world.printedBadges.some(
+            (b) => b.workerId === e.workerId && b.active,
+          ),
+          created_at: '2026-11-04T14:30:00Z',
+        };
+      });
+  }
+
+  async bulkApprove(projectId: string, enrollmentIds: string[]): Promise<BulkResult[]> {
+    this.before('bulkApprove');
+    if (!this.canRunOrientation(projectId)) throw new ApiError('FORBIDDEN');
+    if (enrollmentIds.length > 100) throw new ApiError('TOO_MANY_ENROLLMENTS');
+    return [...new Set(enrollmentIds)].map((id) => {
+      const e = this.world.enrollments.find((x) => x.id === id && x.projectId === projectId);
+      if (!e) return { enrollment_id: id, result: 'NOT_FOUND' };
+      if (e.status === 'APPROVED') return { enrollment_id: id, result: 'ALREADY_APPROVED' };
+      if (e.status !== 'PENDING') return { enrollment_id: id, result: 'NOT_PENDING' };
+      if (!e.oriented) return { enrollment_id: id, result: 'ORIENTATION_MISSING' };
+      e.status = 'APPROVED';
+      return { enrollment_id: id, result: 'APPROVED' };
+    });
+  }
+
+  async confirmEmployer(
+    projectId: string,
+    enrollmentIds: string[],
+    decision: 'VERIFIED' | 'REJECTED',
+  ) {
+    this.before('confirmEmployer');
+    if (!this.canRunOrientation(projectId)) throw new ApiError('FORBIDDEN');
+    return enrollmentIds.map((id) => {
+      const e = this.world.enrollments.find((x) => x.id === id && x.projectId === projectId);
+      if (!e) return { enrollment_id: id, result: 'NOT_FOUND' };
+      if (e.employer === decision) return { enrollment_id: id, result: 'UNCHANGED' };
+      e.employer = decision;
+      return { enrollment_id: id, result: decision };
+    });
+  }
+
+  async decideEnrollment(enrollmentId: string, decision: 'REJECTED' | 'REVOKED', reason: string) {
+    this.before('decideEnrollment');
+    const e = this.world.enrollments.find((x) => x.id === enrollmentId);
+    if (!e || !this.canRunOrientation(e.projectId)) throw new ApiError('FORBIDDEN');
+    if (reason.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    if (decision === 'REJECTED' && e.status === 'PENDING') e.status = 'REJECTED';
+    else if (decision === 'REVOKED' && e.status === 'APPROVED') e.status = 'REVOKED';
+    else throw new ApiError('INVALID_DECISION');
+  }
+
+  async getProjectNotice(projectId: string, locale: Locale) {
+    this.before('getProjectNotice');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    return { notice: FAKE_NOTICES[locale], notice_acceptable: true };
+  }
+
+  async createManagedWorker(input: ManagedWorkerInput) {
+    this.before('createManagedWorker');
+    if (!this.canViewRoster(input.projectId)) throw new ApiError('FORBIDDEN');
+    this.checkDetails(input);
+    if (FAKE_NOTICES[input.locale].id !== input.noticeVersionId)
+      throw new ApiError('NOTICE_OUTDATED');
+    if (!input.acknowledged) throw new ApiError('CONSENT_REQUIRED');
+    const companyId = this.companyFor(input.projectId, input.companyId, input.companyName);
+    const worker: FakeWorker = {
+      id: randomUUID(),
+      userId: null,
+      legalName: input.legalName.trim(),
+      managed: true,
+      emergency: {
+        name: input.emergencyName,
+        phone: input.emergencyPhone,
+        relationship: input.emergencyRelationship || null,
+      },
+    };
+    this.world.workers.push(worker);
+    const enrollment: FakeEnrollment = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      workerId: worker.id,
+      companyId,
+      trade: input.trade.trim() || null,
+      status: 'PENDING',
+      employer: 'PENDING_CONFIRMATION',
+      consent: 'SUPERVISED',
+      oriented: true,
+    };
+    this.world.enrollments.push(enrollment);
+    return { worker_id: worker.id, enrollment_id: enrollment.id };
+  }
+
+  async issuePrintedBadge(projectId: string, workerId: string): Promise<PrintedBadge> {
+    this.before('issuePrintedBadge');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    if (
+      !this.world.enrollments.some(
+        (e) => e.projectId === projectId && e.workerId === workerId && e.status === 'APPROVED',
+      )
+    ) {
+      throw new ApiError('ENROLLMENT_NOT_APPROVED');
+    }
+    for (const b of this.world.printedBadges) if (b.workerId === workerId) b.active = false;
+    const badge = { id: randomUUID(), workerId, active: true };
+    this.world.printedBadges.push(badge);
+    return {
+      badge_id: badge.id,
+      code: `SMP1.${'P'.repeat(32)}`,
+      issued_at: '2026-11-04T15:00:00Z',
+    };
+  }
+
+  async revokePrintedBadge(projectId: string, badgeId: string, reason: string) {
+    this.before('revokePrintedBadge');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    if (reason.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    const badge = this.world.printedBadges.find((b) => b.id === badgeId);
+    if (badge) badge.active = false;
+  }
+
+  async activateDevice(_input: DeviceActivateRequest): Promise<DeviceActivateResponse> {
+    this.before('activateDevice');
+    if (!this.myWorker()) throw new ApiError('WORKER_PROFILE_REQUIRED');
+    const previous = this.world.device?.device_id ?? null;
+    this.world.device = {
+      schema_version: 1,
+      request_id: randomUUID(),
+      device_id: randomUUID(),
+      replaced_device_id: previous,
+      badge_secret: FAKE_BADGE_SECRET,
+      upload_token: 'T'.repeat(43),
+      upload_expires_at: '2026-12-04T00:00:00Z',
+    };
+    return this.world.device;
   }
 }

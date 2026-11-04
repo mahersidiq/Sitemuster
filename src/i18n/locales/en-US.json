@@ -158,7 +158,7 @@
   },
   "access": {
     "joinTitle": "Join your project",
-    "joinBody": "You are signed in. To join a jobsite, scan the orientation QR code shown by your superintendent. Joining a project arrives in the next update.",
+    "joinBody": "You are signed in. To join a jobsite, scan the orientation QR shown by your superintendent or printed at the site.",
     "noOrgTitle": "No organization yet",
     "noOrgBody": "Your staff account is verified. Create your company's organization, or check whether your company has invited you.",
     "operatorTitle": "Operator accounts cannot use the mobile app",
@@ -203,7 +203,25 @@
     "DELEGATION_REQUIRES_ORG_ADMIN": "Only an organization owner or admin can give these extra permissions.",
     "INVITATION_NOT_FOUND": "This invitation wasn't found. It may be for a different email.",
     "INVITATION_NOT_ACTIVE": "This invitation was already used, cancelled or has expired.",
-    "SENSITIVE_CHANGE_REQUIRES_CONFIRMATION": "This change needs your confirmation."
+    "SENSITIVE_CHANGE_REQUIRES_CONFIRMATION": "This change needs your confirmation.",
+    "ORIENTATION_CODE_INVALID": "That is not a valid orientation code. Scan the code on the supervisor's screen again.",
+    "ORIENTATION_CODE_EXPIRED": "That code has changed. Scan the code on the supervisor's screen again. If it keeps failing, check the phone's date and time.",
+    "ORIENTATION_SESSION_CLOSED": "This orientation session has ended. Ask the supervisor to start a new one.",
+    "PROJECT_NOT_ACTIVE": "This project is not active, so workers cannot join it right now.",
+    "NOTICE_OUTDATED": "The notice was updated. Go back and read the current version.",
+    "NOTICE_UNAVAILABLE": "The project notice is not available. Ask the supervisor.",
+    "CONSENT_REQUIRED": "You must read and acknowledge the notice to join.",
+    "CONSENT_NOTICE_NOT_APPROVED": "This notice is not approved yet, so joining is not possible here.",
+    "COMPANY_REQUIRED": "Choose or type your employer.",
+    "COMPANY_NOT_ON_PROJECT": "That company is not on this project. Choose another or type the name.",
+    "EMERGENCY_CONTACT_REQUIRED": "Enter an emergency contact name and phone number.",
+    "TRADE_TOO_LONG": "The trade can be at most 100 characters.",
+    "NO_ENROLLMENTS": "Select at least one worker.",
+    "TOO_MANY_ENROLLMENTS": "Select at most 100 workers at a time.",
+    "INVALID_DECISION": "That action is not possible for this worker's current status.",
+    "ENROLLMENT_NOT_APPROVED": "This worker must be approved first.",
+    "WORKER_PROFILE_REQUIRED": "Join a project first.",
+    "IDEMPOTENCY_KEY_REQUIRED": "Something went wrong. Try again."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Pick at least one day for each shift.",
@@ -389,7 +407,11 @@
     "noPending": "No pending invitations.",
     "pendingLine": "{{role}} · expires {{date}}",
     "revokeInvitation": "Cancel invitation",
-    "inviteStaff": "Invite staff"
+    "inviteStaff": "Invite staff",
+    "workforceTitle": "Workers and orientation",
+    "runOrientation": "Run orientation",
+    "orientationNeedsActive": "Make the project active to run orientation.",
+    "workersAndApprovals": "Workers and approvals"
   },
   "edit": {
     "title": "Change site settings",
@@ -443,5 +465,153 @@
     "ownerHint": "You own this organization.",
     "inviteAdmin": "Invite an organization admin",
     "inviteAdminBody": "Admins can create projects and manage staff for the whole organization. They accept by signing in with this email."
+  },
+  "enrollmentStatus": {
+    "PENDING": "Waiting for approval",
+    "APPROVED": "Approved",
+    "REJECTED": "Not approved",
+    "REVOKED": "Approval removed"
+  },
+  "employerStatus": {
+    "PENDING_CONFIRMATION": "employer not confirmed yet",
+    "VERIFIED": "employer confirmed",
+    "REJECTED": "employer not confirmed"
+  },
+  "bulkResult": {
+    "APPROVED": "approved",
+    "ALREADY_APPROVED": "was already approved",
+    "NOT_FOUND": "not found on this project",
+    "NOT_PENDING": "not waiting for approval",
+    "ORIENTATION_MISSING": "orientation not completed",
+    "VERIFIED": "employer confirmed",
+    "REJECTED": "employer not confirmed",
+    "UNCHANGED": "no change",
+    "NO_COMPANY": "no employer claimed",
+    "NOT_ACTIVE": "not active"
+  },
+  "join": {
+    "scanCta": "Scan orientation QR",
+    "typeCta": "Type or paste a code",
+    "scanTitle": "Scan the orientation QR",
+    "scanBody": "Point the camera at the code on the supervisor's phone or on the printed sheet.",
+    "cameraNeeded": "Camera access is needed to scan. You can also type or paste the code below.",
+    "allowCamera": "Allow camera",
+    "typeLabel": "Orientation code",
+    "useCode": "Use this code",
+    "notOrientationCode": "That is not a SiteMuster orientation code.",
+    "formTitle": "Join project",
+    "sessionUntil": "Orientation open until {{time}}",
+    "legalName": "Your full name",
+    "employer": "Your employer",
+    "otherCompany": "Other company",
+    "companyName": "Employer name",
+    "employerHint": "Your employer will be confirmed by the project team.",
+    "trade": "Trade (optional)",
+    "emergencyTitle": "Emergency contact",
+    "emergencyHint": "Only people with an emergency role on your projects can see this.",
+    "emergencyName": "Contact name",
+    "emergencyPhone": "Contact phone",
+    "emergencyRelationship": "Relationship (optional)",
+    "noticeTitle": "Project notice",
+    "noticeIntro": "Read this notice before you join. It explains what is recorded and your choices.",
+    "acknowledge": "I have read and understood this notice",
+    "acceptAndJoin": "Accept and join",
+    "decline": "I do not accept",
+    "declined": "You did not accept the notice, so you have not joined. Talk to your supervisor about other options.",
+    "doneTitle": "Orientation complete.",
+    "doneBody": "Your supervisor still has to approve you and confirm your employer. Your badge and automatic attendance are available only after approval.",
+    "goHome": "Go to home"
+  },
+  "notice": {
+    "draftWatermark": "DRAFT — this legal text is not approved yet. For testing only.",
+    "notApproved": "This notice has not been approved for use yet.",
+    "versionLine": "{{id}} · version {{version}}"
+  },
+  "workerProjects": {
+    "homeIntro": "Your projects and their status.",
+    "none": "You have not joined a project yet.",
+    "offlineSaved": "Offline — showing the projects saved on this phone.",
+    "employerLine": "{{company}} · {{status}}",
+    "showBadge": "Show my badge",
+    "joinAnother": "Join another project"
+  },
+  "badge": {
+    "title": "My badge",
+    "activateIntro": "Set up this phone once (needs a connection). After that the badge works without signal.",
+    "activate": "Set up this phone",
+    "changesIn": "Changes in {{seconds}} s",
+    "offlineNote": "Works without signal. Show it at the site kiosk.",
+    "oneUse": "Each code works once. Do not share screenshots."
+  },
+  "profile": {
+    "saveEmergency": "Save emergency contact",
+    "emergencySaved": "Emergency contact saved."
+  },
+  "orientation": {
+    "title": "Orientation",
+    "intro": "Start a 120-minute orientation session. Workers scan the QR, read the notice and join. You approve them afterwards.",
+    "start": "Start orientation",
+    "expired": "The last session has ended.",
+    "openUntil": "Open until {{time}}",
+    "modeLabel": "QR type",
+    "rotatingTab": "Live QR",
+    "printedTab": "Printable QR",
+    "rotatesIn": "New code in {{seconds}} s",
+    "rotatingNote": "The code changes every minute and works without signal on this phone.",
+    "printedCaption": "Valid until {{time}}",
+    "printedNote": "The printed code works only while this session is open.",
+    "sharePrint": "Share or print",
+    "shareUnavailable": "Sharing is not available on this device.",
+    "neverApproves": "Scanning a QR never approves anyone. You approve workers in Workers and approvals.",
+    "close": "End session",
+    "toApprovals": "Workers and approvals"
+  },
+  "workers": {
+    "title": "Workers and approvals",
+    "addNoPhone": "Add a worker without a phone",
+    "pendingTitle": "Waiting for approval ({{count}})",
+    "nonePending": "Nobody is waiting for approval.",
+    "selectAll": "Select all (up to {{max}})",
+    "approveSelected": "Approve selected ({{count}})",
+    "confirmEmployerSelected": "Confirm employer for selected ({{count}})",
+    "maxSelected": "You can select up to {{max}} workers at a time.",
+    "resultsTitle": "Results",
+    "resultLine": "{{name}}: {{result}}",
+    "approvedTitle": "Approved ({{count}})",
+    "employerHint": "Select approved workers to confirm their employer.",
+    "inactiveTitle": "Not active",
+    "noPhone": "No phone (supervised)",
+    "appUser": "Uses the app",
+    "consent": {
+      "DIGITAL": "notice accepted in the app",
+      "SUPERVISED": "notice read by a supervisor"
+    },
+    "printedBadge": "printed badge active",
+    "printedBadgeAction": "Printed badge",
+    "reject": "Do not approve",
+    "rejectTitle": "Do not approve {{name}}?",
+    "rejectReason": "Reason (required)",
+    "confirmReject": "Confirm"
+  },
+  "addWorker": {
+    "title": "Worker without a phone",
+    "intro": "Create a supervised profile. No phone number, e-mail or app account is invented. Approval is a separate step.",
+    "noticeTitle": "Read the notice to the worker",
+    "workerLanguage": "Worker's language",
+    "acknowledged": "I read this notice to the worker and they acknowledged it",
+    "acknowledgedHint": "Your name is recorded as the supervisor who read it.",
+    "create": "Add worker",
+    "done": "Worker added and waiting for approval."
+  },
+  "printedBadge": {
+    "title": "Printed badge",
+    "intro": "A printed badge has no personal information. At the kiosk, the attendant must check the person's name and face.",
+    "issue": "Issue printed badge",
+    "caption": "SiteMuster badge",
+    "custody": "Shown once. Print it now and hand it to the worker. Issuing a new badge cancels the old one.",
+    "sharePrint": "Share or print",
+    "revokeReason": "Reason to cancel (required)",
+    "revoke": "Cancel this badge",
+    "revoked": "Badge cancelled."
   }
 }

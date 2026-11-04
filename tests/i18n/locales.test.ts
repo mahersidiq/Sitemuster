@@ -18,6 +18,8 @@ const SAME_IN_BOTH = new Set([
   'site.meters',
   'edit.minutes',
   'invitations.summary',
+  'workerProjects.employerLine',
+  'workers.resultLine',
 ]);
 
 describe('EN/ES UI dictionaries', () => {

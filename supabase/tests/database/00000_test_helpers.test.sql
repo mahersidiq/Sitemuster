@@ -205,7 +205,7 @@ begin
     (tests.id('c_b'), tests.id('w_b1'), 'WORKER', 'VERIFIED');
 
   insert into public.legal_notice_versions (id, document_id, locale, document_type, version, content) values
-    (tests.id('n_en'), 'WORKER_LOCATION_DISCLOSURE_EN_V1', 'en-US', 'WORKER_LOCATION_DISCLOSURE', 1, 'Synthetic test notice (draft).');
+    (tests.id('n_en'), 'TEST_WORKER_NOTICE_EN_V1', 'en-US', 'WORKER_LOCATION_DISCLOSURE', 1, 'Synthetic test notice (draft).');
 
   insert into public.orientation_records (worker_profile_id, project_id, completed_at, notice_version_id)
   select w, p, t - interval '7 days', tests.id('n_en')

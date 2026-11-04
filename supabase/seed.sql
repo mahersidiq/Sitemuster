@@ -33,3 +33,8 @@ $$;
 revoke all on function app_private.dev_send_sms_hook(jsonb) from public, anon, authenticated, service_role;
 grant usage on schema app_private to supabase_auth_admin;
 grant execute on function app_private.dev_send_sms_hook(jsonb) to supabase_auth_admin;
+
+-- LOCAL/CI ONLY: mark this database as development (decision #70). Unmarked databases count as
+-- production and refuse draft legal notices; hosted projects never run this seed.
+insert into app_private.settings (key, value) values ('environment', 'development')
+on conflict (key) do update set value = excluded.value, updated_at = now();

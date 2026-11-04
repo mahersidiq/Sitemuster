@@ -1,0 +1,5 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "SiteMuster uses the camera only to scan orientation and badge QR codes."
+  }
+}

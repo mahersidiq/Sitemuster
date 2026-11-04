@@ -1,6 +1,6 @@
 -- Schema shape and deny-by-default privileges (spec 05 "Migration/test requirement").
 begin;
-select plan(17);
+select plan(18);
 
 select tables_are('public', array[
   'organizations', 'organization_members', 'organization_invitations', 'projects', 'project_staff',
@@ -103,11 +103,27 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['accept_invitation', 'address_lookup_allowed', 'check_project_site', 'create_organization',
-        'create_project', 'get_my_access', 'get_my_profile', 'get_project_detail', 'invite_org_admin',
-        'invite_project_staff', 'list_my_invitations', 'list_my_projects', 'remove_project_staff',
-        'revoke_invitation', 'set_my_language', 'set_project_status', 'update_project_config'],
+  array['accept_invitation', 'address_lookup_allowed', 'bulk_approve_enrollments', 'bulk_confirm_employer',
+        'check_project_site', 'close_orientation_session', 'complete_orientation', 'create_managed_worker',
+        'create_organization', 'create_project', 'decide_enrollment', 'get_my_access',
+        'get_my_emergency_contact', 'get_my_profile', 'get_orientation_session', 'get_project_detail',
+        'get_project_notice',
+        'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
+        'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_enrollments',
+        'preview_orientation', 'remove_project_staff', 'revoke_invitation', 'revoke_printed_badge',
+        'set_my_language', 'set_project_status', 'start_orientation_session', 'update_my_emergency_contact',
+        'update_project_config'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
+);
+
+select is(
+  (select array_agg(p.proname::text order by p.proname)
+     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'edge\_%'
+      and has_function_privilege('service_role', p.oid, 'EXECUTE')
+      and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
+  array['edge_activate_device', 'edge_badge_device', 'edge_redeem_badge_step'],
+  'device activation and badge redemption are callable only by the Edge Functions (service_role)'
 );
 
 select is(
@@ -124,7 +140,10 @@ select is(
     where n.nspname = 'app_private' and has_function_privilege('authenticated', p.oid, 'EXECUTE')
       and p.proname in ('write_audit', 'resolve_upload_credential', 'ensure_raw_fix_partitions',
                         'purge_expired_raw_fixes', 'forbid_mutation', 'protect_last_owner',
-                        'consume_rate_limit', 'build_settings', 'normalize_work_windows', 'tracking_defaults')),
+                        'consume_rate_limit', 'build_settings', 'normalize_work_windows', 'tracking_defaults',
+                        'deployment_environment', 'current_notice', 'assert_notice_acceptable',
+                        'orientation_code_session', 'session_json', 'close_session_internal',
+                        'resolve_join_company', 'record_orientation', 'replace_emergency_contact')),
   0, 'privileged internal functions are not executable by clients'
 );
 

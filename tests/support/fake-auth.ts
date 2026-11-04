@@ -94,6 +94,21 @@ export class FakeAuthGateway implements AuthGateway {
     return this.session !== null;
   }
 
+  async sessionUserId() {
+    return this.session ? this.accessFor(this.session.destination).user_id : null;
+  }
+
+  /** Test hook: hold the next access lookup until the returned function is called. */
+  holdNextFetch(): () => void {
+    let release: () => void = () => undefined;
+    this.pendingFetch = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return release;
+  }
+
+  pendingFetch: Promise<void> | null = null;
+
   onChange(listener: () => void) {
     this.listeners.add(listener);
     return () => {
@@ -144,9 +159,17 @@ export class FakeAuthGateway implements AuthGateway {
   }
 
   async fetchAccess(): Promise<Access> {
+    // Like a real request, the answer reflects the session at the time the request was sent.
+    const destination = this.session?.destination;
+    const aal = this.aal;
+    if (this.pendingFetch) {
+      const wait = this.pendingFetch;
+      this.pendingFetch = null;
+      await wait;
+    }
     if (this.offline) throw new Error('network unavailable');
-    if (!this.session) throw new Error('no session');
-    return { ...this.accessFor(this.session.destination), aal: this.aal };
+    if (!destination) throw new Error('no session');
+    return { ...this.accessFor(destination), aal };
   }
 
   async saveLanguage(locale: Locale) {
