@@ -140,6 +140,8 @@ Resolved once in Milestone 01 (2026-11-03) per decision #33. Every version below
 | Lint/format | `eslint` / `eslint-config-expo` / `eslint-plugin-i18next` / `eslint-config-prettier` / `prettier` | 9.39.5 / 58.0.4 / 6.1.5 / 10.1.8 / 3.9.10 |
 | Types | `@types/react` / `@types/node` | 19.3.0 / 22.20.5 |
 | Database | Supabase CLI (`supabase/.cli-version`, decision #50) / local Postgres major | 2.122.1 / 17 |
+| Native location SDKs (Milestone 13, decision #144) | Transistorsoft `com.transistorsoft:tslocationmanager` (Android, Maven Central) / `TSLocationManager` pod (iOS), pinned by `plugins/with-pinned-native-sdks.js` | 4.7.8 / 4.8.3 |
+| Release tooling (Milestone 13) | `eas-cli` (`eas.json` `cli.version`, release workflow) / `expo/expo-github-action` (pinned by commit `9da89d3617bb88139671bad31b09c65714c2ee06`) / Node on EAS build servers | 25.3.0 / 9.0.1 / 22.23.4 |
 
 Notes:
 - `overrides.react-dom = 19.3.0` aligns an optional web-only peer (pulled in by `expo-router`) with Expo SDK 58's pinned React; the app is mobile-only and never renders with `react-dom`.

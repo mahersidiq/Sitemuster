@@ -325,7 +325,9 @@ describe('route guards', () => {
     expect(app.getPathname()).toBe('/worker/home');
     // Only the worker's own data was requested (enrollments, own foreman crews, own muster rows)
     // — no staff/project API call.
-    const ownData = ['myEnrollments', 'myForemanProjects', 'myActiveMusters'];
+    // Each of these answers only about the signed-in person (own enrollments, foreman roles,
+    // musters, and whether their own account belongs to the reviewer demo).
+    const ownData = ['myEnrollments', 'myForemanProjects', 'myActiveMusters', 'demoProjects'];
     expect(world.calls.filter((call) => !ownData.includes(call))).toEqual([]);
   });
 });

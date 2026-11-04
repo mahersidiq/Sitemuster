@@ -40,8 +40,11 @@ export async function jwtOf(client: SupabaseClient): Promise<string> {
   return (await client.auth.getSession()).data.session?.access_token ?? '';
 }
 
-/** An ACTIVE 24/7 project with one approved subcontractor, seeded as superuser. */
-export async function site() {
+/**
+ * An ACTIVE 24/7 project with one approved subcontractor, seeded as superuser. The time zone is
+ * America/Chicago unless a test needs another one.
+ */
+export async function site(options: { timeZone?: string } = {}) {
   const owner = crypto.randomUUID();
   const org = crypto.randomUUID();
   const projectId = crypto.randomUUID();
@@ -63,8 +66,8 @@ export async function site() {
     );
     await db.query(
       `insert into public.projects (id, organization_id, name, iana_timezone, status, idempotency_key)
-       values ($1, $2, 'Operations site', 'America/Chicago', 'ACTIVE', gen_random_uuid())`,
-      [projectId, org],
+       values ($1, $2, 'Operations site', $3, 'ACTIVE', gen_random_uuid())`,
+      [projectId, org, options.timeZone ?? 'America/Chicago'],
     );
     await db.query(
       `insert into public.project_tracking_config_versions (id, project_id, version_number, effective_at, settings_json, operates_24_7)
@@ -181,8 +184,8 @@ export const results = (body: unknown) => IngestOperationsResponseSchema.parse(b
 export const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
 
 /** A project with one company, `size` approved crew workers and a verified foreman. */
-export async function crewSite(size: number) {
-  const { projectId, companyId } = await site();
+export async function crewSite(size: number, options: { timeZone?: string } = {}) {
+  const { projectId, companyId } = await site(options);
   const crew: string[] = [];
   for (let i = 0; i < size; i += 1) {
     crew.push(await enroll(projectId, { companyId, name: `Crew Member ${i + 1}` }));

@@ -15,7 +15,7 @@ import {
 } from './credential';
 import type { PermissionSnapshot, StoredAuthorization, TrackerDriver } from './driver';
 import { gateFences, regionBudget, selectMonitoredProjects, type TrackingPlan } from './plan';
-import { authorizationConfig, buildSdkConfig } from './sdk-config';
+import { authorizationConfig, buildSdkConfig, type PermissionRationaleText } from './sdk-config';
 
 /**
  * Turns the server plan, the device secret and the OS permissions into an armed (or disarmed)
@@ -93,6 +93,8 @@ export interface TrackingServiceDeps {
   now(): number;
   /** Localized Android foreground-service notification, read when the SDK starts. */
   notification(): { title: string; text: string; channelName: string };
+  /** Localized Android 11+ "Allow all the time" explanation, read when the SDK starts. */
+  permissionRationale?(): PermissionRationaleText;
   renewWithSecret(token: string): Promise<RenewOutcome>;
   /**
    * Sends one coordinate-free record straight to ingest-location-batch with the device secret
@@ -168,12 +170,21 @@ export class TrackingService {
    * overlapping triggers (start, foreground, phone set-up) never initialize the SDK twice.
    */
   start(userId: string): Promise<TrackingStatus> {
+    return this.run(userId, false);
+  }
+
+  /** `configure`: also give the SDK its configuration while the permission is not usable yet. */
+  private run(userId: string, configure: boolean): Promise<TrackingStatus> {
     const epoch = this.epoch;
     return this.serialized(async () => {
       try {
-        return await this.startNow(userId, () => {
-          if (epoch !== this.epoch) throw new StartCancelled();
-        });
+        return await this.startNow(
+          userId,
+          () => {
+            if (epoch !== this.epoch) throw new StartCancelled();
+          },
+          configure,
+        );
       } catch (error) {
         if (error instanceof StartCancelled) return this.status;
         throw error;
@@ -198,7 +209,11 @@ export class TrackingService {
   }
 
   /** `live()` throws once stop() was called: checked after every await, before any write. */
-  private async startNow(userId: string, live: () => void): Promise<TrackingStatus> {
+  private async startNow(
+    userId: string,
+    live: () => void,
+    configure = false,
+  ): Promise<TrackingStatus> {
     live();
     this.userId = userId;
     if (!this.restored) {
@@ -280,10 +295,13 @@ export class TrackingService {
       planStale,
     });
 
-    // No automatic OS prompt: the SDK starts only after SiteMuster's own permission screens.
+    // No automatic OS prompt: the SDK is configured only once the permission is usable, or when
+    // the person accepted SiteMuster's own disclosure and the SDK is about to ask (`configure`).
     await this.reportMonitoring(permission);
     live();
-    if (!permissionUsable(permission)) {
+    const usable = permissionUsable(permission);
+    const configureOnly = !usable && configure && !this.ready;
+    if (!usable && !configureOnly) {
       // The SDK is not (re)started: a running SDK gets a renewed secret now, else at next start.
       if (credential.renewed) {
         if (this.ready) await this.giveSdkCredential(device.deviceId, credential);
@@ -303,6 +321,7 @@ export class TrackingService {
             token: credential.token,
             renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
             notification: this.deps.notification(),
+            permissionRationale: this.deps.permissionRationale?.(),
           },
           onsite ? 'ONSITE' : 'OFFSITE',
         ),
@@ -317,6 +336,9 @@ export class TrackingService {
       await this.deps.devices.updateToken(userId, credential.token, credential.expiresAt);
     }
     live();
+    // Configured for the permission request only: nothing is armed, nothing is uploaded.
+    if (!usable)
+      return this.patch({ phase: 'PERMISSION_REQUIRED', queued: await this.safeCount() });
     await this.agent.arm(fences, plan.coordinates_allowed);
     return this.patch({
       phase:
@@ -333,8 +355,21 @@ export class TrackingService {
     return this.userId ? this.start(this.userId) : Promise.resolve(this.status);
   }
 
+  /**
+   * The person accepted SiteMuster's own disclosure. The SDK reads the "Always" request, the
+   * localized Android 11+ "Allow all the time" rationale and the disabled SDK alert from its
+   * configuration, so it is configured first (Transistorsoft: `ready`, then `requestPermission`;
+   * decision #153). Configuring arms nothing and uploads nothing.
+   */
   async requestPermission(): Promise<TrackingStatus> {
+    const epoch = this.epoch;
+    const userId = this.userId;
+    if (!userId) return this.status;
+    if (!this.ready) await this.run(userId, true);
+    // Not configurable (no phone set up, not enrolled, no plan) or signed out meanwhile: never ask.
+    if (!this.ready || epoch !== this.epoch) return this.status;
     const permission = await this.deps.driver.requestPermission();
+    if (epoch !== this.epoch) return this.status;
     this.patch({ permission });
     return this.refresh();
   }

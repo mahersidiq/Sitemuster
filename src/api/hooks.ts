@@ -56,6 +56,9 @@ export const queryKeys = {
   // Milestone 12
   myConsents: ['my-consents'] as const,
   legalDocument: (type: string, locale: string) => ['legal-document', type, locale] as const,
+  // Milestone 13
+  demoProjects: ['demo-projects'] as const,
+  demoWorkers: (projectId: string) => ['demo-workers', projectId] as const,
 };
 
 export function useOrganizations() {
@@ -323,4 +326,40 @@ export function useLegalDocument(type: GlobalLegalDocument, locale: Locale) {
     queryKey: queryKeys.legalDocument(type, locale),
     queryFn: () => api.legalDocument(type, locale),
   });
+}
+
+// Milestone 13: the reviewer demo. Whether a project is a demo comes from the server allowlist only.
+
+export function useDemoProjects() {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.demoProjects,
+      queryFn: () => api.demoProjects(),
+      staleTime: 5 * 60_000,
+    }),
+  );
+}
+
+/** `{ demo, active }` for one project; both false until the server has answered (`loading`). */
+export function useDemoStatus(projectId: string | null | undefined): {
+  demo: boolean;
+  active: boolean;
+  loading: boolean;
+} {
+  const query = useDemoProjects();
+  const projects = query.data ?? [];
+  const match = projectId ? projects.find((row) => row.project_id === projectId) : undefined;
+  return { demo: match !== undefined, active: match?.active === true, loading: query.isLoading };
+}
+
+export function useDemoWorkers(projectId: string, enabled: boolean) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.demoWorkers(projectId),
+      queryFn: () => api.demoWorkers(projectId),
+      enabled,
+    }),
+  );
 }

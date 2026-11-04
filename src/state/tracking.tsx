@@ -72,6 +72,12 @@ export function TrackingProvider({
                 text: tRef.current('tracking.notification.text'),
                 channelName: tRef.current('tracking.notification.channelName'),
               }),
+              permissionRationale: () => ({
+                title: tRef.current('tracking.rationale.title'),
+                message: tRef.current('tracking.rationale.message'),
+                positiveAction: tRef.current('tracking.rationale.positive'),
+                negativeAction: tRef.current('tracking.rationale.negative'),
+              }),
             })
           : null),
     [createService, env.supabaseUrl],

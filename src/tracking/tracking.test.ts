@@ -195,6 +195,21 @@ describe('native templates and configuration', () => {
     });
   });
 
+  it('passes the localized Android 11+ "Allow all the time" explanation to the SDK, only when given', () => {
+    const rationale = {
+      title: 'Allow location all the time?',
+      message: 'Choose "Allow all the time" on the next screen.',
+      positiveAction: 'Change to "Allow all the time"',
+      negativeAction: 'Not now',
+    };
+    expect(
+      buildSdkConfig({ ...input(), permissionRationale: rationale }, 'OFFSITE').app,
+    ).toMatchObject({ backgroundPermissionRationale: rationale });
+    expect(buildSdkConfig(input(), 'OFFSITE').app).not.toHaveProperty(
+      'backgroundPermissionRationale',
+    );
+  });
+
   it('offsite = geofence-only persistence with SDK autoSync; onsite = all records, JS-driven sync', () => {
     const offsite = buildSdkConfig(input(), 'OFFSITE');
     expect(offsite.persistence?.persistMode).toBe(PERSIST_MODE_GEOFENCE);

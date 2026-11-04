@@ -103,14 +103,15 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['accept_invitation', 'address_lookup_allowed', 'amend_muster', 'attendance_counts', 'bulk_approve_enrollments',
+  array['accept_invitation', 'address_lookup_allowed', 'amend_muster', 'attendance_counts', 'begin_demo_simulation', 'bulk_approve_enrollments',
         'bulk_confirm_employer', 'check_project_site', 'close_muster', 'close_orientation_session', 'complete_orientation',
         'consume_report_budget', 'correction_requests', 'create_managed_worker', 'create_organization', 'create_project', 'decide_enrollment',
+        'demo_workers',
         'foreman_active_musters', 'foreman_crew', 'foreman_kiosk_grants', 'foreman_muster', 'get_my_access',
         'get_my_emergency_contact', 'get_my_profile', 'get_orientation_session', 'get_project_detail', 'get_project_notice',
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'legal_document_text', 'list_my_invitations',
         'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'muster_board', 'muster_report',
-        'my_active_musters', 'my_attendance', 'my_consents', 'my_enrollments', 'my_foreman_projects', 'my_pending_reports',
+        'my_active_musters', 'my_attendance', 'my_consents', 'my_demo_projects', 'my_enrollments', 'my_foreman_projects', 'my_pending_reports',
         'my_tracking_plan', 'open_visitor_visits', 'operation_context', 'operator_approve_legal_notice', 'operator_health',
         'operator_list_legal_notices', 'operator_list_security_flags', 'operator_org_lookup', 'operator_release_retention_hold',
         'operator_resend_invitation', 'operator_reset_staff_mfa', 'operator_retire_legal_notice', 'operator_review_security_flag',
@@ -131,7 +132,7 @@ select is(
       and has_function_privilege('service_role', p.oid, 'EXECUTE')
       and not has_function_privilege('authenticated', p.oid, 'EXECUTE')),
   array['edge_activate_device', 'edge_attendance_commit', 'edge_attendance_load', 'edge_attendance_sweep', 'edge_badge_device',
-        'edge_confirm_report', 'edge_correction_request', 'edge_device_authenticate', 'edge_device_rate_limit',
+        'edge_confirm_report', 'edge_correction_request', 'edge_demo_device', 'edge_device_authenticate', 'edge_device_rate_limit',
         'edge_device_renew', 'edge_insert_location_receipts', 'edge_kiosk_device', 'edge_location_receipt_lookup',
         'edge_muster_member', 'edge_muster_push_targets', 'edge_muster_record_push', 'edge_muster_respond',
         'edge_operation_rate_limit', 'edge_operation_receipts', 'edge_operation_workers', 'edge_printed_badge_worker',

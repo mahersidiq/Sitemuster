@@ -10,6 +10,10 @@ import type {
   ProjectStaffRole,
   ProjectStatus,
   AccountDeleteResponse,
+  DemoProject,
+  DemoSimulateRequest,
+  DemoSimulateResponse,
+  DemoWorker,
   MusterCloseResponse,
   MusterCounts,
   MusterStartResponse,
@@ -450,6 +454,11 @@ export interface SiteMusterApi {
   legalDocument(type: GlobalLegalDocument, locale: Locale): Promise<Notice>;
   /** Needs a sign-in from the last 15 minutes (and the authenticator when enrolled). */
   deleteAccount(): Promise<AccountDeleteResponse>;
+  // Milestone 13: the server-gated reviewer demo (synthetic people only).
+  /** The demo projects the signed-in person belongs to (empty for every real customer). */
+  demoProjects(): Promise<DemoProject[]>;
+  demoWorkers(projectId: string): Promise<DemoWorker[]>;
+  demoSimulate(request: DemoSimulateRequest): Promise<DemoSimulateResponse>;
 }
 
 // Milestone 12 — privacy.

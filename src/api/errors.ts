@@ -80,6 +80,10 @@ export const KNOWN_API_ERRORS = [
   'REAUTHENTICATION_REQUIRED',
   'MFA_REQUIRED',
   'ORG_OWNER_TRANSFER_REQUIRED',
+  // Milestone 13
+  'DEMO_NOT_ALLOWED',
+  'NOT_A_DEMO_WORKER',
+  'DEMO_WAIT',
 ] as const;
 export type KnownApiError = (typeof KNOWN_API_ERRORS)[number];
 

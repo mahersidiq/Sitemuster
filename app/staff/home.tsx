@@ -7,6 +7,7 @@ import { queryKeys, useProjectDashboard } from '../../src/api/hooks';
 import type { ProjectDashboard } from '../../src/api/types';
 import { AppButton } from '../../src/components/AppButton';
 import { Banner } from '../../src/components/Banner';
+import { DemoBanner } from '../../src/components/DemoBanner';
 import { Card } from '../../src/components/Card';
 import { QueryState } from '../../src/components/QueryState';
 import { Screen } from '../../src/components/Screen';
@@ -85,6 +86,7 @@ function DashboardBody({ data }: { data: ProjectDashboard }) {
   const projectId = data.project.id;
   return (
     <>
+      <DemoBanner projectId={projectId} />
       {data.project.status !== 'ACTIVE' ? (
         <Banner
           text={t('dashboard.notActive', { status: t(`projectStatus.${data.project.status}`) })}

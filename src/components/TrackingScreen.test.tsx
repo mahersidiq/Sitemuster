@@ -90,8 +90,30 @@ describe('automatic attendance screen', () => {
     expect(screen.getByTestId('tracking-permission-location').props.children).toBe('Needed');
     expect(screen.getByTestId('tracking-permission-precise').props.children).toBe('Needed');
     expect(screen.getByTestId('tracking-permission-services').props.children).toBe('OK');
+    // The system prompt comes only after the in-app disclosure (store background-location rules).
     await fireEvent.press(screen.getByTestId('tracking-allow'));
+    expect(mockTracking.requestPermission).not.toHaveBeenCalled();
+    expect(screen.getByTestId('tracking-disclosure')).toBeTruthy();
+    expect(
+      screen.getByText(/collects location data to note when you arrive at and leave the jobsites/),
+    ).toBeTruthy();
+    expect(screen.getByText(/even when the app is closed or not in use/)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('tracking-disclosure-continue'));
     expect(mockTracking.requestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks nothing when the person declines the disclosure', async () => {
+    await show({
+      ...BASE,
+      phase: 'PERMISSION_REQUIRED',
+      mode: 'DISARMED',
+      permission: { location: 'WHEN_IN_USE', precise: true, servicesEnabled: true },
+    });
+    await fireEvent.press(await screen.findByTestId('tracking-allow'));
+    await fireEvent.press(screen.getByTestId('tracking-disclosure-cancel'));
+    expect(mockTracking.requestPermission).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('tracking-disclosure')).toBeNull();
+    expect(screen.getByTestId('tracking-allow')).toBeTruthy();
   });
 
   it('explains limited mode, unmonitored sites and a refused upload', async () => {

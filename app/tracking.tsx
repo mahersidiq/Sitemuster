@@ -35,6 +35,7 @@ export function TrackingScreen() {
   const { status, requestPermission, syncNow, refresh } = useTracking();
   const outbox = useOutbox();
   const [busy, setBusy] = useState(false);
+  const [disclosing, setDisclosing] = useState(false);
   // Opening the screen re-reads permissions, the plan and the key (e.g. after Settings changes).
   useEffect(() => {
     void refresh();
@@ -100,12 +101,36 @@ export function TrackingScreen() {
                   ? t('tracking.permissions.androidHelp')
                   : t('tracking.permissions.iosHelp')}
               </Body>
-              <AppButton
-                label={t('tracking.permissions.allow')}
-                onPress={run(requestPermission)}
-                disabled={busy}
-                testID="tracking-allow"
-              />
+              {disclosing ? (
+                // Prominent disclosure right before the system prompt (Google Play background
+                // location policy; App Store guideline 5.1.1). Shown every time, never skipped.
+                <Card testID="tracking-disclosure">
+                  <Title>{t('tracking.disclosure.title')}</Title>
+                  <Body>{t('tracking.disclosure.body')}</Body>
+                  <AppButton
+                    label={t('tracking.disclosure.continue')}
+                    onPress={() => {
+                      setDisclosing(false);
+                      void run(requestPermission)();
+                    }}
+                    disabled={busy}
+                    testID="tracking-disclosure-continue"
+                  />
+                  <AppButton
+                    variant="secondary"
+                    label={t('tracking.disclosure.cancel')}
+                    onPress={() => setDisclosing(false)}
+                    testID="tracking-disclosure-cancel"
+                  />
+                </Card>
+              ) : (
+                <AppButton
+                  label={t('tracking.permissions.allow')}
+                  onPress={() => setDisclosing(true)}
+                  disabled={busy}
+                  testID="tracking-allow"
+                />
+              )}
             </>
           ) : null}
         </Card>

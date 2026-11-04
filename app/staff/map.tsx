@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useProjectDashboard, useProjectMap } from '../../src/api/hooks';
 import { Banner } from '../../src/components/Banner';
+import { DemoBanner } from '../../src/components/DemoBanner';
 import { Card } from '../../src/components/Card';
 import { QueryState } from '../../src/components/QueryState';
 import { Screen } from '../../src/components/Screen';
@@ -99,6 +100,7 @@ function LiveMap() {
               if (allowed) void refetch();
             }}
           />
+          <DemoBanner projectId={projectId} />
           {dashboard.data && !allowed ? (
             <Banner tone="info" text={t('liveMap.notAllowed')} testID="map-not-allowed" />
           ) : null}

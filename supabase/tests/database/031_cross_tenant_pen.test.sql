@@ -10,8 +10,12 @@
 -- call runs in its own subtransaction that is always rolled back, so calls cannot affect each
 -- other. New functions and tables are swept automatically.
 begin;
-select plan(19);
+select plan(21);
 select tests.seed_world();
+-- The reviewer demo (Milestone 13): its reviewer account is one more attacker (decision #142).
+select tests.create_user('de000000-0000-4000-8000-0000000000a0', 'demo.owner@example.test');
+select tests.create_user('de000000-0000-4000-8000-0000000000a1', 'reviewer.a@example.test', '+15125550150');
+select app_private.seed_reviewer_demo('de000000-0000-4000-8000-0000000000a0', 'de000000-0000-4000-8000-0000000000a1');
 
 -- A few more of tenant A's objects, so every id-taking function gets a real A target.
 insert into public.orientation_sessions (id, project_id, started_by, starts_at, expires_at, static_code_hash, idempotency_key)
@@ -319,6 +323,7 @@ select set_config('pen.outsider', tests.pen_sweep_functions(tests.id('u_outsider
 -- else must refuse them like any outsider.
 select set_config('pen.operator', tests.pen_sweep_functions(tests.id('u_operator'), 'authenticated', 'aal2', '^operator_')::text, true);
 select set_config('pen.anon', tests.pen_sweep_functions(null, 'anon', null)::text, true);
+select set_config('pen.reviewer', tests.pen_sweep_functions('de000000-0000-4000-8000-0000000000a1', 'authenticated', 'aal2')::text, true);
 
 select is((current_setting('pen.b_owner')::jsonb -> 'findings') || (current_setting('pen.b_owner')::jsonb -> 'malformed'), '[]'::jsonb, 'GC B owner: no function returns or changes tenant A data');
 select is((current_setting('pen.b_super')::jsonb -> 'findings') || (current_setting('pen.b_super')::jsonb -> 'malformed'), '[]'::jsonb, 'GC B superintendent: no function returns or changes tenant A data');
@@ -327,6 +332,7 @@ select is((current_setting('pen.b_worker')::jsonb -> 'findings') || (current_set
 select is((current_setting('pen.outsider')::jsonb -> 'findings') || (current_setting('pen.outsider')::jsonb -> 'malformed'), '[]'::jsonb, 'a signed-in outsider: no function returns or changes tenant A data');
 select is((current_setting('pen.operator')::jsonb -> 'findings') || (current_setting('pen.operator')::jsonb -> 'malformed'), '[]'::jsonb, 'the platform operator: no tenant function returns or changes tenant A data');
 select is((current_setting('pen.anon')::jsonb -> 'findings') || (current_setting('pen.anon')::jsonb -> 'malformed'), '[]'::jsonb, 'anonymous: no function returns or changes tenant A data');
+select is((current_setting('pen.reviewer')::jsonb -> 'findings') || (current_setting('pen.reviewer')::jsonb -> 'malformed'), '[]'::jsonb, 'the app reviewer''s demo account: no function returns or changes tenant A data');
 select ok((current_setting('pen.b_owner')::jsonb ->> 'called')::int >= 80
           and (current_setting('pen.b_owner')::jsonb ->> 'refused')::int >= 50,
   'the sweep really called every client function, well-formed (and most refused outright)');
@@ -347,6 +353,8 @@ select is(tests.pen_sweep_relations(tests.id('u_outsider'), 'authenticated', 'aa
   'a signed-in outsider sees no row of tenant A');
 select is(tests.pen_sweep_relations(tests.id('u_operator'), 'authenticated', 'aal2') -> 'findings', '[]'::jsonb,
   'the platform operator sees no row of tenant A (no coordinates, contacts or rosters)');
+select is(tests.pen_sweep_relations('de000000-0000-4000-8000-0000000000a1', 'authenticated', 'aal2') -> 'findings', '[]'::jsonb,
+  'the app reviewer''s demo account sees no row of tenant A');
 select ok((tests.pen_sweep_relations(tests.id('u_b_owner'), 'authenticated', 'aal2') ->> 'read')::int >= 20,
   'the sweep really read every API-visible table and view');
 select is((tests.pen_sweep_relations(null, 'anon', null) ->> 'read')::int, 0, 'anonymous callers can read no table at all');

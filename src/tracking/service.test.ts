@@ -1,3 +1,4 @@
+import type { Config } from 'react-native-background-geolocation';
 import { describe, expect, it } from 'vitest';
 
 import { type DeviceRenewResponse, iso } from '@sitemuster/shared';
@@ -220,6 +221,105 @@ describe('tracking service', () => {
       permission: { location: 'ALWAYS', precise: false, servicesEnabled: true },
     });
     expect((await reduced.service.start(USER)).phase).toBe('PERMISSION_REQUIRED');
+  });
+
+  describe('asking for permission after the disclosure (decision #153)', () => {
+    const ALWAYS = { location: 'ALWAYS', precise: true, servicesEnabled: true } as const;
+    const UNSET = { location: 'NOT_DETERMINED', precise: true, servicesEnabled: true } as const;
+    const RATIONALE = {
+      title: 'Allow location all the time?',
+      message: 'Needed to count you on site while the app is closed.',
+      positiveAction: 'Change to "Allow all the time"',
+      negativeAction: 'Not now',
+    };
+
+    /** The SDK as it is when it asks: configured or not, armed or not. */
+    function watchRequests(
+      rig: ReturnType<typeof setup>,
+      service: TrackingService,
+      grant: boolean,
+    ) {
+      const order: string[] = [];
+      let configured: Config | null = null;
+      const ready = rig.sdk.ready.bind(rig.sdk);
+      rig.sdk.ready = async (config) => {
+        configured = structuredClone(config);
+        order.push('ready');
+        await ready(config);
+      };
+      rig.sdk.requestPermission = async () => {
+        order.push(`request:${service.current.mode}`);
+        if (grant) rig.sdk.permissionState = { ...ALWAYS };
+        else rig.sdk.permissionState = { ...UNSET, location: 'WHEN_IN_USE' };
+        return rig.sdk.permissionState;
+      };
+      return { order, configured: () => configured as Config | null };
+    }
+
+    it('configures the SDK first, so it asks with "Always" and the Android 11+ rationale', async () => {
+      const rig = setup({ permission: { ...UNSET } });
+      const service = rig.coldStart({ permissionRationale: () => RATIONALE });
+      expect((await service.start(USER)).phase).toBe('PERMISSION_REQUIRED');
+      expect(rig.readyCalls()).toBe(0);
+      const watch = watchRequests(rig, service, true);
+
+      const status = await service.requestPermission();
+      // Configured before the request, and nothing armed while it asked.
+      expect(watch.order).toEqual(['ready', 'request:DISARMED']);
+      expect(watch.configured()?.app?.backgroundPermissionRationale).toEqual(RATIONALE);
+      expect(watch.configured()?.geolocation).toMatchObject({
+        locationAuthorizationRequest: 'Always',
+        disableLocationAuthorizationAlert: true,
+      });
+      expect(watch.configured()?.http?.autoSync).toBe(false);
+      // Granted: armed with the configuration it already has (configured once).
+      expect(status).toMatchObject({ phase: 'ACTIVE', mode: 'ARMED_OFFSITE' });
+      expect(rig.readyCalls()).toBe(1);
+    });
+
+    it('a refused or partial permission leaves the SDK configured but not armed; asking again does not configure twice', async () => {
+      const rig = setup({ permission: { ...UNSET } });
+      expect((await rig.service.start(USER)).phase).toBe('PERMISSION_REQUIRED');
+      const watch = watchRequests(rig, rig.service, false);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        expect(await rig.service.requestPermission()).toMatchObject({
+          phase: 'PERMISSION_REQUIRED',
+          mode: 'DISARMED',
+        });
+      }
+      expect(watch.order).toEqual(['ready', 'request:DISARMED', 'request:DISARMED']);
+      expect(rig.readyCalls()).toBe(1);
+      expect(rig.sdk.wire).toEqual([]);
+    });
+
+    it('never asks when the SDK cannot be configured: no phone set up, or not started', async () => {
+      const none = setup({ device: null, permission: { ...UNSET } });
+      expect((await none.service.start(USER)).phase).toBe('NO_DEVICE');
+      const noneWatch = watchRequests(none, none.service, true);
+      expect((await none.service.requestPermission()).phase).toBe('NO_DEVICE');
+      expect(noneWatch.order).toEqual([]);
+
+      const fresh = setup({ permission: { ...UNSET } });
+      const freshWatch = watchRequests(fresh, fresh.service, true);
+      await fresh.service.requestPermission();
+      expect(freshWatch.order).toEqual([]);
+    });
+
+    it('never asks after a sign-out that happens while the SDK is being configured', async () => {
+      const rig = setup({ permission: { ...UNSET } });
+      expect((await rig.service.start(USER)).phase).toBe('PERMISSION_REQUIRED');
+      const watch = watchRequests(rig, rig.service, true);
+      const ready = rig.sdk.ready.bind(rig.sdk);
+      let signedOut: Promise<void> = Promise.resolve();
+      rig.sdk.ready = async (config) => {
+        signedOut = rig.service.stop();
+        await ready(config);
+      };
+      await rig.service.requestPermission();
+      await signedOut;
+      expect(watch.order).toEqual(['ready']);
+      expect(rig.service.current).toMatchObject({ phase: 'NO_DEVICE', mode: 'DISARMED' });
+    });
   });
 
   it('reports NO_DEVICE, DEVICE_REVOKED and NOT_ENROLLED (with reasons) and stays disarmed', async () => {

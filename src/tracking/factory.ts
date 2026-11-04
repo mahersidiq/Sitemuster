@@ -7,6 +7,7 @@ import { loadDevice, updateUploadToken } from '../device/device-store';
 import { renewWithSecret } from './credential';
 import { NativeTrackerDriver } from './native-driver';
 import { createNativeTrackingStore } from './native-store';
+import type { PermissionRationaleText } from './sdk-config';
 import { TrackingService } from './service';
 
 /**
@@ -27,6 +28,8 @@ export function createNativeTrackingService(input: {
   supabaseUrl: string;
   /** Localized Android foreground-service notification, read when the SDK starts. */
   notification: () => { title: string; text: string; channelName: string };
+  /** Localized Android 11+ "Allow all the time" explanation (decision #148). */
+  permissionRationale: () => PermissionRationaleText;
 }): TrackingService {
   const urls = trackingUrls(input.supabaseUrl);
   const appVersion = Constants.expoConfig?.version ?? '0.0.0';
@@ -40,6 +43,7 @@ export function createNativeTrackingService(input: {
     appVersion,
     now: () => Date.now(),
     notification: input.notification,
+    permissionRationale: input.permissionRationale,
     renewWithSecret: (token) => renewWithSecret(urls.renew, token, appVersion),
     postRecord: async (record, token) => {
       try {

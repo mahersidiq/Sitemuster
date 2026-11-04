@@ -1,0 +1,20 @@
+# Release smoke test (Milestone 13, decision #151): first launch asks for the language, then shows
+# both sign-in paths and the no-phone alternative. Runs on a preview build of the staging app id.
+# Not executed by the build agent (no simulator or device): run it with
+#   maestro test .maestro/
+# on a phone or simulator with the build installed (docs/release/phone-test-checklist.md §1).
+appId: com.sitemuster.app.dev
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: 'language-screen'
+- tapOn:
+    id: 'choose-en-US'
+- assertVisible:
+    id: 'sign-in-screen'
+- assertVisible: 'Sign in with phone'
+- assertVisible: 'Sign in with email'
+- assertVisible: 'No phone?'
+- assertNotVisible:
+    id: 'backend-unavailable'
