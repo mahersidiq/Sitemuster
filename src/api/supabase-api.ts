@@ -8,6 +8,8 @@ import {
   DeviceRenewResponseSchema,
   IngestOperationsResponseSchema,
   OrientationSessionSchema,
+  parseBroadcastPayload,
+  projectTopic,
   type DeviceActivateRequest,
   type IngestOperationsRequest,
   type Locale,
@@ -33,7 +35,11 @@ import {
   type OrientationPreview,
   type OrientationSessionSummary,
   type PrintedBadge,
+  type ProjectChannelListener,
+  type ProjectDashboard,
+  type ProjectMap,
   type RosterEntry,
+  type WorkforceMember,
   type InviteStaffInput,
   type MyInvitation,
   type OrganizationSummary,
@@ -457,4 +463,61 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
       p_worker_id: workerId,
     });
   }
+
+  async projectDashboard(projectId: string) {
+    return this.rpc<ProjectDashboard>('project_dashboard', { p_project_id: projectId });
+  }
+
+  async workforceRoster(projectId: string) {
+    return this.rpc<WorkforceMember[]>('workforce_roster', { p_project_id: projectId });
+  }
+
+  async projectMap(projectId: string) {
+    return this.rpc<ProjectMap>('project_map', { p_project_id: projectId });
+  }
+
+  subscribeProject(projectId: string, listener: ProjectChannelListener): () => void {
+    return subscribeProjectChannel(this.client, projectId, listener);
+  }
+}
+
+/**
+ * Private Broadcast for one project (decision #19). The database authorizes the join through the
+ * `realtime.messages` policy; a refused join reports DENIED and stops retrying. Messages are
+ * validated against the strict contract and anything else is dropped.
+ */
+export function subscribeProjectChannel(
+  client: SupabaseClient,
+  projectId: string,
+  listener: ProjectChannelListener,
+): () => void {
+  const channel = client.channel(projectTopic(projectId), { config: { private: true } });
+  let closed = false;
+  channel.on('broadcast', { event: '*' }, (message: { payload?: unknown }) => {
+    const parsed = parseBroadcastPayload(message.payload);
+    if (!closed && parsed && parsed.project_id === projectId) listener.onMessage(parsed);
+  });
+  void client.realtime
+    .setAuth()
+    .catch(() => undefined) // no session: the join below is refused and reported
+    .then(() => {
+      if (closed) return;
+      channel.subscribe((status, error) => {
+        if (closed) return;
+        if (status === 'SUBSCRIBED') listener.onStatus('SUBSCRIBED');
+        else if (status === 'CHANNEL_ERROR' && isAuthorizationError(error)) {
+          closed = true;
+          listener.onStatus('DENIED');
+          void client.removeChannel(channel);
+        } else listener.onStatus('DISCONNECTED');
+      });
+    });
+  return () => {
+    closed = true;
+    void client.removeChannel(channel);
+  };
+}
+
+function isAuthorizationError(error: Error | undefined): boolean {
+  return /unauthori[sz]ed|permission|forbidden|not allowed/i.test(error?.message ?? '');
 }

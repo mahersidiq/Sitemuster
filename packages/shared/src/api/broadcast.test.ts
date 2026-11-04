@@ -49,7 +49,9 @@ describe('BroadcastSchema (decision #19)', () => {
     expect(parseBroadcastPayload(sent)).toEqual(example);
     expect(parseBroadcastPayload(example)).toEqual(example);
     expect(parseBroadcastPayload({ ...sent, legal_name: 'Ana Acosta' })).toBeNull();
-    expect(parseBroadcastPayload({ ...sent, counts: { estimated_onsite: 1, lng: -95.3 } })).toBeNull();
+    expect(
+      parseBroadcastPayload({ ...sent, counts: { estimated_onsite: 1, lng: -95.3 } }),
+    ).toBeNull();
     expect(parseBroadcastPayload({ ...sent, id: 42 })).toBeNull();
     expect(parseBroadcastPayload(null)).toBeNull();
     expect(parseBroadcastPayload([example])).toBeNull();
