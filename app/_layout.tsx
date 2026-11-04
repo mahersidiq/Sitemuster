@@ -13,6 +13,7 @@ import { Title } from '../src/components/Typography';
 import { readRuntimeEnv } from '../src/config/env';
 import { createI18n } from '../src/i18n';
 import { initMonitoring } from '../src/monitoring/sentry';
+import { MusterNotifications } from '../src/notifications/MusterNotifications';
 import { AppProviders } from '../src/state/AppProviders';
 import { colors, spacing } from '../src/theme';
 
@@ -60,6 +61,7 @@ export default function RootLayout() {
   return (
     <AppProviders env={env}>
       <StatusBar style="dark" />
+      <MusterNotifications />
       <View style={styles.root}>
         {env.appEnv === 'development' ? <DevelopmentStrip /> : null}
         <View style={styles.root}>

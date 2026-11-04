@@ -27,6 +27,12 @@ const SAME_IN_BOTH = new Set([
   'foremanReports.sent',
   'requests.span',
   'requests.spanDays',
+  // Milestone 11: separator-only lines (placeholders and punctuation).
+  'muster.lastResponse',
+  'muster.historyLine',
+  'muster.report.memberLine',
+  'muster.report.amendmentLine',
+  'muster.summary.person',
 ]);
 
 describe('EN/ES UI dictionaries', () => {

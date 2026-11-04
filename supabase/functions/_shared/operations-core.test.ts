@@ -4,6 +4,12 @@ import {
   ATTENDANT,
   COMPANY_B,
   crew,
+  memberOf,
+  musterOp,
+  musterScan,
+  SAFETY,
+  VISITOR,
+  WORKER_K1,
   FOREMAN,
   HOST,
   kiosk,
@@ -339,7 +345,7 @@ describe('ingest-operations', () => {
     expect(w.events).toHaveLength(1);
   });
 
-  it('a malformed operation is refused on its own; muster waits for Milestone 11', async () => {
+  it('a malformed operation is refused on its own; a self report from outside the roster is refused', async () => {
     const w = await world();
     const broken = {
       event_uuid: uuid(1),
@@ -356,11 +362,7 @@ describe('ingest-operations', () => {
       payload: { muster_id: uuid(90), snapshot_member_id: uuid(91), action: 'SELF_REPORT' },
     };
     const out = results((await send(w, [broken, muster, kiosk(3, 1)])).body);
-    expect(out.map((r) => r.reason)).toEqual([
-      'INVALID_OPERATION',
-      'OPERATION_NOT_SUPPORTED',
-      null,
-    ]);
+    expect(out.map((r) => r.reason)).toEqual(['INVALID_OPERATION', 'FORBIDDEN', null]);
     expect((await send(w, [{ operation_type: 'KIOSK_ENTRY' }])).status).toBe(422);
   });
 
@@ -450,6 +452,8 @@ describe('database row mappers (the Edge Function wiring is a thin, untyped shel
       visitors: false,
       correct: true,
       foremanCompanyIds: ['c'],
+      musterCommand: false,
+      musterWorkerId: null,
     });
     expect(() => contextFromJson({})).toThrow();
     expect(
@@ -477,5 +481,159 @@ describe('database row mappers (the Edge Function wiring is a thin, untyped shel
         review: true,
       },
     ]);
+  });
+});
+
+describe('muster responses (Milestone 11)', () => {
+  it("2 workers + 1 visitor: I'M SAFE, a foreman check and a kiosk visitor check stay separate", async () => {
+    const w = await world();
+    w.as(WORKER_K1);
+    const [self] = results(
+      (await send(w, [musterOp(1, 'MUSTER_SELF_REPORT', { channel: 'NOTIFICATION_ACTION' })])).body,
+    );
+    expect(self?.status).toBe('accepted');
+    w.as(FOREMAN);
+    const [foreman] = results(
+      (
+        await send(w, [
+          musterOp(2, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(workerId('f', 1)) }),
+        ])
+      ).body,
+    );
+    expect(foreman?.status).toBe('accepted');
+    w.as(ATTENDANT);
+    const [visitor] = results(
+      (
+        await send(w, [
+          musterOp(3, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(VISITOR) }),
+        ])
+      ).body,
+    );
+    expect(visitor?.status).toBe('accepted');
+    const status = (id: string) => w.muster.members.get(memberOf(id))?.status;
+    expect([
+      status(workerId('k', 1)),
+      status(workerId('f', 1)),
+      status(VISITOR),
+      status(workerId('k', 2)),
+    ]).toEqual(['SELF_REPORTED_SAFE', 'VERIFIED_ACCOUNTED', 'VERIFIED_ACCOUNTED', 'UNACCOUNTED']);
+    expect(w.muster.responses.map((r) => r.channel)).toEqual([
+      'NOTIFICATION_ACTION',
+      'FOREMAN',
+      'KIOSK',
+    ]);
+  });
+
+  it('nobody answers for someone else: a self report names only the caller', async () => {
+    const w = await world();
+    w.as(WORKER_K1);
+    const [other] = results(
+      (
+        await send(w, [
+          musterOp(1, 'MUSTER_SELF_REPORT', { snapshot_member_id: memberOf(workerId('k', 2)) }),
+        ])
+      ).body,
+    );
+    expect(other).toMatchObject({ status: 'rejected', reason: 'FORBIDDEN' });
+    // A worker cannot "verify" anyone either (no physical-check role).
+    const [verify] = results(
+      (
+        await send(w, [
+          musterOp(2, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(workerId('k', 1)) }),
+        ])
+      ).body,
+    );
+    expect(verify).toMatchObject({ status: 'rejected', reason: 'FORBIDDEN' });
+    expect(w.muster.members.get(memberOf(workerId('k', 1)))?.status).toBe('UNACCOUNTED');
+  });
+
+  it('a foreman verifies only their own company; the safety team verifies anyone (visitors too)', async () => {
+    const w = await world();
+    w.as(FOREMAN);
+    const [outside] = results(
+      (
+        await send(w, [
+          musterOp(1, 'MUSTER_PHYSICAL_VERIFY', {
+            snapshot_member_id: memberOf(workerId('k', 11)),
+          }),
+        ])
+      ).body,
+    );
+    expect(outside).toMatchObject({ status: 'rejected', reason: 'NOT_OWN_CREW' });
+    const [visitorByForeman] = results(
+      (
+        await send(w, [
+          musterOp(2, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(VISITOR) }),
+        ])
+      ).body,
+    );
+    expect(visitorByForeman).toMatchObject({ status: 'rejected', reason: 'NOT_OWN_CREW' });
+    w.as(SAFETY);
+    const [bySafety] = results(
+      (
+        await send(w, [
+          musterOp(3, 'MUSTER_PHYSICAL_VERIFY', {
+            snapshot_member_id: memberOf(workerId('k', 11)),
+          }),
+          musterOp(4, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(VISITOR) }),
+        ])
+      ).body,
+    );
+    expect(bySafety?.status).toBe('accepted');
+    expect(w.muster.responses.map((r) => r.channel)).toEqual(['SAFETY_STAFF', 'SAFETY_STAFF']);
+    // The superintendent (correct only) has no physical-check role in V1.
+    w.as(SUPER);
+    const [bySuper] = results(
+      (
+        await send(w, [
+          musterOp(5, 'MUSTER_PHYSICAL_VERIFY', { snapshot_member_id: memberOf(workerId('k', 2)) }),
+        ])
+      ).body,
+    );
+    expect(bySuper).toMatchObject({ status: 'rejected', reason: 'FORBIDDEN' });
+  });
+
+  it('an attended kiosk verifies by badge; a foreman kiosk only its own crew; strangers are not in the muster', async () => {
+    const w = await world();
+    w.as(ATTENDANT);
+    const [scan] = results((await send(w, [musterScan(1, 2)])).body);
+    expect(scan).toMatchObject({ status: 'accepted', worker_id: workerId('k', 2) });
+    expect(w.muster.responses.at(-1)?.channel).toBe('KIOSK');
+    const [stranger] = results((await send(w, [musterScan(2, 5)])).body);
+    expect(stranger).toMatchObject({ status: 'rejected', reason: 'NOT_IN_MUSTER' });
+    w.as(FOREMAN);
+    const [notCrew] = results((await send(w, [musterScan(3, 11)])).body);
+    expect(notCrew).toMatchObject({ status: 'rejected', reason: 'NOT_OWN_CREW' });
+  });
+
+  it('an offline check syncs once; after the close only checks made before it count (as amendments)', async () => {
+    const w = await world();
+    w.as(SAFETY);
+    const op = musterOp(1, 'MUSTER_PHYSICAL_VERIFY', {
+      snapshot_member_id: memberOf(workerId('k', 2)),
+    });
+    expect(results((await send(w, [op])).body)[0]?.status).toBe('accepted');
+    expect(results((await send(w, [op])).body)[0]?.status).toBe('duplicate');
+    expect(w.muster.responses).toHaveLength(1);
+    w.muster.status = 'CLOSED';
+    w.muster.endedAt = new Date(T0 + 60_000).toISOString();
+    const before = musterOp(
+      2,
+      'MUSTER_PHYSICAL_VERIFY',
+      { snapshot_member_id: memberOf(workerId('k', 1)) },
+      T0 + 30_000,
+    );
+    const after = musterOp(
+      3,
+      'MUSTER_PHYSICAL_VERIFY',
+      { snapshot_member_id: memberOf(workerId('k', 1)) },
+      T0 + 120_000,
+    );
+    const out = results((await send(w, [before, after], { sentAt: T0 + 5 * 60_000 })).body);
+    expect(out.map((r) => [r.status, r.reason ?? null])).toEqual([
+      ['accepted', null],
+      ['rejected', 'MUSTER_CLOSED'],
+    ]);
+    expect(w.muster.responses.at(-1)?.late).toBe(true);
   });
 });

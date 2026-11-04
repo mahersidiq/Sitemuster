@@ -48,6 +48,12 @@ export interface PushMessage {
   body: string;
   data?: Record<string, string | number | boolean>;
   silent?: boolean;
+  /** Interactive actions registered on the phone (e.g. the muster I'M SAFE button). */
+  categoryId?: string;
+  /** Android notification channel (created by the app). */
+  channelId?: string;
+  priority?: 'default' | 'high';
+  sound?: 'default' | null;
 }
 
 export interface PushTicket {

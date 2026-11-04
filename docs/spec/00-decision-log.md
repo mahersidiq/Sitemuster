@@ -390,3 +390,75 @@ Reason: CLAUDE.md locked stack "basic worker CSV … native share via expo-shari
 **113.** Foreman kiosk grants (from decision #107): the owner, PM or superintendent turns kiosk use on or off for a verified foreman of a company approved on the project, with a reason; it is audited. A granted foreman scans only their own crew (Milestone 08 rule). Removing the grant takes effect on the next operation (the server re-checks every one).
 
 Reason: spec 02 role matrix "Kiosk: own crew if kiosk role delegated".
+
+**114.** Muster command (Milestone 11): only a person with the project's emergency role starts or closes a muster. That is an active SAFETY assignment or an assignment marked `emergency_designated` (an org owner qualifies only when assigned that way), always with MFA (`has_emergency_role`, decision #53). Everyone with roster access sees the board read-only.
+- **Starting.** Needs an incident label and an idempotency key.
+- **Duplicates.** A second start for the same project joins the ACTIVE muster (`already_active`), enforced by a per-project advisory lock and a partial unique index. A distinct incident needs an explicit "separate muster" choice (`p_separate`).
+- **Archived projects** cannot start a muster (`PROJECT_NOT_ACTIVE`).
+
+Reason: spec 12 "Roles and triggers"; acceptance "only authorized safety triggers/closes", "two concurrent start attempts cannot create duplicate active event".
+
+**115.** Muster snapshot: frozen in the start transaction and never edited afterwards.
+- **Who is on it.** Every APPROVED enrollment, plus anyone the live state still shows on site (not OFFSITE) or with an open, pending or unresolved session.
+- **Each row records** the source, the last detection time and the employer.
+- **Source values.** `ONSITE_<start source>` when counted; `PRESENCE_UNKNOWN` when stale; `UNRESOLVED_SESSION`; otherwise the presence state, `OFFSITE` or `ROSTER_NOT_DETECTED`.
+- **Initial status.** STATUS_UNKNOWN when presence is stale or unresolved, otherwise UNACCOUNTED.
+- **Visitors.** Every OPEN or UNRESOLVED visit is a separate row with source `VISITOR`.
+- **Digest.** The snapshot is fingerprinted with a sha256 digest. Nobody is silently left off.
+
+Reason: spec 12 "Start transaction" step 2 and "Workers, visitors and failure modes".
+
+**116.** Muster alerts:
+- **Providers.** Staging and production use the Expo Push Service (optional `EXPO_ACCESS_TOKEN` secret); development uses the typed fake adapter (provider `development-fake`).
+- **Never blocking.** Alerts are sent only after the muster is committed. A push outage, a missing token or a database error reading targets never fails or blocks the muster; the board shows the failures.
+- **Metadata only.** Each person gets one delivery record (SENT / FAILED / NO_DEVICE). It is communication metadata, never presence.
+- **Payload.** Opaque ids only (`muster_id`, `project_id`, `member_id`), never names or places. The title and body are in the worker's primary language (EN/ES).
+- **Phone side.** The app asks for notification permission only after an explanation card. Without the EAS project id the build reports "not set up" and registers nothing. Sign-out revokes this person's token on this phone and forgets the local "registered" memory, so signing back in during the same app run registers again (review on PR #11).
+
+Reason: spec 12 step 3 and "Push may be late, blocked, denied or offline"; acceptance "missing push does not block"; spec 09 least data.
+
+**117.** A muster badge scan does not spend the badge's 30-second step. Entry/exit kiosks redeem the step; the muster check only resolves the worker and checks the frozen list, so the same fresh code can be used for both. Safeguards:
+- the scan needs an attended, registered kiosk (staff with MFA, or a foreman with a kiosk grant) and the attendant's look at the person;
+- a printed badge still needs the face-and-name confirmation;
+- repeated scans of one person are idempotent by event id.
+
+Reason: spec 12 "kiosk uses signed worker badge (dynamic or marked printed) + human check"; avoids a worker being turned away at the assembly point because the same code was just used at the gate.
+
+**118.** Late and corrected muster records:
+- **Late checks.** An offline check whose observed time is before the close is kept as a LATE_RESPONSE amendment. An observed time after the close is refused with `MUSTER_CLOSED`.
+- **Corrections.** After the close, the commander can add a CORRECTION amendment with a note (`amend_muster`, idempotent event id).
+- **Integrity.** Amendments are append-only and chained: each digest covers the previous one, starting from the report digest. The closed report itself (`muster_reports`) is immutable. Each report row carries its frozen-list `member_id`, so a correction can point at one person.
+- **Append order** (review on PR #11). Each amendment gets a sequence number under the per-muster lock (unique per muster), and the chain tip is the highest number, never the newest timestamp: concurrent appends can take the lock in another order than their transactions started. An insert trigger refuses any amendment that does not extend amendment n-1 (or the report, for the first), so the chain cannot fork.
+
+Reason: spec 12 "Prevent edits to closed event; corrections create signed append-only amendment"; "Offline muster scans synchronize once with event UUID and server receipt".
+
+**119.** Muster operations extend the operations contract (spec 11):
+- **Self report.** `MUSTER_SELF_REPORT` comes only from the worker's own session, with channel `APP` or `NOTIFICATION_ACTION`.
+- **Physical verification.** `MUSTER_PHYSICAL_VERIFY` names either a frozen-list `snapshot_member_id` (a tap by the safety team, the worker's own foreman, or the visitor desk for visitors) or a badge scan (`badge_payload` + `badge_kind` + `kiosk_device_id`; the server resolves the person).
+- **Channel.** The channel of a verification is derived on the server from the caller's role, never sent by the phone.
+- **Refusals.** `NOT_IN_MUSTER`, `NOT_OWN_CREW`, `FORBIDDEN`, `MUSTER_CLOSED`.
+
+Reason: spec 12 "Response state machine"; spec 02 foreman own-company rule; CLAUDE.md "queue ownership is exclusive per event class" (these go through the expo-sqlite outbox only).
+
+**120.** Muster status rules:
+- **Self-reports.** SELF_REPORTED_SAFE never becomes VERIFIED_ACCOUNTED without an authorized physical check. A self-report after a physical check is recorded but leaves the person VERIFIED_ACCOUNTED (no downgrade).
+- **Duplicates.** Several checks of the same person keep one current status and every actor's audit row.
+- **Closing.** Needs a 3–2,000-character note and, while anyone is UNACCOUNTED or STATUS_UNKNOWN (workers or visitors), an explicit acknowledgement (`ACKNOWLEDGE_INCOMPLETE_REQUIRED`). The report is written in the same transaction as the close.
+
+Reason: spec 12 non-negotiable principle and "Close-out and immutable report"; acceptance "self-safe distinct from physical verified", "immutable closure".
+
+**121.** The I'M SAFE button on a muster alert opens the app and needs the phone unlocked (`opensAppToForeground`, `isAuthenticationRequired`). The app then queues the signed-in worker's own self-report (channel NOTIFICATION_ACTION) through the outbox:
+- nothing is queued for a signed-out phone or a non-worker;
+- a tap delivered twice is queued once.
+
+A background answer without unlocking would let anyone holding the phone answer for the worker. The in-app I'M SAFE button stays available with or without alerts.
+
+Reason: spec 12 "Interactive notification action can respond where supported"; spec 09 identity ("the worker's phone is not their identity"); safest option for data integrity.
+
+**122.** The muster screen on the phone:
+- **Live updates.** Opening a project's muster console selects that project, so the app's single private channel (decision #106) carries its MUSTER_CHANGED messages. The board also refreshes every 10 seconds while open.
+- **Counts.** Counts are always the server's. Checks still on the phone are shown apart from them as "waiting to sync" (PENDING_SYNC) and are never added locally.
+- **Default list.** People without a physical check come first ("Not seen yet", self-reports included).
+- **Report.** The closed report is shown on the phone and shared as plain text through the native share sheet (no PDF in V1).
+
+Reason: spec 12 "counts label local/unverified vs server authoritative"; "Basic V1 screen/shareable textual summary"; decision #106.

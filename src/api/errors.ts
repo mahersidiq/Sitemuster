@@ -70,6 +70,10 @@ export const KNOWN_API_ERRORS = [
   'TOO_MANY_PENDING',
   'RANGE_INVALID',
   'FOREMAN_NOT_FOUND',
+  // Milestone 11
+  'LABEL_REQUIRED',
+  'ACKNOWLEDGE_INCOMPLETE_REQUIRED',
+  'MUSTER_NOT_CLOSED',
 ] as const;
 export type KnownApiError = (typeof KNOWN_API_ERRORS)[number];
 

@@ -17,6 +17,7 @@ import { createAuthBackend, type AuthBackend } from '../auth/create-gateway';
 import type { AuthGateway } from '../auth/gateway';
 import { deriveAuthState, type AuthState } from '../auth/routing';
 import { wipeDeviceCredentials } from '../device/device-store';
+import { revokeMusterAlerts } from '../notifications/muster-alerts';
 import type { RuntimeEnv } from '../config/runtime-env';
 import { useLanguage } from './language';
 
@@ -164,6 +165,16 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
         error instanceof Error ? error.message : 'unknown',
       );
     });
+    // Muster alerts belong to the person, not the phone: stop them for this person here; the
+    // next sign-in registers the phone again.
+    if (backend.api) {
+      await revokeMusterAlerts(backend.api).catch((error: unknown) => {
+        console.warn(
+          'auth: muster alerts not stopped on the server yet',
+          error instanceof Error ? error.message : 'unknown',
+        );
+      });
+    }
     await backend.gateway.signOut();
     await backend.storage.wipe();
     // The badge secret and upload token belong to this worker only (decision #74).

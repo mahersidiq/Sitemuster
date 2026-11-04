@@ -85,6 +85,8 @@ export function queryKeysFor(projectId: string, scopes: ReadonlySet<RefreshScope
   if (any('ENROLLMENT_CHANGED')) add(queryKeys.roster(projectId));
   // Every date's company reports of the project (prefix key).
   if (any('REPORT_CHANGED')) add(queryKeys.reportsOf(projectId));
+  // The muster list, board and report of the project (prefix key).
+  if (any('MUSTER_CHANGED')) add(queryKeys.musterOf(projectId));
   if (any('PROJECT_CONFIG_CHANGED')) {
     add(queryKeys.project(projectId));
     add(queryKeys.projects);

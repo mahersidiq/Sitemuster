@@ -6,6 +6,7 @@ import { TrackingStatusCard } from '../../src/components/TrackingStatusCard';
 import { Body, Title } from '../../src/components/Typography';
 import { WorkerProjects } from '../../src/components/WorkerProjects';
 import { ForemanCard } from '../../src/fallbacks/ForemanCard';
+import { MusterAlertsSetup, WorkerMusterAlerts } from '../../src/muster/WorkerMuster';
 import { useAuth } from '../../src/state/auth';
 
 export default function WorkerHomeScreen() {
@@ -23,8 +24,10 @@ export default function WorkerHomeScreen() {
   return (
     <Screen testID="worker-home">
       <Title>{t('worker.home.title')}</Title>
+      <WorkerMusterAlerts />
       <TrackingStatusCard />
       <ForemanCard />
+      <MusterAlertsSetup />
       <Body>{t('workerProjects.homeIntro')}</Body>
       <WorkerProjects showJoin />
     </Screen>

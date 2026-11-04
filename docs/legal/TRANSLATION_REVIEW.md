@@ -28,6 +28,22 @@ Seeded into `legal_notice_versions` by migration `20261104130000_m05_orientation
 
 Approving a reviewed text means inserting it as a NEW version, or setting `review_status = 'APPROVED'` with `approved_by`/`approved_at` on the exact reviewed row, through the private operator workflow — never editing the stored text (the database forbids it).
 
+## Muster safety copy in the app (Milestone 11)
+
+The app's muster wording is AI-drafted UI copy in English and Spanish. It is the working text of `MUSTER_SAFETY_LIMITATIONS_EN_V1` / `MUSTER_SAFETY_LIMITATIONS_ES_V1` above: `DRAFT_REQUIRES_HUMAN_REVIEW`, and a production release stays blocked until a bilingual safety/legal reviewer approves it (CLAUDE.md release gate "unverified legal strings").
+
+| Where it appears | Source |
+|---|---|
+| Alert title and body sent to phones ("Emergency muster — tap I'M SAFE" / "Reunión de emergencia — toque ESTOY A SALVO") | `musterNotificationText` in `packages/shared/src/api/muster.ts` |
+| "Supplemental headcount tool, not a certified life-safety or evacuation system…" on the safety, foreman and kiosk screens | `muster.notLifeSafety` |
+| Report notice "Supplemental headcount record, not a certified life-safety record" (also the shared text summary) | `muster.report.notice` |
+| Worker after I'M SAFE: "That is not a physical check: go to the assembly point…" | `muster.worker.selfNote`, `muster.worker.instructions` |
+| Kiosk muster mode: "A badge alone is not proof" | `muster.kioskBanner` |
+| Alert permission explanation ("Alerts can be late or blocked, so always follow the site's emergency plan") | `muster.push.setupBody` |
+| Alert delivery is communication only | `muster.pushNote`, `muster.report.pushLimits` |
+
+The reviewer checks that the Spanish says the same thing as the English, that nothing implies a guaranteed or complete headcount, and that workers are told to follow the site's emergency plan. Approved wording replaces these strings in one PR, with the reviewer recorded here.
+
 ## Topics counsel must review before approval
 
 - Clear, prominent background/Always, precise/approximate, work-site-only location use, limitations, who sees coordinates, the unavoidable local offsite geofence monitoring, worker refusal and fallback kiosk/foreman rights.

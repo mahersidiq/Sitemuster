@@ -12,6 +12,8 @@ type TestGlobals = typeof globalThis & {
   __mapFails?: boolean;
   /** Milestone 09: regions the native map was moved to (animateToRegion). */
   __mapAnimations?: { latitude: number; longitude: number }[];
+  /** Milestone 11: the EAS project id an Expo push token is issued for (unset: none). */
+  __easProjectId?: string;
 };
 
 const mockSecureStore = new Map<string, string>();
@@ -71,7 +73,13 @@ jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {
     get expoConfig() {
-      return { extra: { appEnv: (globalThis as TestGlobals).__appEnv ?? 'development' } };
+      const g = globalThis as TestGlobals;
+      return {
+        extra: {
+          appEnv: g.__appEnv ?? 'development',
+          ...(g.__easProjectId ? { eas: { projectId: g.__easProjectId } } : {}),
+        },
+      };
     },
   },
 }));
@@ -207,6 +215,77 @@ jest.mock('expo-file-system', () => ({
 
 beforeEach(() => {
   (globalThis as CameraGlobals).__cameraGranted = true;
+});
+
+// expo-notifications (Milestone 11): permission, push token and the last tapped alert are
+// controllable; channels and categories are recorded so tests can check the I'M SAFE button.
+interface MockNotificationState {
+  permission: { granted: boolean; canAskAgain: boolean };
+  requestResult: { granted: boolean; canAskAgain: boolean };
+  lastResponse: unknown;
+  responseListeners: Set<(response: unknown) => void>;
+  receivedListeners: Set<(notification: unknown) => void>;
+  categories: Record<string, unknown>;
+  channels: Record<string, unknown>;
+  token: string;
+}
+type NotificationGlobals = typeof globalThis & { __notifications?: MockNotificationState };
+jest.mock('expo-notifications', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react') as typeof import('react');
+  const state = () => (globalThis as NotificationGlobals).__notifications as MockNotificationState;
+  return {
+    AndroidImportance: { DEFAULT: 5, HIGH: 6, MAX: 7 },
+    AndroidNotificationVisibility: { PUBLIC: 1, PRIVATE: 2, SECRET: 3 },
+    DEFAULT_ACTION_IDENTIFIER: 'expo.modules.notifications.actions.DEFAULT',
+    setNotificationHandler: jest.fn(),
+    setNotificationChannelAsync: jest.fn(async (id: string, channel: unknown) => {
+      state().channels[id] = channel;
+      return channel;
+    }),
+    setNotificationCategoryAsync: jest.fn(async (id: string, actions: unknown) => {
+      state().categories[id] = actions;
+      return { identifier: id, actions };
+    }),
+    getPermissionsAsync: jest.fn(async () => ({ ...state().permission })),
+    requestPermissionsAsync: jest.fn(async () => {
+      state().permission = { ...state().requestResult };
+      return { ...state().permission };
+    }),
+    getExpoPushTokenAsync: jest.fn(async () => ({ type: 'expo', data: state().token })),
+    addNotificationReceivedListener: jest.fn((listener: (notification: unknown) => void) => {
+      state().receivedListeners.add(listener);
+      return { remove: () => state().receivedListeners.delete(listener) };
+    }),
+    useLastNotificationResponse: () => {
+      const [value, setValue] = React.useState<unknown>(state().lastResponse);
+      React.useEffect(() => {
+        const listener = (response: unknown) => setValue(response);
+        state().responseListeners.add(listener);
+        return () => {
+          state().responseListeners.delete(listener);
+        };
+      }, []);
+      return value;
+    },
+    clearLastNotificationResponseAsync: jest.fn(async () => {
+      state().lastResponse = null;
+    }),
+  };
+});
+
+beforeEach(() => {
+  (globalThis as NotificationGlobals).__notifications = {
+    permission: { granted: false, canAskAgain: true },
+    requestResult: { granted: true, canAskAgain: true },
+    lastResponse: null,
+    responseListeners: new Set(),
+    receivedListeners: new Set(),
+    categories: {},
+    channels: {},
+    token: 'ExponentPushToken[testtoken0001]',
+  };
+  delete (globalThis as TestGlobals).__easProjectId;
 });
 
 // Transistorsoft native module: absent in Jest. A benign stand-in that reports "While Using" so
