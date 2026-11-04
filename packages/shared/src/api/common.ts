@@ -54,6 +54,10 @@ export const ApiErrorCodeSchema = z.enum([
   'REAUTHENTICATION_REQUIRED',
   'MFA_REQUIRED',
   'ORG_OWNER_TRANSFER_REQUIRED',
+  // Reviewer demo (Milestone 13).
+  'DEMO_NOT_ALLOWED',
+  'NOT_A_DEMO_WORKER',
+  'DEMO_WAIT',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

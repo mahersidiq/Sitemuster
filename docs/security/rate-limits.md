@@ -38,6 +38,7 @@ This page lists every limit in the system. `tests/security/rate-limit-inventory.
 | Account deletion | `account_delete` | 5 a day | person | `account-delete` |
 | Push registration | `push_token_hour` | 20 an hour | person | every insert into `push_tokens` (trigger) |
 | Muster start | `muster_start_hour` | 20 an hour | person | every insert into `muster_events` (trigger); a real emergency is never more than a few starts |
+| Reviewer demo simulation | `demo_simulation_hour` | 120 an hour | staff member | `demo-simulate` (`begin_demo_simulation`; only allowlisted demo projects, new in M13) |
 
 ## Sign-in codes (Supabase Auth)
 

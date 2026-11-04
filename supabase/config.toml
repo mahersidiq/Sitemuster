@@ -456,6 +456,10 @@ verify_jwt = true
 [functions.account-delete]
 verify_jwt = true
 
+# Milestone 13: reviewer demo simulation (the caller's JWT; the database checks the allowlist).
+[functions.demo-simulate]
+verify_jwt = true
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false

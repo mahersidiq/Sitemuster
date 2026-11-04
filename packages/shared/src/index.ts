@@ -15,6 +15,7 @@ export * from './api/orientation.ts';
 export * from './api/reports.ts';
 export * from './api/muster.ts';
 export * from './api/account.ts';
+export * from './api/demo.ts';
 export * from './replay/fixture-schema.ts';
 export * from './providers/types.ts';
 export * from './providers/registry.ts';
