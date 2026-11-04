@@ -19,7 +19,7 @@ import { GEOFENCE_TEMPLATE, LOCATION_TEMPLATE, renderTemplate } from './template
  * integrity: persistMode, autoSync, the native queue (records persisted BEFORE JavaScript sees
  * them), coordinate-free templates, whole-batch 2xx acknowledgement, 401 + native token refresh,
  * geofence transitions with initial-entry triggering, and the captured HTTP wire.
- * It is NOT proof of device behaviour; real devices are tested separately (HUMAN_CHECKLIST §9).
+ * It is NOT proof of device behaviour; real devices are tested separately (HUMAN_CHECKLIST §12).
  * Never compiled into release bundles: only loaded behind `__DEV__` or from tests.
  */
 export const SIMULATED_SDK_MARKER = 'SITEMUSTER-SIMULATED-SDK';

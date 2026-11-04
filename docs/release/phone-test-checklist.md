@@ -17,7 +17,7 @@ location privacy sign-off) are part of this checklist; run them too.
 - [ ] Staging has the current migrations and functions (`deploy-backend` workflow, target staging).
 - [ ] A test project on staging whose circle covers a place you can walk to, with one company, its
   foreman, a kiosk attendant and two test workers (one per platform).
-- [ ] For the network items: the intercepting proxy from HUMAN_CHECKLIST §10 on the test phones
+- [ ] For the network items: the intercepting proxy from HUMAN_CHECKLIST §12 on the test phones
   only, and the capture checker ready:
   `npm run privacy:capture-check -- <capture.har> --site <lat>,<lng>,<radius_m>`.
 

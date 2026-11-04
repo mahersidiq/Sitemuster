@@ -17,7 +17,7 @@ this build agent does not have), **BLOCKED** (needs a human decision, money or c
 | No cross-project ingestion | PASS | pgTAP `024_device_ingestion`; `supabase/functions/_shared/ingest-core.test.ts`; replay fixture 55 |
 | Old-device credential refused | PASS | pgTAP `014_devices_credentials`; `tests/backend/pen-edge.test.ts` (revoked phone refused on the next upload) |
 | No off-site coordinate transmitted — automated wire tests | PASS | `src/tracking/tracking.test.ts` (simulated SDK wire for a whole day, with a leaking negative control); `tests/security/location-wire-privacy.test.ts` |
-| No off-site coordinate transmitted — real devices (network capture) | NOT_EXECUTED_PHYSICAL_DEVICE | HUMAN_CHECKLIST §10 with `npm run privacy:capture-check`; until signed off production stays TRACKING_LIMITED (decision #90) |
+| No off-site coordinate transmitted — real devices (network capture) | NOT_EXECUTED_PHYSICAL_DEVICE | HUMAN_CHECKLIST §12 with `npm run privacy:capture-check`; until signed off production stays TRACKING_LIMITED (decision #90) |
 | Background-mode behaviour on real devices | NOT_EXECUTED_PHYSICAL_DEVICE | `docs/release/phone-test-checklist.md` §2–§3 |
 | Self-report never shown as physical verification | PASS | pgTAP `028_muster`; `tests/mobile/muster-flows.test.tsx` |
 | Offline events recoverable, no duplicates | PASS | replay fixtures (`tests/location-traces`), `src/outbox` tests, `tests/backend/operations.test.ts` |

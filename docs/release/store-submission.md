@@ -12,7 +12,7 @@ human decision (decision #48 "stop and ask before publishing anything").
 | Legal approval of the worker location notice, muster limitations and deletion notice, English **and** Spanish (TRANSLATION_REVIEW) | counsel | BLOCKED — production refuses consent and musters until then |
 | Public **privacy policy URL** (both stores require one) | owner + counsel, hosted on the company's domain | BLOCKED — V1 builds no website; a single static page is enough |
 | Public **account-deletion web page** (Google Play requires a link where people can ask for deletion without the app) | owner | BLOCKED — the same static page can describe the in-app path and give a contact address |
-| Real-device location privacy sign-off per platform and app version (HUMAN_CHECKLIST §10, decision #90) | owner | `NOT_EXECUTED_PHYSICAL_DEVICE` — until then production phones run TRACKING_LIMITED |
+| Real-device location privacy sign-off per platform and app version (HUMAN_CHECKLIST §12, decision #90) | owner | `NOT_EXECUTED_PHYSICAL_DEVICE` — until then production phones run TRACKING_LIMITED |
 | Transistorsoft Android release license bound to the final package id (HUMAN_CHECKLIST §10) | owner (purchase) | BLOCKED |
 | Reviewer demo seeded on production (`docs/release/reviewer-demo.md`) | owner | BLOCKED on the legal approval above |
 | Phone test checklist passed on the release build (`docs/release/phone-test-checklist.md`) | owner | `NOT_EXECUTED_PHYSICAL_DEVICE` |

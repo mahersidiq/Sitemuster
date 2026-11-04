@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ANDROID_BLOCKED_PERMISSIONS, ANDROID_TRACKING_PERMISSIONS } from '../../app.config';
-import { REPO_ROOT, readRepoFile } from '../support/repo';
+import { listFiles, REPO_ROOT, readRepoFile } from '../support/repo';
 
 /**
  * Milestone 13 release documents are part of the release gate, so they are checked like code:
@@ -206,5 +206,53 @@ describe('store review texts', () => {
   it('match the in-app disclosure to the Play wording', () => {
     expect(APP_EN.tracking.disclosure.body).toContain('collects location data');
     expect(APP_EN.tracking.disclosure.body).toContain('even when the app is closed or not in use');
+  });
+});
+
+describe('HUMAN_CHECKLIST references', () => {
+  // "## 3b. Email…" → "3b"; the subsections (### …) belong to the numbered section above them.
+  const sectionOf = new Map<string, string>();
+  let current = '';
+  for (const line of readRepoFile('docs/setup/HUMAN_CHECKLIST.md').split('\n')) {
+    const numbered = /^## (\d+[a-z]?)\. /.exec(line);
+    if (numbered?.[1]) current = numbered[1];
+    const heading = /^#{2,3} (.+)$/.exec(line);
+    if (heading?.[1]) sectionOf.set(heading[1], current);
+  }
+  // Migrations are immutable history and are not scanned.
+  const references = listFiles(['docs', 'scripts', 'src', 'supabase/functions', 'app'], (path) =>
+    /\.(md|ts|tsx|mts)$/.test(path),
+  ).flatMap((path) =>
+    readRepoFile(path)
+      .split('\n')
+      .flatMap((line, index) =>
+        [...line.matchAll(/HUMAN_CHECKLIST(?:\.md)? §(\d+[a-z]?)/g)].map((match) => ({
+          where: `${path}:${index + 1}`,
+          line,
+          section: match[1] ?? '',
+        })),
+      ),
+  );
+
+  it('name sections that exist', () => {
+    expect(references.length).toBeGreaterThan(20);
+    const sections = new Set(sectionOf.values());
+    expect(references.filter((ref) => !sections.has(ref.section)).map((ref) => ref.where)).toEqual(
+      [],
+    );
+  });
+
+  it('send the location privacy capture to the section that holds its steps', () => {
+    const signoff = [...sectionOf].find(([heading]) =>
+      heading.startsWith('Real-device location privacy sign-off'),
+    )?.[1];
+    expect(signoff).toBeTruthy();
+    const capture = references.filter((ref) =>
+      /privacy sign-off|network capture|network-capture|capture-check|intercepting proxy|on-site coordinates|TRACKING_LIMITED/i.test(
+        ref.line,
+      ),
+    );
+    expect(capture.length).toBeGreaterThanOrEqual(8);
+    expect(capture.filter((ref) => ref.section !== signoff).map((ref) => ref.where)).toEqual([]);
   });
 });
