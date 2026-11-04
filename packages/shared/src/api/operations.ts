@@ -53,6 +53,8 @@ const ManualPayloadSchema = z
     corrected_start_at: UtcIsoSchema.optional(),
     corrected_end_at: UtcIsoSchema.optional(),
     reason: z.string().trim().min(3).max(1000),
+    /** A worker or foreman correction request this change approves (Milestone 10). */
+    request_id: UuidSchema.optional(),
   })
   .superRefine((payload, ctx) => {
     if (!payload.corrected_start_at && !payload.corrected_end_at) {
@@ -225,6 +227,8 @@ export const OPERATION_REASONS = [
   'ALREADY_CHECKED_IN',
   'OPERATION_NOT_SUPPORTED',
   'EVENT_UUID_CONFLICT',
+  'REQUEST_NOT_FOUND',
+  'REQUEST_ALREADY_DECIDED',
 ] as const;
 export type OperationReason = (typeof OPERATION_REASONS)[number];
 

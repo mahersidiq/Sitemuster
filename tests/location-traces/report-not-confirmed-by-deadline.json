@@ -1,0 +1,75 @@
+{
+  "fixture_version": 1,
+  "id": "report-not-confirmed-by-deadline",
+  "description": "Friday's company report is due Saturday 12:00 (Mon–Sat site); the foreman never answers in time, so it is NOT_CONFIRMED (never approved) and a late answer is refused. Sunday has no report.",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "clock_start_utc": "2026-11-06T13:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-06T14:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A"]
+    },
+    {
+      "at_utc": "2026-11-06T22:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "EXIT",
+      "workers": ["A"]
+    },
+    {
+      "at_utc": "2026-11-07T07:00:00Z",
+      "type": "DAILY_REPORT",
+      "local_date": "2026-11-06"
+    },
+    {
+      "at_utc": "2026-11-07T18:30:00Z",
+      "type": "TIME_ADVANCE"
+    },
+    {
+      "at_utc": "2026-11-07T19:00:00Z",
+      "type": "REPORT_RESPONSE",
+      "local_date": "2026-11-06",
+      "action": "CONFIRM",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004801"
+    },
+    {
+      "at_utc": "2026-11-09T07:00:00Z",
+      "type": "DAILY_REPORT",
+      "local_date": "2026-11-08"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000004801": {
+        "status": "rejected",
+        "reason": "REPORT_DEADLINE_PASSED"
+      }
+    },
+    "reports": [
+      {
+        "local_date": "2026-11-06",
+        "version": 1,
+        "status": "NOT_CONFIRMED",
+        "workers": 1,
+        "definite_seconds": 28800,
+        "due_at": "2026-11-07T18:00:00Z"
+      }
+    ]
+  }
+}

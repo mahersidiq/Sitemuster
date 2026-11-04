@@ -1264,7 +1264,12 @@ class Machine {
         approved_by: item.actorId,
         reason: item.reason,
         original_json: original,
-        proposed_json: { start_at: target.startAt, end_at: target.endAt, status: target.status },
+        proposed_json: {
+          start_at: target.startAt,
+          end_at: target.endAt,
+          status: target.status,
+          ...(item.requestId ? { request_id: item.requestId } : {}),
+        },
         action_at: item.receivedAt,
         event_uuid: item.eventUuid,
       });
@@ -1320,7 +1325,12 @@ class Machine {
       approved_by: item.actorId,
       reason: item.reason,
       original_json: {},
-      proposed_json: { start_at: session.startAt, end_at: session.endAt, status: session.status },
+      proposed_json: {
+        start_at: session.startAt,
+        end_at: session.endAt,
+        status: session.status,
+        ...(item.requestId ? { request_id: item.requestId } : {}),
+      },
       action_at: item.receivedAt,
       event_uuid: item.eventUuid,
     });

@@ -4,16 +4,19 @@ import {
   AddressResolveResponseSchema,
   AddressSearchResponseSchema,
   BulkApproveResultSchema,
+  DailyReportsResponseSchema,
   DeviceActivateResponseSchema,
   DeviceRenewResponseSchema,
   IngestOperationsResponseSchema,
   OrientationSessionSchema,
   parseBroadcastPayload,
   projectTopic,
+  ReportConfirmResponseSchema,
   type DeviceActivateRequest,
   type IngestOperationsRequest,
   type Locale,
   type ProjectStatus,
+  type ReportConfirmRequest,
 } from '@sitemuster/shared';
 
 import { TrackingPlanSchema } from '../tracking/plan';
@@ -22,7 +25,11 @@ import {
   ApiError,
   type BulkResult,
   type CorrectableSession,
+  type CorrectionRequestInput,
+  type CorrectionRequestRow,
   type CrewMember,
+  type ForemanKioskGrant,
+  type MyAttendance,
   type ForemanProject,
   type KioskRegistration,
   type OpenVisit,
@@ -478,6 +485,94 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
 
   subscribeProject(projectId: string, listener: ProjectChannelListener): () => void {
     return subscribeProjectChannel(this.client, projectId, listener);
+  }
+
+  // ---------------------------------------------------------------- Milestone 10
+
+  async listReports(projectId: string, localDate: string) {
+    return DailyReportsResponseSchema.parse(
+      await this.invoke('daily-reports', {
+        schema_version: 1,
+        action: 'list',
+        project_id: projectId,
+        local_date: localDate,
+      }),
+    );
+  }
+
+  async pendingReports() {
+    return DailyReportsResponseSchema.parse(
+      await this.invoke('daily-reports', { schema_version: 1, action: 'pending' }),
+    );
+  }
+
+  async reissueReport(input: {
+    projectId: string;
+    companyId: string;
+    localDate: string;
+    reason: string;
+  }) {
+    return DailyReportsResponseSchema.parse(
+      await this.invoke('daily-reports', {
+        schema_version: 1,
+        action: 'reissue',
+        project_id: input.projectId,
+        company_id: input.companyId,
+        local_date: input.localDate,
+        reason: input.reason,
+      }),
+    );
+  }
+
+  async answerReport(request: ReportConfirmRequest) {
+    return ReportConfirmResponseSchema.parse(await this.invoke('report-confirm', request));
+  }
+
+  async myAttendance(projectId: string, from: string, to: string) {
+    return this.rpc<MyAttendance>('my_attendance', {
+      p_project_id: projectId,
+      p_from: from,
+      p_to: to,
+    });
+  }
+
+  async requestCorrection(input: CorrectionRequestInput) {
+    return this.rpc<{ request_id: string; duplicate: boolean }>('request_attendance_correction', {
+      p_project_id: input.projectId,
+      p_session_id: input.sessionId,
+      p_proposed_start_at: input.proposedStartAt,
+      p_proposed_end_at: input.proposedEndAt,
+      p_reason: input.reason,
+      p_event_uuid: input.eventUuid,
+    });
+  }
+
+  async correctionRequests(projectId: string) {
+    return this.rpc<CorrectionRequestRow[]>('correction_requests', { p_project_id: projectId });
+  }
+
+  async rejectCorrectionRequest(requestId: string, reason: string) {
+    await this.rpc('reject_correction_request', { p_request_id: requestId, p_reason: reason });
+  }
+
+  async foremanKioskGrants(projectId: string) {
+    return this.rpc<ForemanKioskGrant[]>('foreman_kiosk_grants', { p_project_id: projectId });
+  }
+
+  async setForemanKioskGrant(input: {
+    projectId: string;
+    companyId: string;
+    foremanProfileId: string;
+    enabled: boolean;
+    reason: string;
+  }) {
+    await this.rpc('set_foreman_kiosk_grant', {
+      p_project_id: input.projectId,
+      p_company_id: input.companyId,
+      p_foreman_profile_id: input.foremanProfileId,
+      p_enabled: input.enabled,
+      p_reason: input.reason,
+    });
   }
 }
 

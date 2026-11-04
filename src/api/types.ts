@@ -1,5 +1,6 @@
 import type {
   BroadcastMessage,
+  DailyReportsResponse,
   DeviceActivateRequest,
   DeviceActivateResponse,
   DeviceRenewResponse,
@@ -8,6 +9,9 @@ import type {
   Locale,
   ProjectStaffRole,
   ProjectStatus,
+  ReportConfirmRequest,
+  ReportConfirmResponse,
+  SessionRecord,
   WorkWindow,
   WorkWindowInput,
 } from '@sitemuster/shared';
@@ -371,6 +375,90 @@ export interface SiteMusterApi {
    * changed"; screens refetch authorized rows. Returns the unsubscribe function.
    */
   subscribeProject(projectId: string, listener: ProjectChannelListener): () => void;
+  // Milestone 10: daily company reports, foreman answers, own hours and correction requests.
+  /** Staff and the company's foreman; generates missing reports for an ended project-local day. */
+  listReports(projectId: string, localDate: string): Promise<DailyReportsResponse>;
+  /** The signed-in foreman's reports still open for an answer (across projects). */
+  pendingReports(): Promise<DailyReportsResponse>;
+  /** Owner, PM or superintendent with MFA: a new version after corrections. */
+  reissueReport(input: {
+    projectId: string;
+    companyId: string;
+    localDate: string;
+    reason: string;
+  }): Promise<DailyReportsResponse>;
+  /** CONFIRM, DISPUTE or SUBMIT_CORRECTION, once per version (the company's foreman only). */
+  answerReport(request: ReportConfirmRequest): Promise<ReportConfirmResponse>;
+  /** The worker's own sessions and correction requests on one project (never anyone else's). */
+  myAttendance(projectId: string, from: string, to: string): Promise<MyAttendance>;
+  requestCorrection(
+    input: CorrectionRequestInput,
+  ): Promise<{ request_id: string; duplicate: boolean }>;
+  correctionRequests(projectId: string): Promise<CorrectionRequestRow[]>;
+  rejectCorrectionRequest(requestId: string, reason: string): Promise<void>;
+  foremanKioskGrants(projectId: string): Promise<ForemanKioskGrant[]>;
+  setForemanKioskGrant(input: {
+    projectId: string;
+    companyId: string;
+    foremanProfileId: string;
+    enabled: boolean;
+    reason: string;
+  }): Promise<void>;
+}
+
+// Milestone 10 — reports are ESTIMATES of onsite presence: never payroll or a guaranteed headcount.
+
+export interface MyAttendance {
+  project: { id: string; name: string; time_zone: string };
+  configs: { config_version_id: string; presence_unknown_seconds: number }[];
+  /** The worker's own sessions (shared SessionRecord shape). */
+  sessions: SessionRecord[];
+  requests: {
+    request_id: string;
+    session_id: string | null;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    reason: string;
+    proposed: { proposed_start_at: string | null; proposed_end_at: string | null };
+    decision_reason: string | null;
+    created_at: string;
+  }[];
+}
+
+export interface CorrectionRequestInput {
+  projectId: string;
+  sessionId: string | null;
+  proposedStartAt: string | null;
+  proposedEndAt: string | null;
+  reason: string;
+  eventUuid: string;
+}
+
+export interface CorrectionRequestRow {
+  request_id: string;
+  worker_id: string;
+  worker_name: string;
+  company_name: string | null;
+  channel: 'WORKER_REQUEST' | 'FOREMAN_REQUEST';
+  session_id: string | null;
+  original: { start_at?: string; end_at?: string | null; status?: string };
+  proposed: {
+    proposed_start_at?: string | null;
+    proposed_end_at?: string | null;
+    note?: string | null;
+  };
+  reason: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  decision_reason: string | null;
+  created_at: string;
+  decided_at: string | null;
+}
+
+export interface ForemanKioskGrant {
+  foreman_profile_id: string;
+  name: string;
+  company_id: string;
+  company_name: string;
+  can_operate_kiosk: boolean;
 }
 
 export interface KioskRegistration {

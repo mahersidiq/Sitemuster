@@ -179,3 +179,55 @@ export async function post(jwt: string, events: unknown[], sentAt = new Date()) 
 
 export const results = (body: unknown) => IngestOperationsResponseSchema.parse(body).results;
 export const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000);
+
+/** A project with one company, `size` approved crew workers and a verified foreman. */
+export async function crewSite(size: number) {
+  const { projectId, companyId } = await site();
+  const crew: string[] = [];
+  for (let i = 0; i < size; i += 1) {
+    crew.push(await enroll(projectId, { companyId, name: `Crew Member ${i + 1}` }));
+  }
+  const foreman = await workerSession();
+  const foremanProfile = await enroll(projectId, {
+    userId: foreman.userId,
+    companyId,
+    name: 'Fran Foreman',
+  });
+  await withDb((db) =>
+    db.query(
+      "update public.subcontractor_members set role = 'FOREMAN' where company_id = $1 and worker_profile_id = $2",
+      [companyId, foremanProfile],
+    ),
+  );
+  return { projectId, companyId, crew, foreman };
+}
+
+export async function assignStaff(client: SupabaseClient, projectId: string, role: string) {
+  const userId = await userIdOf(client);
+  await withDb((db) =>
+    db.query(
+      'insert into public.project_staff (project_id, user_id, role, emergency_designated) values ($1, $2, $3, false)',
+      [projectId, userId, role],
+    ),
+  );
+}
+
+export const crewBatch = (
+  projectId: string,
+  companyId: string,
+  workers: string[],
+  direction: 'ENTRY' | 'EXIT' = 'ENTRY',
+  minutes = 5,
+  observedAt: Date = minutesAgo(minutes),
+) => ({
+  event_uuid: crypto.randomUUID(),
+  project_id: projectId,
+  operation_type: direction === 'ENTRY' ? 'FOREMAN_BULK_ENTRY' : 'FOREMAN_BULK_EXIT',
+  observed_at: observedAt.toISOString(),
+  payload: {
+    subcontractor_id: companyId,
+    worker_ids: workers,
+    direction,
+    verification_method: 'PHYSICAL_CONFIRMATION',
+  },
+});

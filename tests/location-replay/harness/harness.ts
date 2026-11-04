@@ -29,6 +29,8 @@ import {
   windowInstances,
   localDateOf,
   addDays,
+  generateDayReports,
+  reissueDayReport,
 } from '@sitemuster/shared';
 
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -176,6 +178,16 @@ export interface ReplayObservation {
   timezone: string;
   now: string;
   presenceUnknownSeconds: number;
+  /** Every stored report version; status as readers see it now (overdue = NOT_CONFIRMED). */
+  reports: {
+    local_date: string;
+    version: number;
+    status: string;
+    workers: number;
+    definite_seconds: number;
+    uncertain_seconds: number;
+    due_at: string;
+  }[];
 }
 
 const WINDOWS_DEFAULT = DEFAULT_WORK_WINDOWS.map((w) => ({ ...w }));
@@ -287,7 +299,8 @@ export class ReplayHarness {
       return { eligible: false, reason: 'EMPLOYER_NOT_VERIFIED' };
     if (worker.eligibility.consent !== 'VALID')
       return { eligible: false, reason: 'CONSENT_MISSING' };
-    return { eligible: true, reason: null };
+    // Sessions record the employer at opening (company reports, Milestone 10).
+    return { eligible: true, reason: null, employerId: this.companyId };
   }
 
   async setup(): Promise<void> {
@@ -1240,6 +1253,57 @@ export class ReplayHarness {
         ]);
         break;
       }
+      case 'DAILY_REPORT':
+        await generateDayReports(
+          this.backend.reports,
+          this.project.id,
+          input.local_date,
+          iso(this.now),
+        );
+        break;
+      case 'REPORT_RESPONSE': {
+        const versions = (await this.backend.reportRows(this.project.id))
+          .filter((row) => row.localDate === input.local_date)
+          .sort((a, b) => b.version - a.version);
+        const target = input.version
+          ? versions.find((row) => row.version === input.version)
+          : versions[0];
+        if (!target)
+          throw new Error(`fixture ${this.fixture.id}: no report for ${input.local_date}`);
+        const eventUuid = uuid();
+        const answer = await this.backend.answerReport({
+          reportId: target.reportId,
+          version: target.version,
+          action: input.action,
+          comment: input.reason ?? null,
+          eventUuid,
+          actorId: this.foremanId,
+          now: iso(this.now),
+        });
+        this.record({
+          eventUuid,
+          status: answer.ok ? (answer.duplicate ? 'duplicate' : 'accepted') : 'rejected',
+          reason: answer.ok ? null : answer.code,
+          review: false,
+        });
+        break;
+      }
+      case 'REPORT_REISSUE': {
+        const versions = (await this.backend.reportRows(this.project.id)).filter(
+          (row) => row.localDate === input.local_date,
+        );
+        const companyId = versions[0]?.companyId;
+        if (!companyId) throw new Error(`fixture ${this.fixture.id}: nothing to reissue`);
+        await reissueDayReport(this.backend.reports, {
+          projectId: this.project.id,
+          companyId,
+          localDate: input.local_date,
+          reason: input.reason,
+          actorId: this.superId,
+          now: iso(this.now),
+        });
+        break;
+      }
       case 'PROJECT_STATUS_CHANGE': {
         await this.backend.setProjectStatus(this.project.id, input.status);
         this.projectStatus = input.status;
@@ -1313,6 +1377,20 @@ export class ReplayHarness {
       .map((r) => r.reason ?? '')
       .sort();
     const latestConfig = configAt(this.project.versions, iso(this.now)) as AttendanceConfig;
+    const reports = (await this.backend.reportRows(this.project.id))
+      .sort((a, b) => a.localDate.localeCompare(b.localDate) || a.version - b.version)
+      .map((row) => ({
+        local_date: row.localDate,
+        version: row.version,
+        status:
+          row.status === 'PENDING_CONFIRMATION' && ms(row.dueAt) <= this.now
+            ? 'NOT_CONFIRMED'
+            : row.status,
+        workers: row.summary.totals.workers,
+        definite_seconds: row.summary.totals.definite_seconds,
+        uncertain_seconds: row.summary.totals.uncertain_seconds,
+        due_at: iso(ms(row.dueAt)),
+      }));
     return {
       presence: track?.presence ?? 'OFFSITE',
       session_count: mine.length,
@@ -1352,6 +1430,7 @@ export class ReplayHarness {
       timezone: this.timezone,
       now: iso(this.now),
       presenceUnknownSeconds: latestConfig.presenceUnknownSeconds,
+      reports,
     };
   }
 

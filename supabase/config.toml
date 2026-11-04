@@ -438,6 +438,13 @@ verify_jwt = false
 [functions.ingest-operations]
 verify_jwt = true
 
+# Daily company reports and foreman answers (Milestone 10): the caller's Supabase JWT is required.
+[functions.daily-reports]
+verify_jwt = true
+
+[functions.report-confirm]
+verify_jwt = true
+
 [analytics]
 # Log analytics stack is not needed for CI or tests.
 enabled = false

@@ -8,7 +8,10 @@ import {
   type EngineOutput,
   type ItemResult,
   type ProjectContext,
+  type CompanyDayReport,
   type ReceiptRow,
+  type ReportStore,
+  rpcReportStore,
   type ServiceRpc,
   type SessionRecord,
   sha256Hex,
@@ -22,9 +25,13 @@ import {
 import type {
   BackendSnapshot,
   Eligibility,
+  ReportAnswer,
+  ReportAnswerInput,
   ServerBackend,
   StoredPosition,
+  StoredReport,
 } from '../../location-replay/harness/backend';
+import { settingsOf } from '../../location-replay/harness/settings';
 
 /**
  * Replay backend over the REAL local Postgres (decision #80). Everything a fixture does runs in one
@@ -35,27 +42,6 @@ import type {
  * World setup (organizations, projects, enrollments, devices) is plain SQL as the test superuser.
  */
 type Json = Record<string, unknown>;
-
-function settingsOf(config: AttendanceConfig): Json {
-  return {
-    geofence_radius_m: config.radiusM,
-    exit_hysteresis_m: config.exitHysteresisM,
-    entry_dwell_seconds: config.entryDwellSeconds,
-    max_horizontal_accuracy_m: config.maxHorizontalAccuracyM,
-    location_fresh_seconds: config.locationFreshSeconds,
-    presence_unknown_seconds: config.presenceUnknownSeconds,
-    queue_auto_reconcile_age_hours: config.lateReviewHours,
-    max_device_clock_skew_seconds: config.maxClockSkewSeconds,
-    work_window_grace_minutes: config.workWindowGraceMinutes,
-    shift_closeout_grace_minutes: config.closeoutGraceMinutes,
-    always_open_24h_review_open_hours: config.alwaysOpenReviewHours,
-    operates_24_7: config.operates24x7,
-    work_windows: config.windows.map((window) => ({
-      ...window,
-      crosses_midnight: window.local_end_time < window.local_start_time,
-    })),
-  };
-}
 
 export class PgReplayBackend implements ServerBackend, AttendanceStore {
   readonly mode = 'database' as const;
@@ -349,6 +335,75 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
       }),
     );
   };
+
+  get reports(): ReportStore {
+    return rpcReportStore(this.rpc);
+  }
+
+  private readonly foremen = new Set<string>();
+
+  /** The fixture's foreman as a real verified FOREMAN of the replay company (report answers). */
+  private async ensureForeman(userId: string): Promise<void> {
+    if (this.foremen.has(userId)) return;
+    const profileId = this.id(`foreman|${userId}`);
+    await this.db.query(
+      `insert into auth.users (instance_id, id, aud, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+       values ('00000000-0000-0000-0000-000000000000', $1, 'authenticated', 'authenticated', '{}', '{}', now(), now())`,
+      [userId],
+    );
+    await this.db.query(
+      "insert into public.worker_profiles (id, auth_user_id, legal_name, managed_identity) values ($1, $2, 'Replay foreman', false)",
+      [profileId, userId],
+    );
+    await this.db.query(
+      "insert into public.subcontractor_members (company_id, worker_profile_id, role, verification_status) values ($1, $2, 'FOREMAN', 'VERIFIED')",
+      [this.companyId, profileId],
+    );
+    this.foremen.add(userId);
+  }
+
+  async answerReport(input: ReportAnswerInput): Promise<ReportAnswer> {
+    await this.ensureForeman(input.actorId);
+    const row = (await this.rpc('edge_confirm_report', {
+      p_report_id: input.reportId,
+      p_version: input.version,
+      p_action: input.action,
+      p_comment: input.comment,
+      p_proposed: null,
+      p_event_uuid: input.eventUuid,
+      p_actor: input.actorId,
+      p_now: input.now,
+    })) as { ok: boolean; status: string; duplicate?: boolean; code?: string };
+    return row.ok
+      ? { ok: true, status: row.status, duplicate: row.duplicate === true }
+      : { ok: false, code: String(row.code), status: row.status };
+  }
+
+  async reportRows(projectId: string): Promise<StoredReport[]> {
+    const result = await this.db.query<{
+      id: string;
+      company_id: string;
+      local_date: string;
+      version: number;
+      status: string;
+      due_at: Date;
+      summary: CompanyDayReport;
+    }>(
+      `select id::text, subcontractor_id::text as company_id, local_date::text, report_version as version,
+              status::text, due_at, summary
+         from public.daily_company_reports where project_id = $1 order by local_date, report_version`,
+      [projectId],
+    );
+    return result.rows.map((row) => ({
+      reportId: row.id,
+      companyId: row.company_id,
+      localDate: row.local_date,
+      version: row.version,
+      status: row.status,
+      dueAt: row.due_at.toISOString(),
+      summary: row.summary,
+    }));
+  }
 
   async visitorEvent(event: VisitorEvent): Promise<ItemResult> {
     let visitorId = this.visitors.get(event.visitorKey);

@@ -138,6 +138,36 @@ function WorkforceCard({ detail }: { detail: ProjectDetail }) {
           testID="open-workers"
         />
       ) : null}
+      {permissions.can_view_roster ? (
+        <AppButton
+          variant="secondary"
+          label={t('reports.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/reports', params: { id: project.id } })
+          }
+          testID="open-reports"
+        />
+      ) : null}
+      {permissions.can_correct_attendance ? (
+        <AppButton
+          variant="secondary"
+          label={t('requests.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/requests', params: { id: project.id } })
+          }
+          testID="open-requests-project"
+        />
+      ) : null}
+      {permissions.can_correct_attendance ? (
+        <AppButton
+          variant="secondary"
+          label={t('kioskGrants.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/foremen', params: { id: project.id } })
+          }
+          testID="open-foremen"
+        />
+      ) : null}
     </Card>
   );
 }

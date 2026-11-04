@@ -1,0 +1,135 @@
+{
+  "fixture_version": 1,
+  "id": "contractor-report-disputed",
+  "description": "The foreman disputes the daily company report; version 1 stays exactly as issued, staff correct Ben's exit and reissue version 2, which the foreman confirms. A second answer and an answer to the old version are refused.",
+  "spec_case": 47,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "other_workers": [
+    {
+      "key": "B",
+      "has_phone": false
+    }
+  ],
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T13:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A", "B"]
+    },
+    {
+      "at_utc": "2026-11-03T22:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "EXIT",
+      "workers": ["A", "B"]
+    },
+    {
+      "at_utc": "2026-11-04T07:00:00Z",
+      "type": "DAILY_REPORT",
+      "local_date": "2026-11-03"
+    },
+    {
+      "at_utc": "2026-11-04T07:30:00Z",
+      "type": "DAILY_REPORT",
+      "local_date": "2026-11-03"
+    },
+    {
+      "at_utc": "2026-11-04T14:00:00Z",
+      "type": "REPORT_RESPONSE",
+      "local_date": "2026-11-03",
+      "action": "DISPUTE",
+      "reason": "Ben left at noon, not 4 pm",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004701"
+    },
+    {
+      "at_utc": "2026-11-04T14:05:00Z",
+      "type": "REPORT_RESPONSE",
+      "local_date": "2026-11-03",
+      "action": "CONFIRM",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004702"
+    },
+    {
+      "at_utc": "2026-11-04T15:00:00Z",
+      "type": "MANUAL_ATTENDANCE",
+      "worker": "B",
+      "session": "LAST",
+      "corrected_end_utc": "2026-11-03T18:00:00Z",
+      "reason": "Foreman dispute: Ben left at noon"
+    },
+    {
+      "at_utc": "2026-11-04T15:10:00Z",
+      "type": "REPORT_REISSUE",
+      "local_date": "2026-11-03",
+      "reason": "Corrected after the foreman dispute"
+    },
+    {
+      "at_utc": "2026-11-04T16:00:00Z",
+      "type": "REPORT_RESPONSE",
+      "local_date": "2026-11-03",
+      "action": "CONFIRM",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004703"
+    },
+    {
+      "at_utc": "2026-11-04T16:05:00Z",
+      "type": "REPORT_RESPONSE",
+      "local_date": "2026-11-03",
+      "action": "CONFIRM",
+      "version": 1,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004704"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000004701": {
+        "status": "accepted"
+      },
+      "eeeeeeee-0000-4000-8000-000000004702": {
+        "status": "rejected",
+        "reason": "REPORT_ALREADY_ANSWERED"
+      },
+      "eeeeeeee-0000-4000-8000-000000004703": {
+        "status": "accepted"
+      },
+      "eeeeeeee-0000-4000-8000-000000004704": {
+        "status": "rejected",
+        "reason": "REPORT_VERSION_STALE"
+      }
+    },
+    "reports": [
+      {
+        "local_date": "2026-11-03",
+        "version": 1,
+        "status": "SUPERSEDED",
+        "workers": 2,
+        "definite_seconds": 64800,
+        "uncertain_seconds": 0,
+        "due_at": "2026-11-04T18:00:00Z"
+      },
+      {
+        "local_date": "2026-11-03",
+        "version": 2,
+        "status": "CONFIRMED",
+        "workers": 2,
+        "definite_seconds": 50400,
+        "uncertain_seconds": 0,
+        "due_at": "2026-11-05T18:00:00Z"
+      }
+    ]
+  }
+}

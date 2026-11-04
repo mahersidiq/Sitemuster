@@ -80,6 +80,44 @@ export function correctionTimes(input: {
   };
 }
 
+/**
+ * Corrected times for an EXISTING visit, typed in the project's time zone (review finding on
+ * PR #10). The arrival is on the visit's arrival date. A departure is the first moment at that
+ * clock time after the arrival (the corrected one, else the recorded one), so a departure-only fix
+ * on a 22:00–06:00 visit lands on the next day. Empty fields are "unchanged" (null); anything
+ * invalid returns null as a whole.
+ */
+export function visitCorrectionTimes(input: {
+  visitStartAt: string;
+  start: string;
+  end: string;
+  timeZone: string;
+}): { startAt: string | null; endAt: string | null } | null {
+  const start = input.start.trim() === '' ? null : minutes(input.start);
+  const end = input.end.trim() === '' ? null : minutes(input.end);
+  if ((input.start.trim() !== '' && start === null) || (input.end.trim() !== '' && end === null)) {
+    return null;
+  }
+  if (start === null && end === null) return null;
+  const visitStart = Date.parse(input.visitStartAt);
+  if (Number.isNaN(visitStart)) return null;
+  const date = localDateOf(visitStart, input.timeZone);
+  const startAt = start === null ? null : zonedToUtc(date, start, input.timeZone);
+  const after = startAt ?? visitStart;
+  let endAt: number | null = null;
+  if (end !== null) {
+    endAt = zonedToUtc(date, end, input.timeZone);
+    // At most two days on: a visit can never be corrected to end before it began.
+    for (let day = 1; endAt <= after && day <= 2; day += 1) {
+      endAt = zonedToUtc(addDays(date, day), end, input.timeZone);
+    }
+  }
+  return {
+    startAt: startAt === null ? null : new Date(startAt).toISOString(),
+    endAt: endAt === null ? null : new Date(endAt).toISOString(),
+  };
+}
+
 /** The project-local date (YYYY-MM-DD) and time (HH:MM) of an instant. */
 export function localDateTime(instant: string, timeZone: string): { date: string; time: string } {
   const t = Date.parse(instant);

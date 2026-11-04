@@ -60,7 +60,21 @@ export const REPLAY_INPUT_TYPES = [
   'CREDENTIAL_REVOKED',
   'SILENT_PUSH',
   'APP_FORCE_STOPPED',
+  // Milestone 10 additions.
+  'DAILY_REPORT',
+  'REPORT_RESPONSE',
+  'REPORT_REISSUE',
 ] as const;
+
+const LocalDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const ReportStatus = z.enum([
+  'PENDING_CONFIRMATION',
+  'CONFIRMED',
+  'DISPUTED',
+  'CORRECTION_REQUESTED',
+  'NOT_CONFIRMED',
+  'SUPERSEDED',
+]);
 
 export const ReplayInputSchema = z.discriminatedUnion('type', [
   z.strictObject({
@@ -198,6 +212,25 @@ export const ReplayInputSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...at, type: z.literal('SILENT_PUSH'), delivered: z.boolean() }),
   /** Android Settings → Force stop (or iOS swipe-away): nothing runs until the app is opened. */
   z.strictObject({ ...at, type: z.literal('APP_FORCE_STOPPED') }),
+  /** The daily-reports generator runs for one project-local day (Milestone 10). */
+  z.strictObject({ ...at, type: z.literal('DAILY_REPORT'), local_date: LocalDate }),
+  /** The company foreman answers the newest (or the given) version of that day's report. */
+  z.strictObject({
+    ...at,
+    type: z.literal('REPORT_RESPONSE'),
+    local_date: LocalDate,
+    action: z.enum(['CONFIRM', 'DISPUTE']),
+    reason: z.string().min(3).max(200).optional(),
+    version: z.number().int().positive().optional(),
+    event_uuid: UuidSchema.optional(),
+  }),
+  /** GC staff reissue the day's report after corrections (a new version). */
+  z.strictObject({
+    ...at,
+    type: z.literal('REPORT_REISSUE'),
+    local_date: LocalDate,
+    reason: z.string().min(3).max(200),
+  }),
 ]);
 export type ReplayInput = z.infer<typeof ReplayInputSchema>;
 
@@ -311,6 +344,20 @@ export const ReplayExpectedSchema = z.strictObject({
   muster_responses_recorded: z.number().int().nonnegative().optional(),
   /** How many times the server answered "duplicate" (retries after lost replies, resubmits). */
   duplicate_responses: z.number().int().nonnegative().optional(),
+  /** Every version of the project's daily company reports, by date and version (Milestone 10). */
+  reports: z
+    .array(
+      z.strictObject({
+        local_date: LocalDate,
+        version: z.number().int().positive(),
+        status: ReportStatus,
+        workers: z.number().int().nonnegative().optional(),
+        definite_seconds: z.number().int().nonnegative().optional(),
+        uncertain_seconds: z.number().int().nonnegative().optional(),
+        due_at: UtcIsoSchema.optional(),
+      }),
+    )
+    .optional(),
 });
 
 const ProjectSchema = z.strictObject({

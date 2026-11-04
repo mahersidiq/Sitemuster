@@ -3,6 +3,7 @@ import { configFromSettings } from '../../packages/shared/src/attendance/config.
 import type { AttendanceStore } from '../../packages/shared/src/attendance/reconcile.ts';
 import type {
   AttendanceEventRow,
+  CorrectionRow,
   EngineOutput,
 } from '../../packages/shared/src/attendance/types.ts';
 import {
@@ -10,6 +11,7 @@ import {
   encryptBadgeSecret,
 } from '../../supabase/functions/_shared/badge-crypto.ts';
 import type {
+  CorrectionRequestFact,
   OperationContext,
   OperationsDeps,
   ReceiptRow,
@@ -69,6 +71,10 @@ export interface OperationsWorld {
   failStore: { on: boolean };
   /** Receipt writes fail (the operation itself was already applied): the request answers 503. */
   failReceipts: { on: boolean };
+  /** Worker/foreman correction requests a manual correction may name (Milestone 10). */
+  requests: Map<string, CorrectionRequestFact>;
+  /** Correction rows the reconciler committed. */
+  corrections: CorrectionRow[];
   as(actor: string): void;
 }
 
@@ -106,6 +112,8 @@ export async function operationsWorld(): Promise<OperationsWorld> {
   const loads: string[] = [];
   const failStore = { on: false };
   const failReceipts = { on: false };
+  const requests = new Map<string, CorrectionRequestFact>();
+  const corrections: CorrectionRow[] = [];
   let actor = ATTENDANT;
   const store: AttendanceStore = {
     load: async (projectId, worker, uuids, sessions) => {
@@ -115,7 +123,10 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     },
     commit: async (output: EngineOutput, revision: number) => {
       const status = await backend.commit(output, revision);
-      if (status === 'ok') events.push(...output.events);
+      if (status === 'ok') {
+        events.push(...output.events);
+        corrections.push(...output.corrections);
+      }
       return status;
     },
   };
@@ -182,6 +193,7 @@ export async function operationsWorld(): Promise<OperationsWorld> {
       return 'ok';
     },
     applyVisitor: (input) => backend.visitorEvent(input),
+    correctionRequest: async (id) => requests.get(id) ?? null,
     store,
   };
   // Printed badges: the core sends the SHA-256 (hex) of the code.
@@ -204,6 +216,8 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     loads,
     failStore,
     failReceipts,
+    requests,
+    corrections,
     as: (a) => (actor = a),
   };
 }

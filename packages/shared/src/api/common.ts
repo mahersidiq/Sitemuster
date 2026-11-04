@@ -33,6 +33,17 @@ export const ApiErrorCodeSchema = z.enum([
   'CREDENTIAL_EXPIRED',
   'CREDENTIAL_SUPERSEDED',
   'NO_DEVICE',
+  // Daily reports and foreman answers (Milestone 10).
+  'DAY_OPEN',
+  'REPORT_VERSION_STALE',
+  'REPORT_ALREADY_ANSWERED',
+  'REPORT_DEADLINE_PASSED',
+  'REASON_REQUIRED',
+  'REASON_TOO_LONG',
+  'PROPOSAL_REQUIRED',
+  'WORKER_NOT_IN_REPORT',
+  'SESSION_NOT_IN_REPORT',
+  'EVENT_ID_CONFLICT',
 ]);
 export type ApiErrorCode = z.infer<typeof ApiErrorCodeSchema>;
 

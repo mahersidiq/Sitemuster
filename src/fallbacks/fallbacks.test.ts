@@ -9,6 +9,7 @@ import {
   kioskPublicId,
   localDateTime,
   outcomeOf,
+  visitCorrectionTimes,
 } from './fallbacks';
 
 const DEVICE = '5d000000-0000-4000-8000-0000000000a1';
@@ -63,6 +64,71 @@ describe('correction times (project time zone)', () => {
       correctionTimes({ date: 'yesterday', start: '06:00', end: '', timeZone: 'UTC' }),
     ).toBeNull();
     expect(correctionTimes({ date: '2026-11-04', start: '', end: '', timeZone: 'UTC' })).toBeNull();
+  });
+
+  it('an existing visit keeps its own dates: a night shift departure is the next day (review on PR #10)', () => {
+    const tz = 'America/Chicago';
+    // 22:00 CST on Nov 3 → departure-only fix "07:00" is 07:00 on Nov 4, after the arrival.
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T04:00:00Z',
+        start: '',
+        end: '07:00',
+        timeZone: tz,
+      }),
+    ).toEqual({ startAt: null, endAt: '2026-11-04T13:00:00.000Z' });
+    // A day visit stays on its day.
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T13:00:00Z',
+        start: '',
+        end: '16:00',
+        timeZone: tz,
+      }),
+    ).toEqual({ startAt: null, endAt: '2026-11-04T22:00:00.000Z' });
+    // Both ends: the arrival on the visit's date, the departure after the corrected arrival.
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T04:00:00Z',
+        start: '21:30',
+        end: '05:00',
+        timeZone: tz,
+      }),
+    ).toEqual({ startAt: '2026-11-04T03:30:00.000Z', endAt: '2026-11-04T11:00:00.000Z' });
+    // Arrival only.
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T13:00:00Z',
+        start: '06:30',
+        end: '',
+        timeZone: tz,
+      }),
+    ).toEqual({ startAt: '2026-11-04T12:30:00.000Z', endAt: null });
+    // Across the fall-back night (Nov 1): 22:00 CDT Oct 31 → 06:00 CST Nov 1.
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-01T03:00:00Z',
+        start: '',
+        end: '06:00',
+        timeZone: tz,
+      }),
+    ).toEqual({ startAt: null, endAt: '2026-11-01T12:00:00.000Z' });
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T04:00:00Z',
+        start: '',
+        end: '7pm',
+        timeZone: tz,
+      }),
+    ).toBeNull();
+    expect(
+      visitCorrectionTimes({
+        visitStartAt: '2026-11-04T04:00:00Z',
+        start: '',
+        end: '',
+        timeZone: tz,
+      }),
+    ).toBeNull();
   });
 
   it('shows an instant in project-local date and time', () => {

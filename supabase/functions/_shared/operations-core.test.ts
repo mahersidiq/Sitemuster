@@ -248,6 +248,49 @@ describe('ingest-operations', () => {
     expect(manualBySuper?.status).toBe('accepted');
   });
 
+  it('a manual correction may approve a correction request: unknown, mismatched and decided requests are refused', async () => {
+    const w = await world();
+    w.as(SUPER);
+    const requestId = uuid(900);
+    w.requests.set(requestId, {
+      projectId: PROJECT_A,
+      workerId: workerId('k', 1),
+      sessionId: null,
+      status: 'PENDING',
+    });
+    const manual = (n: number, payload: Record<string, unknown>) => ({
+      event_uuid: uuid(n),
+      project_id: PROJECT_A,
+      operation_type: 'MANUAL_ATTENDANCE_CORRECTION',
+      observed_at: new Date(T0).toISOString(),
+      payload: {
+        worker_id: workerId('k', 1),
+        corrected_start_at: new Date(T0 - 7_200_000).toISOString(),
+        corrected_end_at: new Date(T0 - 3_600_000).toISOString(),
+        reason: 'Approved the worker request',
+        ...payload,
+      },
+    });
+    const [unknown] = results((await send(w, [manual(901, { request_id: uuid(999) })])).body);
+    expect(unknown).toMatchObject({ status: 'rejected', reason: 'REQUEST_NOT_FOUND' });
+    const [otherWorker] = results(
+      (await send(w, [manual(902, { worker_id: workerId('k', 2), request_id: requestId })])).body,
+    );
+    expect(otherWorker).toMatchObject({ status: 'rejected', reason: 'REQUEST_NOT_FOUND' });
+    const [approved] = results((await send(w, [manual(903, { request_id: requestId })])).body);
+    expect(approved?.status).toBe('accepted');
+    // The approval travels inside the committed correction (the database marks the request).
+    expect(w.corrections.at(-1)?.proposed_json).toMatchObject({ request_id: requestId });
+    w.requests.set(requestId, {
+      projectId: PROJECT_A,
+      workerId: workerId('k', 1),
+      sessionId: null,
+      status: 'APPROVED',
+    });
+    const [again] = results((await send(w, [manual(904, { request_id: requestId })])).body);
+    expect(again).toMatchObject({ status: 'rejected', reason: 'REQUEST_ALREADY_DECIDED' });
+  });
+
   it('a project the caller has no role on is refused without touching it (zero reads, nothing recorded against it)', async () => {
     const w = await world();
     w.as(ATTENDANT);

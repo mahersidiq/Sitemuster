@@ -125,8 +125,33 @@ export interface OperationsDeps {
     actorId: string;
     kioskDeviceId: string | null;
   }): Promise<ItemResult>;
+  /**
+   * A worker or foreman correction request named by a manual correction (null when unknown).
+   * The database approves it atomically with the correction; this check gives a clear rejection.
+   */
+  correctionRequest?(requestId: string): Promise<CorrectionRequestFact | null>;
   store: AttendanceStore;
   log?(entry: Record<string, unknown>): void;
+}
+
+export interface CorrectionRequestFact {
+  projectId: string;
+  workerId: string;
+  sessionId: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
+/** `edge_correction_request` row → request facts. */
+export function correctionRequestFromJson(value: unknown): CorrectionRequestFact | null {
+  const row = value as Record<string, unknown> | null;
+  if (!row || typeof row.project_id !== 'string' || typeof row.worker_id !== 'string') return null;
+  const status = row.status === 'APPROVED' || row.status === 'REJECTED' ? row.status : 'PENDING';
+  return {
+    projectId: row.project_id,
+    workerId: row.worker_id,
+    sessionId: typeof row.session_id === 'string' ? row.session_id : null,
+    status,
+  };
 }
 
 /** The caller's JWT was refused by the database (anon key, deleted user): 401, nothing recorded. */
@@ -546,6 +571,22 @@ export async function processOperations(
           pending.push(done(event, event.event_uuid, 'rejected', 'WORKER_NOT_ENROLLED'));
           break;
         }
+        if (payload.request_id) {
+          const request = (await deps.correctionRequest?.(payload.request_id)) ?? null;
+          const matches =
+            request !== null &&
+            request.projectId === event.project_id &&
+            request.workerId === payload.worker_id &&
+            request.sessionId === (payload.session_id ?? null);
+          if (!matches) {
+            pending.push(done(event, event.event_uuid, 'rejected', 'REQUEST_NOT_FOUND'));
+            break;
+          }
+          if (request.status !== 'PENDING') {
+            pending.push(done(event, event.event_uuid, 'rejected', 'REQUEST_ALREADY_DECIDED'));
+            break;
+          }
+        }
         const item: Evidence = {
           kind: 'MANUAL',
           eventUuid: event.event_uuid,
@@ -558,6 +599,7 @@ export async function processOperations(
           correctedStartAt: payload.corrected_start_at ?? null,
           correctedEndAt: payload.corrected_end_at ?? null,
           reason: payload.reason,
+          requestId: payload.request_id ?? null,
         };
         evidence.push(item);
         pending.push({
