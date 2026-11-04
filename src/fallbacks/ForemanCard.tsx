@@ -1,4 +1,5 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +13,13 @@ import { colors } from '../theme';
 export function ForemanCard() {
   const { t } = useTranslation();
   const projects = useForemanProjects();
+  const { refetch } = projects;
+  // Tabs stay mounted: re-read on focus (a foreman role can be granted while the app is open).
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
   if (!projects.data || projects.data.length === 0) return null;
   return (
     <Card testID="foreman-card">

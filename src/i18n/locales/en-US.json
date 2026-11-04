@@ -707,7 +707,7 @@
   },
   "signOutGuard": {
     "title": "Records not sent yet",
-    "body": "{{count}} records on this phone have not reached the server. If you sign out now, they will be lost.",
+    "body": "Records on this phone that have not reached the server: {{count}}. If you sign out now, they will be lost.",
     "sync": "Try to send them now",
     "discard": "Sign out and discard them",
     "cancel": "Stay signed in"

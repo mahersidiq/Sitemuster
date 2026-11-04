@@ -245,3 +245,60 @@ Reason: spec 11 (the SDK deletes the whole batch on 2xx).
 - **Verification.** Reading `getState()` before `ready()` on real phones is checked by the device sign-off (checklist §10).
 
 Reason: decision #44 (zero loss across renewal). (PR #7 review.)
+
+**98.** Operational outbox answers (Milestone 08, additive to spec 11).
+- **Request.** It carries `client_sent_at` (decision #84).
+- **Results.** Each result may also carry:
+  - `worker_id`: kiosk scans, only when the scan was authorized;
+  - `review`: stored but held for review, e.g. a wrong kiosk clock;
+  - `original_status`.
+- **Receipts.** Every terminal result is stored once in `operational_outbox_receipts` with its worker, per-worker children and review flag. A re-sent operation (the phone lost the answer) gets `duplicate`, plus the outcome, worker and children it got the first time. The kiosk then still shows the right person and result.
+- **Another person's id.** An operation id already held by another person is refused as `EVENT_UUID_CONFLICT` and never acknowledged as theirs.
+- **No role on the project.** An operation for a project the caller has no role on is refused as `PROJECT_NOT_AUTHORIZED`. Its receipt references no project, so nothing is written against that project.
+- **Store failure.** The whole request answers 503 and nothing is acknowledged. The outbox resends; already-applied parts answer `duplicate` (badge redemption, reconciler event uuids and visit idempotency keys are all idempotent).
+- **Muster.** Muster operations are refused (`OPERATION_NOT_SUPPORTED`) until Milestone 11.
+- **Wiring.** The Edge Function entry files are not type-checked by `tsc`, so every database-row mapper lives in the shared core, where it is typed and unit tested.
+
+Reason: spec 01 "receive authoritative success or conflict state"; spec 11 "removes only accepted or durable rejected/duplicate".
+
+**99.** Who may record what (role matrix, made exact for V1):
+- **Kiosk.** An assigned ATTENDANT with MFA scans anyone approved. A foreman whose GC granted kiosk use (`foreman_project_grants.can_operate_kiosk`) scans only their own company's crew and never handles visitors.
+- **Visitor desk.** Assigned ATTENDANT with MFA.
+- **Manual correction.** Organization OWNER or assigned PM/SUPER, with MFA. SAFETY corrects only "if delegated"; V1 has no delegation mechanism, so it does not.
+- **Foreman crew sign-in/out.** A verified foreman of a company approved on the project, for that company's enrolled workers only.
+- **Kiosk revocation.** The project's configurers, or the attendant the kiosk is assigned to.
+
+Worker and foreman correction requests belong to the daily-report flow (Milestone 10). The `ingest-operations` Edge Function asks `operation_context` with the caller's own JWT, so these rules live in SQL only. Reason: spec 02; the narrowest reading where the matrix is silent.
+
+**100.** A kiosk checks attendance eligibility before it consumes a badge step. The rule is decision #56: approved enrollment, verified employer when a company is claimed, and an active acknowledgement. `edge_operation_workers` reports it, and pgTAP asserts it matches the reconciler's rule for every seeded worker. A worker who is not yet eligible is refused as `NOT_APPROVED` without spending that 30-second code. A printed badge is refused as `BADGE_REVOKED` when replaced or cancelled, and as `BADGE_INVALID` when unknown. Only the SHA-256 of a printed code ever reaches the database. Reason: spec 11 badge order; a refused scan should not burn the next attempt.
+
+**101.** Visitors and foreman batches:
+- **Visitor ids.** A new visitor gets a UUID chosen by the kiosk, so the kiosk can sign them out even while offline. The server creates the record on first sign-in. An id already used on another project is refused (`VISITOR_ID_CONFLICT`), never reused. Without a visitor id, the id is derived from the operation id, so a resend is idempotent.
+- **Visitor host.** The host must be active staff on the project.
+- **Foreman batch results.** Each named worker gets a child result whose idempotent id is `deriveUuid('foreman-member', operation|worker)`. The batch reads:
+  - `accepted` when at least one worker was recorded (`SOME_WORKERS_REJECTED` when some were refused);
+  - `rejected` when none was (the shared reason when there is one);
+  - `duplicate` when all were already recorded.
+- **Clock skew.** A foreman phone clock more than 5 minutes off holds the crew records for review, as for kiosks.
+
+Reason: spec 01 "visitor separate"; spec 11 "per-worker outcome … not a partial silent success".
+
+**102.** The operational outbox on the phone:
+- **Storage.** It uses its own expo-sqlite file and its own AES-256-GCM key in the OS keystore, separate from the session key, so a session reset never destroys unsent work. Each row belongs to the signed-in person who recorded it and is sent only with that person's session.
+- **Sending.** An operation is validated with the shared schema and stored before anything is sent. Operations go oldest first, at most 100 per request and about 200 KiB.
+- **Settling.** Only a terminal answer settles an operation. Network failure, 401, 429, 5xx or a missing per-operation answer keeps it queued.
+- **Retries.** Sends happen right away, on foreground, every minute while something waits, and on Sync now. Outbox retries are not location polling.
+- **Retention.** Settled entries stay visible for 24 hours, then leave the phone.
+- **Unreadable rows.** Rows whose key is gone (reinstall) are removed and reported.
+- **Sign-out.** Signing out with unsent operations needs an explicit choice: send now, or discard knowingly.
+- **No badge key.** Without the badge key the Edge Function answers 503 `CONFIGURATION_ERROR` to every request (fails closed), and the outbox keeps everything.
+
+Reason: CLAUDE.md "no data-loss outbox"; spec 07 "Kiosk offline during rush".
+
+**103.** Kiosk registration and evidence handling:
+- **Registration.** A phone registers as a project's kiosk with a public id derived from its installation and the project, so the same phone at two projects cannot be linked. An attendant taking over the shift re-registers the same kiosk; the operator change is audited. A revoked kiosk stays revoked. The kiosk id is kept in the keystore so a kiosk restarted offline keeps recording.
+- **What the kiosk does.** It never checks a badge: it holds no secrets, records its own time and queues the scan.
+- **Printed badges.** A printed badge needs an explicit face-and-name confirmation on screen before it is recorded, and stays labelled "Printed badge".
+- **Names.** When an accepted scan names a worker the kiosk's cached list does not know (approved at the gate after the kiosk opened), the list is reloaded.
+
+Reason: spec 02 "Kiosk device has unique device registration"; spec 07 printed-badge row.

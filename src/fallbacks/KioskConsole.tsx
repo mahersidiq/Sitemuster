@@ -1,5 +1,4 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as SecureStore from 'expo-secure-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -17,9 +16,9 @@ import { useApi } from '../state/auth';
 import { useOutbox } from '../state/outbox';
 import { colors, spacing } from '../theme';
 import { classifyBadge, kioskPublicId } from './fallbacks';
+import { loadKioskId, saveKioskId } from './kiosk-store';
 import { OutcomeLine } from './OutcomeLine';
 
-const SECURE_OPTIONS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK };
 /** The camera reports the same code many times a second; one scan per code per 5 seconds. */
 const REPEAT_WINDOW_MS = 5_000;
 
@@ -51,19 +50,18 @@ export function KioskConsole({
   const [printed, setPrinted] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'info' | 'danger'; text: string } | null>(null);
   const last = useRef<{ code: string; at: number } | null>(null);
-  const storageKey = `sitemuster.kiosk.${projectId}.v1`;
 
   // Register (or take over) this phone as the project's kiosk; offline, reuse the last one.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const stored = await SecureStore.getItemAsync(storageKey, SECURE_OPTIONS).catch(() => null);
+      const stored = await loadKioskId(projectId);
       try {
         const registration = await api.registerKiosk(
           projectId,
           kioskPublicId(await installationHash(), projectId),
         );
-        await SecureStore.setItemAsync(storageKey, registration.kiosk_device_id, SECURE_OPTIONS);
+        await saveKioskId(projectId, registration.kiosk_device_id);
         if (!cancelled) setKioskId(registration.kiosk_device_id);
       } catch (error) {
         if (cancelled) return;
@@ -74,7 +72,7 @@ export function KioskConsole({
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, storageKey, t]);
+  }, [api, projectId, t]);
 
   const scans = useMemo(
     () =>

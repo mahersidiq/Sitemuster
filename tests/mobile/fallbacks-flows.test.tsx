@@ -140,6 +140,23 @@ describe('attended kiosk', () => {
     expect(screen.getAllByText(/Printed badge/).length).toBeGreaterThan(0);
   });
 
+  it('a worker approved after the kiosk opened is shown by name once the scan is accepted', async () => {
+    const { owner, projectId } = await site();
+    const world = attendantWorld(owner, projectId);
+    signIn(world, true);
+    await chooseLanguage('en-US');
+    await renderRouter('./app', { initialUrl: `/project/${projectId}/kiosk` });
+    await screen.findByTestId('kiosk');
+    // Approved at the gate after the kiosk loaded its name list.
+    const late = owner.addEnrollment(projectId, 'Diego Ruiz', 'APPROVED');
+    const code = 'SMP1.printed-badge-code-late-0001';
+    world.badgeWorkers.set(code, late.workerId);
+    await fireEvent.changeText(screen.getByTestId('kiosk-code'), code);
+    await fireEvent.press(screen.getByTestId('kiosk-record'));
+    await fireEvent.press(await screen.findByTestId('kiosk-printed-confirm'));
+    expect(await screen.findByText('Diego Ruiz: recorded')).toBeTruthy();
+  });
+
   it('refuses anything that is not a SiteMuster badge', async () => {
     const { owner, projectId } = await site();
     signIn(attendantWorld(owner, projectId), true);
@@ -287,7 +304,7 @@ describe('sign-out with unsent records', () => {
     await fireEvent.press(await screen.findByTestId('sign-out'));
     expect(
       await screen.findByText(
-        '1 records on this phone have not reached the server. If you sign out now, they will be lost.',
+        'Records on this phone that have not reached the server: 1. If you sign out now, they will be lost.',
       ),
     ).toBeTruthy();
     await fireEvent.press(screen.getByTestId('sign-out-guard-cancel'));

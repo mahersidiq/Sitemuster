@@ -707,7 +707,7 @@
   },
   "signOutGuard": {
     "title": "Registros sin enviar",
-    "body": "{{count}} registros de este teléfono aún no llegan al servidor. Si cierra sesión ahora, se perderán.",
+    "body": "Registros de este teléfono que aún no llegan al servidor: {{count}}. Si cierra sesión ahora, se perderán.",
     "sync": "Intentar enviarlos ahora",
     "discard": "Cerrar sesión y descartarlos",
     "cancel": "Seguir con la sesión iniciada"

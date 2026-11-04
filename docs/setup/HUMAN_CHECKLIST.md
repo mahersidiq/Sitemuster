@@ -36,6 +36,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Mark the environment in each project's SQL editor (decision #70). Staging: `insert into app_private.settings (key, value) values ('environment', 'staging') on conflict (key) do update set value = excluded.value;`. Production: leave unmarked (unmarked = production) or set `'production'`. Never set `'development'` on a hosted project.
 - [ ] Deploy the Milestone 05 functions too: `supabase functions deploy orientation-session enrollment-bulk-approve device-activate --project-ref <ref>` (JWT verification on).
 - [ ] Deploy the Milestone 07 functions: `supabase functions deploy ingest-location-batch device-renew device-activate --project-ref <ref>`. `ingest-location-batch` and `device-renew` deliberately run **without** gateway JWT verification (they check the 32-byte device secret themselves; `supabase/config.toml`). If the dashboard or CLI shows "Verify JWT" enabled for either, turn it off for these two only. Every other function keeps it on.
+- [ ] Deploy the Milestone 08 function: `supabase functions deploy ingest-operations --project-ref <ref>`. JWT verification stays **on** (`supabase/config.toml`). It needs the same `BADGE_SECRET_ENCRYPTION_KEY` as `device-activate`. Without it, it answers "not configured" to every request and phones keep their kiosk and crew records queued (decision #102).
+- [ ] Assign kiosk attendants: invite the people who run the gate kiosk to the project with the **Kiosk attendant** role (they need e-mail sign-in and an authenticator app, like other staff). A foreman may run a crew kiosk only after the GC grants it (`foreman_project_grants.can_operate_kiosk`; a screen for granting arrives with the dashboard work).
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] After deploying the Milestone 06 migrations, open *Database → Cron* (or run `select jobname, schedule, active from cron.job;` in the SQL editor) and confirm the job `sitemuster-attendance-sweep` runs every minute and its recent runs succeed. It applies the attendance time rules (unknown after 20 min, end-of-shift close-out, 24/7 review, visitor close-out) and only works when the environment marker above is `staging` or `production` — on a database marked `development` it deliberately does nothing. The migration enables the `pg_cron` and `btree_gist` extensions; if the deploy reports a permission error for either, enable it under *Database → Extensions* and deploy again.
 - [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
@@ -105,6 +107,18 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Store `TS_IOS_LICENSE_KEY` and `TS_ANDROID_LICENSE_KEY` in secure EAS environment/secret store or supported native build secret injection; never in prompts or published spec ZIP.
 - [ ] Verify native location SDK compiles on the selected pinned Expo SDK with config plugins; run real iOS/Android background, reboot, force-stop, offsite-payload and battery tests. License is not a substitute for OS permission or actual verification.
 - [ ] Store the Android license as the EAS **production** environment secret `TS_ANDROID_LICENSE_KEY` (build-time only, never `EXPO_PUBLIC_`). `app.config.ts` refuses a production build without it (fail closed). Development builds run without a license (Transistorsoft DEBUG builds). SDK v5 needs no iOS key in this app's configuration; keep any iOS key Transistorsoft issues in the same secret store.
+
+### Real-device kiosk, crew and visitor check (Milestone 08)
+
+On a development build pointing at **staging**, with one attendant phone and two worker phones:
+
+- [ ] Attendant: open the project, then **Kiosk sign-in/out**. Allow the camera. Scan a worker's badge from their phone. → "Recorded on this phone…" appears, then "<name>: recorded" within a few seconds.
+- [ ] Turn on airplane mode on **both** the kiosk and the worker phone. Scan the badge again with **Leaving** selected. → "Waiting to sync — not confirmed". Turn airplane mode off on the kiosk and tap **Sync now**. → "<name>: recorded"; the worker's visit is closed.
+- [ ] Scan the same badge twice within 30 seconds from two kiosks. → The second shows "This code was already used. Ask for a fresh code."
+- [ ] Scan a printed badge (Workers → Printed badge). → A face-and-name confirmation appears first; after **Record**, the entry stays labelled "Printed badge".
+- [ ] Foreman (worker account made foreman of an approved company): Home → **Crew sign-in/out** → select workers → **Record**. → One result per worker.
+- [ ] Visitors: sign a visitor in and out. → They never appear in worker counts.
+- [ ] With an unsent record (airplane mode on), sign out. → "Records not sent yet" asks before discarding.
 
 ### Real-device location privacy sign-off (release gate, decision #90)
 

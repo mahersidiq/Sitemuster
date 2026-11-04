@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProject, useRoster } from '../../../src/api/hooks';
@@ -8,6 +9,7 @@ import { Screen } from '../../../src/components/Screen';
 import { StaffGate } from '../../../src/components/StaffGate';
 import { Body, Title } from '../../../src/components/Typography';
 import { KioskConsole } from '../../../src/fallbacks/KioskConsole';
+import { useRefreshForUnknownWorkers } from '../../../src/fallbacks/useKnownWorkers';
 
 export default function KioskRoute() {
   return (
@@ -25,6 +27,11 @@ function Kiosk() {
   const roster = useRoster(id);
   const nameOf = (workerId: string) =>
     roster.data?.find((entry) => entry.worker_id === workerId)?.legal_name ?? null;
+  const known = useCallback(
+    (workerId: string) => roster.data?.some((entry) => entry.worker_id === workerId) ?? false,
+    [roster.data],
+  );
+  useRefreshForUnknownWorkers(known, roster.data !== undefined, roster.refetch);
   return (
     <Screen testID="kiosk-screen">
       <Title>{t('kiosk.title')}</Title>

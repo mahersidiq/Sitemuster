@@ -1,6 +1,6 @@
 import * as Crypto from 'expo-crypto';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -54,7 +54,21 @@ function Visitors() {
   const [purpose, setPurpose] = useState('');
   const [host, setHost] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const staff = project.data?.staff ?? [];
+  const staff = project.data?.staff;
+  // One choice per person (someone can hold several project roles).
+  const hosts = useMemo(() => {
+    const byUser = new Map<string, { userId: string; label: string; roles: string[] }>();
+    for (const member of staff ?? []) {
+      const entry = byUser.get(member.user_id) ?? {
+        userId: member.user_id,
+        label: member.email ?? member.user_id.slice(0, 8),
+        roles: [],
+      };
+      entry.roles.push(t(`roles.${member.role}`));
+      byUser.set(member.user_id, entry);
+    }
+    return [...byUser.values()];
+  }, [staff, t]);
 
   const mine = useMemo(
     () =>
@@ -66,6 +80,13 @@ function Visitors() {
       ),
     [outbox.entries, id],
   );
+
+  // Once the server has answered for a sign-in or sign-out, reload the visits it now holds.
+  const settledCount = mine.filter((entry) => entry.status !== 'PENDING').length;
+  const { refetch } = visits;
+  useEffect(() => {
+    if (settledCount > 0) void refetch();
+  }, [settledCount, refetch]);
 
   // Server visits plus sign-ins still on this phone, minus sign-outs still on this phone.
   const onSite = useMemo<OnSite[]>(() => {
@@ -147,7 +168,7 @@ function Visitors() {
           observed_at: new Date().toISOString(),
           payload: {
             visitor_id: visit.visitorId,
-            host_user_id: visit.hostUserId ?? host ?? staff[0]?.user_id ?? '',
+            host_user_id: visit.hostUserId ?? host ?? hosts[0]?.userId ?? '',
             purpose: visit.purpose,
             direction: 'EXIT',
           },
@@ -195,9 +216,9 @@ function Visitors() {
         <Text style={styles.label}>{t('visitors.host')}</Text>
         <ChipGroup
           label={t('visitors.host')}
-          options={staff.map((member) => ({
-            value: member.user_id,
-            label: `${member.email ?? member.user_id.slice(0, 8)} · ${t(`roles.${member.role}`)}`,
+          options={hosts.map((hostOption) => ({
+            value: hostOption.userId,
+            label: `${hostOption.label} · ${hostOption.roles.join(', ')}`,
           }))}
           selected={host ? [host] : []}
           onToggle={setHost}
