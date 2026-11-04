@@ -607,6 +607,11 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 - The SDK is now configured before it asks for location permission (decision #153). Before, Android 11+ never received the "Allow all the time" rationale on a fresh install.
 - The capture checker now inspects everything that left the phone (decision #154): an upload's query string, header names and other body fields, coordinates in records outside a complete `coords` position, and the form fields and header names of other requests. Before, an upload with no records and off-site coordinates in its body and query passed.
 
+**CI fix (test only, not caused by this milestone):** the `database` job failed on `c9686f7` in `tests/backend/reports.test.ts` (Milestone 10).
+- Root cause: the test project used America/Chicago, and yesterday's report on a 24/7 site is due at 12:00 today, project time. Every run after 12:00 in Chicago (18:00 UTC) therefore saw the report already NOT_CONFIRMED. Earlier runs happened to start before that hour.
+- Fix: each run now uses the fixed-offset zone where it is about 05:00, so the deadline is always about 7 hours ahead. A guard test checks the zone helper for every hour of the day.
+- `main` would have failed the same way after 18:00 UTC.
+
 **Merged:** PR #13 squash-merged under #48 after CI was green on its final head and the automated review was addressed. This line was written in the pull request before the merge, so it reaches `main` only through that merge.
 
 **Next step:** none. Milestones 01–13 are all merged and there is no Milestone 14: do not start new feature work. What remains is the owner's, in this order:

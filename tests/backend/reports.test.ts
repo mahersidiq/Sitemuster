@@ -35,7 +35,20 @@ import { staffClient } from './support/staff';
  * approved through the manual-correction operation (atomically), a worker's request is rejected
  * with a reason, other companies and GC B are refused, and a late answer is NOT_CONFIRMED.
  */
-const TZ = 'America/Chicago';
+/**
+ * The project's time zone. Yesterday's report on a 24/7 site is due at 12:00 today, project time,
+ * so in a fixed zone such as America/Chicago this suite failed whenever it ran in the afternoon or
+ * evening there (the report was already NOT_CONFIRMED). Each run therefore uses the fixed-offset
+ * zone (no daylight saving time) where it is about 05:00 now: yesterday is closed for 5 hours and
+ * the deadline is about 7 hours ahead, at whatever hour the suite runs. Etc/GMT signs are inverted:
+ * Etc/GMT-11 is UTC+11.
+ */
+function morningTimeZone(now: number): string {
+  const offset = ((((5 - new Date(now).getUTCHours()) % 24) + 36) % 24) - 12; // −12 … +11 hours
+  if (offset === 0) return 'Etc/UTC';
+  return offset > 0 ? `Etc/GMT-${offset}` : `Etc/GMT+${-offset}`;
+}
+const TZ = morningTimeZone(Date.now());
 const yesterday = () => addDays(localDateOf(Date.now(), TZ), -1);
 const at = (minutesOfDay: number) => new Date(zonedToUtc(yesterday(), minutesOfDay, TZ));
 
@@ -58,7 +71,7 @@ const listReports = (jwt: string, projectId: string, localDate: string) =>
 
 /** Yesterday 08:00–15:00 for the crew (project-local), signed in by the foreman. */
 async function workedYesterday(size: number) {
-  const world = await crewSite(size);
+  const world = await crewSite(size, { timeZone: TZ });
   const entry = crewBatch(world.projectId, world.companyId, world.crew, 'ENTRY', 0, at(8 * 60));
   const exit = crewBatch(world.projectId, world.companyId, world.crew, 'EXIT', 0, at(15 * 60));
   const posted = results((await post(world.foreman.jwt, [entry, exit])).body);
@@ -89,6 +102,26 @@ async function rpc(client: SupabaseClient, name: string, args: Record<string, un
 }
 
 describe('daily company reports and foreman answers (local stack)', () => {
+  it('runs in a project time zone where it is about 05:00, at any hour of the day', async () => {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const instant = Date.UTC(2026, 10, 4, hour, 30);
+      const zone = morningTimeZone(instant);
+      const local = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone,
+        hour: 'numeric',
+        hourCycle: 'h23',
+      }).format(instant);
+      expect(Number(local), zone).toBe(5);
+      expect(
+        await scalar<number>(
+          'select count(*)::int as v from pg_catalog.pg_timezone_names where name = $1',
+          [zone],
+        ),
+        zone,
+      ).toBe(1);
+    }
+  });
+
   it('generates yesterday once per company, the foreman disputes, staff reissue, a correction is approved', async () => {
     const w = await workedYesterday(2);
     const date = formatLocalDate(yesterday());
@@ -259,7 +292,7 @@ describe('daily company reports and foreman answers (local stack)', () => {
       (await listReports(w.staffJwt, w.projectId, date)).body,
     ).reports[0] as ReportView;
 
-    const other = await site();
+    const other = await site({ timeZone: TZ });
     const outsider = await workerSession();
     const outsiderProfile = await enroll(other.projectId, {
       userId: outsider.userId,
@@ -298,8 +331,8 @@ describe('daily company reports and foreman answers (local stack)', () => {
     await withDb(async (db) => {
       await db.query(
         `insert into public.daily_company_reports (project_id, subcontractor_id, local_date, report_version, summary, due_at)
-         values ($1, $2, (now() at time zone 'America/Chicago')::date - 5, 1, '{"workers": []}', now() - interval '1 minute')`,
-        [w.projectId, w.companyId],
+         values ($1, $2, (now() at time zone $3)::date - 5, 1, '{"workers": []}', now() - interval '1 minute')`,
+        [w.projectId, w.companyId, TZ],
       );
     });
     const lateId = await scalar<string>(
@@ -328,7 +361,7 @@ describe('daily company reports and foreman answers (local stack)', () => {
   });
 
   it('a worker sees only their own hours and requests a correction; staff reject it with a reason', async () => {
-    const { projectId, companyId } = await site();
+    const { projectId, companyId } = await site({ timeZone: TZ });
     const worker = await workerSession();
     const workerId = await enroll(projectId, {
       userId: worker.userId,
@@ -341,7 +374,7 @@ describe('daily company reports and foreman answers (local stack)', () => {
         await db.query(
           `insert into public.attendance_sessions (project_id, worker_id, employer_snapshot_id, start_at, end_at, start_source, end_source,
                                                    config_version_id, status, iana_timezone, last_seen_at, witnessed, opened_by_event)
-           select $1, $2, $3, $4, $5, 'MANUAL', 'MANUAL', p.config_version_id, 'CLOSED', 'America/Chicago', $5, true, gen_random_uuid()
+           select $1, $2, $3, $4, $5, 'MANUAL', 'MANUAL', p.config_version_id, 'CLOSED', p.iana_timezone, $5, true, gen_random_uuid()
              from public.projects p where p.id = $1`,
           [projectId, id, companyId, at(7 * 60).toISOString(), at(15 * 60).toISOString()],
         );
