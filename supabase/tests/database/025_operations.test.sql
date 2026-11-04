@@ -2,7 +2,7 @@
 -- kiosk registration/revocation, the service-role helpers behind ingest-operations, and the
 -- read functions for the fallback screens (docs/spec/02, 04, 11; decisions #98–#103).
 begin;
-select plan(59);
+select plan(63);
 select tests.seed_world();
 select set_config('t.p_a1', tests.id('p_a1')::text, true);
 select set_config('t.p_b1', tests.id('p_b1')::text, true);
@@ -197,6 +197,32 @@ select is(public.edge_visitor_register(current_setting('t.p_a1')::uuid, '7e00000
 reset role;
 select is((select count(*)::int from public.visitor_records where project_id = current_setting('t.p_b1')::uuid), 0,
   'no visitor row was written on project B');
+
+-- A visitor exit stores its operation id with the close; a second close is refused as stale
+-- (review finding on PR #8: a resend after a lost answer must find the exit it already made).
+select is(public.edge_visitor_commit(jsonb_build_object(
+  'id', '7f000000-0000-4000-8000-000000000001', 'projectId', current_setting('t.p_a1'),
+  'visitorKey', '7e000000-0000-4000-8000-000000000001', 'status', 'OPEN',
+  'checkedInAt', '2026-11-04T14:00:00Z', 'checkedOutAt', null, 'closeoutAt', '2026-11-05T01:00:00Z',
+  'idempotencyKey', '7f000000-0000-4000-8000-000000000001', 'exitIdempotencyKey', null),
+  current_setting('t.u_a_attendant')::uuid, null), 'ok', 'a visitor sign-in opens a visit');
+select is(public.edge_visitor_commit(jsonb_build_object(
+  'id', '7f000000-0000-4000-8000-000000000001', 'projectId', current_setting('t.p_a1'),
+  'visitorKey', '7e000000-0000-4000-8000-000000000001', 'status', 'CLOSED',
+  'checkedInAt', '2026-11-04T14:00:00Z', 'checkedOutAt', '2026-11-04T15:00:00Z', 'closeoutAt', '2026-11-05T01:00:00Z',
+  'idempotencyKey', '7f000000-0000-4000-8000-000000000001', 'exitIdempotencyKey', '7f000000-0000-4000-8000-0000000000e1'),
+  current_setting('t.u_a_attendant')::uuid, null), 'ok', 'the sign-out closes it');
+select is(public.edge_visitor_commit(jsonb_build_object(
+  'id', '7f000000-0000-4000-8000-000000000001', 'projectId', current_setting('t.p_a1'),
+  'visitorKey', '7e000000-0000-4000-8000-000000000001', 'status', 'CLOSED',
+  'checkedInAt', '2026-11-04T14:00:00Z', 'checkedOutAt', '2026-11-04T16:00:00Z', 'closeoutAt', '2026-11-05T01:00:00Z',
+  'idempotencyKey', '7f000000-0000-4000-8000-000000000001', 'exitIdempotencyKey', '7f000000-0000-4000-8000-0000000000e2'),
+  current_setting('t.u_a_attendant')::uuid, null), 'stale', 'a second sign-out of a closed visit is refused as stale');
+select is((select jsonb_build_object('out', x ->> 'checkedOutAt', 'exit', x ->> 'exitIdempotencyKey')
+             from jsonb_array_elements(public.edge_visitor_load(current_setting('t.p_a1')::uuid)) x
+            where x ->> 'id' = '7f000000-0000-4000-8000-000000000001'),
+  jsonb_build_object('out', '2026-11-04T15:00:00+00:00', 'exit', '7f000000-0000-4000-8000-0000000000e1'),
+  'the first sign-out time and its operation id are kept and read back for resends');
 
 -- ---------------------------------------------------------------------------------------------
 -- Read functions for the fallback screens

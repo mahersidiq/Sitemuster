@@ -275,6 +275,7 @@ Worker and foreman correction requests belong to the daily-report flow (Mileston
 **101.** Visitors and foreman batches:
 - **Visitor ids.** A new visitor gets a UUID chosen by the kiosk, so the kiosk can sign them out even while offline. The server creates the record on first sign-in. An id already used on another project is refused (`VISITOR_ID_CONFLICT`), never reused. Without a visitor id, the id is derived from the operation id, so a resend is idempotent.
 - **Visitor host.** The host must be active staff on the project.
+- **Visitor exits.** The exit's operation id is stored in the same row update that closes the visit, and a visit is closed only while it is still open or unresolved (compare-and-swap). A resend after a lost answer, or after the receipt could not be written, therefore answers `duplicate`, never `VISIT_NOT_FOUND`; a second, different exit is still refused (review finding on PR #8).
 - **Foreman batch results.** Each named worker gets a child result whose idempotent id is `deriveUuid('foreman-member', operation|worker)`. The batch reads:
   - `accepted` when at least one worker was recorded (`SOME_WORKERS_REJECTED` when some were refused);
   - `rejected` when none was (the shared reason when there is one);
@@ -285,6 +286,7 @@ Reason: spec 01 "visitor separate"; spec 11 "per-worker outcome … not a partia
 
 **102.** The operational outbox on the phone:
 - **Storage.** It uses its own expo-sqlite file and its own AES-256-GCM key in the OS keystore, separate from the session key, so a session reset never destroys unsent work. Each row belongs to the signed-in person who recorded it and is sent only with that person's session.
+- **One key per installation.** Every keystore access for that key runs one at a time and the key is shared by every outbox on the phone, so two first-time records made at once (a double tap, two quick scans) can never each create a key and leave one record unreadable (review finding on PR #8).
 - **Sending.** An operation is validated with the shared schema and stored before anything is sent. Operations go oldest first, at most 100 per request and about 200 KiB.
 - **Settling.** Only a terminal answer settles an operation. Network failure, 401, 429, 5xx or a missing per-operation answer keeps it queued.
 - **Retries.** Sends happen right away, on foreground, every minute while something waits, and on Sync now. Outbox retries are not location polling.

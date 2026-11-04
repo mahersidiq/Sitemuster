@@ -164,6 +164,45 @@ describe('ingest-operations', () => {
     expect(w.events).toHaveLength(0);
   });
 
+  it('a visitor exit applied before a 503 is answered duplicate on the resend, never VISIT_NOT_FOUND', async () => {
+    // Review finding on PR #8: the close succeeded but the receipt could not be written.
+    const w = await world();
+    const visitor = 'b1000000-0000-4000-8000-000000000002';
+    const visit = (n: number, direction: 'ENTRY' | 'EXIT', at: number) => ({
+      event_uuid: uuid(n),
+      project_id: PROJECT_A,
+      operation_type: direction === 'ENTRY' ? 'VISITOR_ENTRY' : 'VISITOR_EXIT',
+      observed_at: new Date(at).toISOString(),
+      payload: {
+        visitor_id: visitor,
+        ...(direction === 'ENTRY' ? { name: 'Dee Delivery' } : {}),
+        host_user_id: HOST,
+        purpose: 'Delivery',
+        direction,
+      },
+    });
+    expect(results((await send(w, [visit(1, 'ENTRY', T0)])).body)[0]?.status).toBe('accepted');
+
+    w.failReceipts.on = true;
+    const lost = await send(w, [visit(2, 'EXIT', T0 + 600_000)]);
+    expect(lost.status).toBe(503);
+    expect((await w.backend.snapshot(PROJECT_A)).visits.map((v) => v.status)).toEqual(['CLOSED']);
+
+    w.failReceipts.on = false;
+    const [resent] = results((await send(w, [visit(2, 'EXIT', T0 + 600_000)])).body);
+    expect(resent).toMatchObject({ status: 'duplicate', reason: null });
+    // A different, later exit for the same visitor is still refused: the visit is closed once.
+    const [another] = results((await send(w, [visit(3, 'EXIT', T0 + 900_000)])).body);
+    expect(another).toMatchObject({ status: 'rejected', reason: 'VISIT_NOT_FOUND' });
+    const visits = (await w.backend.snapshot(PROJECT_A)).visits;
+    expect(visits).toHaveLength(1);
+    expect(visits[0]).toMatchObject({
+      status: 'CLOSED',
+      checkedOutAt: new Date(T0 + 600_000).toISOString(),
+      exitIdempotencyKey: uuid(2),
+    });
+  });
+
   it('a crew batch answers per worker: other-company and unknown workers are refused, the rest count', async () => {
     const w = await world();
     w.as(FOREMAN);

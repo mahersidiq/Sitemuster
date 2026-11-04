@@ -278,19 +278,19 @@
 - Screenshots: `docs/screenshots/m08` (web render against the local stack; the kiosk round trip uses the real Edge Function).
 
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
-- `supabase test db`: **19 files, 550** pgTAP tests. `025_operations` has 59: permissions per role incl. MFA, GC B, foreman B, worker and operator; kiosk registration, hand-over, revocation and audit; receipts; printed badge by hash; eligibility parity with the reconciler; visitor registration incl. the cross-project id refusal; crew names-only; screen-read authorization.
+- `supabase test db`: **19 files, 554** pgTAP tests. `025_operations` has 63: permissions per role incl. MFA, GC B, foreman B, worker and operator; kiosk registration, hand-over, revocation and audit; receipts; printed badge by hash; eligibility parity with the reconciler; visitor registration incl. the cross-project id refusal; the visitor exit compare-and-swap that keeps the exit's operation id; crew names-only; screen-read authorization.
 - `npm run test:backend`: **112/112**, incl. `operations.test.ts` (2) against the real stack:
   - offline kiosk 20 scans (10 phone, 10 printed) plus 20 crew events → exactly 40 accepted; the resend adds nothing (40 sessions, 40 events, 22 receipts);
   - badge replay refused; per-worker errors; visitor separate; manual correction with reason; the overlap refusal; attendant cannot correct;
   - GC B attendant refused for project A with zero rows written there; anon key and missing bearer refused.
 
   The 81 database replays pass through the production handler.
-- Vitest unit **323**:
-  - operations core 14, incl. the acceptance scenario, replay, printed flag, visitors, per-worker errors, permissions, zero reads of a foreign project, foreman crew kiosk, clock skew, 503 then exactly once, malformed and muster, foreign id, HTTP guards, row mappers;
+- Vitest unit **324**:
+  - operations core 15, incl. the acceptance scenario, a visitor exit resent after a 503 (duplicate, not VISIT_NOT_FOUND), replay, printed flag, visitors, per-worker errors, permissions, zero reads of a foreign project, foreman crew kiosk, clock skew, 503 then exactly once, malformed and muster, foreign id, HTTP guards, row mappers;
   - outbox 8 against the real handler, incl. offline then a lost answer then exactly 40 accepted;
   - helpers 6.
 
-  Also: integration 51, security 78, i18n 18, replay 180. Jest **59**, incl. 9 new flows: kiosk offline→sync, printed confirmation, late-approved worker named, not-a-badge, Spanish, crew per-worker, correction, visitors, sign-out guard.
+  Also: integration 51, security 78, i18n 18, replay 180. Jest **61**, incl. the outbox key race (two first records at once share one key) and 9 new flows: kiosk offline→sync, printed confirmation, late-approved worker named, not-a-badge, Spanish, crew per-worker, correction, visitors, sign-out guard.
 - typecheck, ESLint + shellcheck, Prettier: pass.
 - GitHub Actions: _recorded in the PR._
 

@@ -134,28 +134,38 @@ export async function applyVisitorOperation(
   const config = configAt(configs, event.observedAt);
   if (!config) return rejected('PROJECT_NOT_FOUND');
   if (project.status !== 'ACTIVE') return rejected('PROJECT_NOT_ACTIVE');
-  const visits = (await rpc('edge_visitor_load', { p_project: event.projectId })) as VisitRecord[];
-  const { changed, result } = applyVisitorEvent(
-    visits,
-    {
-      eventUuid: event.eventUuid,
-      projectId: event.projectId,
-      visitorKey: event.visitorKey,
-      direction: event.direction,
-      observedAt: event.observedAt,
-    },
-    config,
-    project.timezone,
-  );
-  if (!changed) return result;
-  const committed = await rpc('edge_visitor_commit', {
-    p_visit: changed,
-    p_actor: event.actorId,
-    p_kiosk: event.kioskDeviceId,
-  });
-  // Another visit already holds this operation's idempotency key: it was applied before.
-  return committed === 'conflict' ? { ...result, status: 'duplicate', reason: null } : result;
+  for (let attempt = 0; attempt < VISIT_COMMIT_ATTEMPTS; attempt += 1) {
+    const visits = (await rpc('edge_visitor_load', {
+      p_project: event.projectId,
+    })) as VisitRecord[];
+    const { changed, result } = applyVisitorEvent(
+      visits,
+      {
+        eventUuid: event.eventUuid,
+        projectId: event.projectId,
+        visitorKey: event.visitorKey,
+        direction: event.direction,
+        observedAt: event.observedAt,
+      },
+      config,
+      project.timezone,
+    );
+    if (!changed) return result;
+    const committed = await rpc('edge_visitor_commit', {
+      p_visit: changed,
+      p_actor: event.actorId,
+      p_kiosk: event.kioskDeviceId,
+    });
+    // Another visit already holds this operation's id (entry or exit): it was applied before.
+    if (committed === 'conflict') return { ...result, status: 'duplicate', reason: null };
+    // 'stale': another operation closed the visit first; decide again on fresh rows.
+    if (committed !== 'stale') return result;
+  }
+  // Still racing after a few attempts: the caller answers 503 and the outbox sends it again.
+  throw new Error('VISIT_COMMIT_CONFLICT');
 }
+
+const VISIT_COMMIT_ATTEMPTS = 3;
 
 /** Engine output → the `edge_attendance_commit` changeset (atomic compare-and-swap). */
 export function changesetFromOutput(output: EngineOutput, expectedRevision: number): Json {

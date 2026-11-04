@@ -325,6 +325,68 @@ as $$
     from public.projects p where p.id = p_project
 $$;
 
+-- A visitor exit stores its operation id in the same row update that closes the visit (review
+-- finding on PR #8). A resend after a lost answer, or after the receipt could not be written,
+-- then finds the closed visit and answers `duplicate` instead of VISIT_NOT_FOUND.
+alter table public.visitor_visits
+  add column exit_idempotency_key uuid,
+  add constraint visitor_visits_exit_idempotency_uq unique (exit_idempotency_key),
+  add constraint visitor_visits_exit_key_ck check (exit_idempotency_key is null or checked_out_at is not null);
+
+create or replace function public.edge_visitor_load(p_project uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+set timezone = 'UTC'
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', v.id, 'projectId', v.project_id, 'visitorKey', v.visitor_id, 'status', v.status,
+           'checkedInAt', v.checked_in_at, 'checkedOutAt', v.checked_out_at,
+           'closeoutAt', coalesce(v.closeout_at, v.checked_in_at + interval '16 hours'),
+           'idempotencyKey', v.idempotency_key,
+           'exitIdempotencyKey', v.exit_idempotency_key) order by v.checked_in_at), '[]'::jsonb)
+    from public.visitor_visits v where v.project_id = p_project
+$$;
+
+-- Compare-and-swap: a visit is closed only while it is still OPEN or UNRESOLVED. 'stale' means
+-- another operation closed it first (the caller reloads and decides again); 'conflict' means the
+-- operation id is already stored (it was applied before).
+create or replace function public.edge_visitor_commit(p_visit jsonb, p_actor uuid, p_kiosk uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+set timezone = 'UTC'
+as $$
+declare
+  v_visitor uuid := (p_visit ->> 'visitorKey')::uuid;
+  v_project uuid := (p_visit ->> 'projectId')::uuid;
+  v_rows integer;
+begin
+  if not exists (select 1 from public.visitor_records r where r.id = v_visitor and r.project_id = v_project) then
+    raise exception 'VISITOR_NOT_FOUND' using errcode = '22023';
+  end if;
+  insert into public.visitor_visits (id, visitor_id, project_id, kiosk_actor_id, kiosk_device_id, checked_in_at,
+                                     checked_out_at, status, idempotency_key, closeout_at, exit_idempotency_key)
+  values ((p_visit ->> 'id')::uuid, v_visitor, v_project, p_actor, p_kiosk, (p_visit ->> 'checkedInAt')::timestamptz,
+          (p_visit ->> 'checkedOutAt')::timestamptz, (p_visit ->> 'status')::public.visitor_visit_status,
+          (p_visit ->> 'idempotencyKey')::uuid, (p_visit ->> 'closeoutAt')::timestamptz,
+          (p_visit ->> 'exitIdempotencyKey')::uuid)
+  on conflict (id) do update
+     set checked_out_at = excluded.checked_out_at, status = excluded.status,
+         exit_idempotency_key = excluded.exit_idempotency_key
+   where public.visitor_visits.project_id = excluded.project_id
+     and public.visitor_visits.status in ('OPEN', 'UNRESOLVED');
+  get diagnostics v_rows = row_count;
+  return case when v_rows = 0 then 'stale' else 'ok' end;
+exception
+  when unique_violation then
+    return 'conflict';
+end;
+$$;
+
 create function public.edge_operation_rate_limit(p_actor uuid, p_events integer)
 returns boolean
 language plpgsql

@@ -67,6 +67,8 @@ export interface OperationsWorld {
   receipts: Map<string, StoredReceipt>;
   loads: string[];
   failStore: { on: boolean };
+  /** Receipt writes fail (the operation itself was already applied): the request answers 503. */
+  failReceipts: { on: boolean };
   as(actor: string): void;
 }
 
@@ -103,6 +105,7 @@ export async function operationsWorld(): Promise<OperationsWorld> {
   const visitors = new Map<string, string>();
   const loads: string[] = [];
   const failStore = { on: false };
+  const failReceipts = { on: false };
   let actor = ATTENDANT;
   const store: AttendanceStore = {
     load: async (projectId, worker, uuids, sessions) => {
@@ -133,6 +136,7 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     receipts: async (uuids) =>
       uuids.flatMap((u) => (receipts.has(u) ? [receipts.get(u) as StoredReceipt] : [])),
     recordReceipts: async (_requestId, rows: ReceiptRow[]) => {
+      if (failReceipts.on) throw new Error('database unavailable');
       for (const row of rows) {
         if (receipts.has(row.event_uuid)) continue;
         receipts.set(row.event_uuid, {
@@ -192,7 +196,16 @@ export async function operationsWorld(): Promise<OperationsWorld> {
     workerId: workerId('k', 4),
     active: false,
   });
-  return { deps, backend, events, receipts, loads, failStore, as: (a) => (actor = a) };
+  return {
+    deps,
+    backend,
+    events,
+    receipts,
+    loads,
+    failStore,
+    failReceipts,
+    as: (a) => (actor = a),
+  };
 }
 
 export const kiosk = (n: number, i: number, at = T0, direction: 'ENTRY' | 'EXIT' = 'ENTRY') => ({

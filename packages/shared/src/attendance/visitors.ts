@@ -16,6 +16,8 @@ export interface VisitRecord {
   checkedOutAt: string | null;
   closeoutAt: string;
   idempotencyKey: string;
+  /** The operation id of the exit that closed the visit, stored with the close (resends). */
+  exitIdempotencyKey: string | null;
 }
 
 export interface VisitorEvent {
@@ -38,7 +40,12 @@ export function applyVisitorEvent(
     reason,
     review: false,
   });
-  if (visits.some((visit) => visit.idempotencyKey === event.eventUuid)) {
+  if (
+    visits.some(
+      (visit) =>
+        visit.idempotencyKey === event.eventUuid || visit.exitIdempotencyKey === event.eventUuid,
+    )
+  ) {
     return {
       changed: null,
       result: { eventUuid: event.eventUuid, status: 'duplicate', reason: null, review: false },
@@ -63,6 +70,7 @@ export function applyVisitorEvent(
         checkedOutAt: null,
         closeoutAt: iso(scheduleFor(start, config, timeZone).closeoutAt),
         idempotencyKey: event.eventUuid,
+        exitIdempotencyKey: null,
       },
       result: ok(),
     };
@@ -88,7 +96,12 @@ export function applyVisitorEvent(
     };
   }
   return {
-    changed: { ...target, status: 'CLOSED', checkedOutAt: event.observedAt },
+    changed: {
+      ...target,
+      status: 'CLOSED',
+      checkedOutAt: event.observedAt,
+      exitIdempotencyKey: event.eventUuid,
+    },
     result: ok(),
   };
 }

@@ -91,24 +91,45 @@ function nativeTable(): OutboxTable {
   };
 }
 
-function nativeCipher(): OutboxCipher {
-  let key: Uint8Array | null = null;
-  // A temporarily unreadable keystore (before first unlock) rejects: the rows stay untouched.
-  const loadKey = async (create: boolean): Promise<Uint8Array | null> => {
-    if (key) return key;
+/**
+ * The installation has ONE outbox key, shared by every outbox instance (one per signed-in person).
+ * Every keystore access runs one at a time (review finding on PR #8): two first-time enqueues
+ * that overlap (a double tap, two quick scans) must never each create a key, because the entry
+ * sealed with the key that loses the race could never be opened again.
+ */
+let cachedKey: Uint8Array | null = null;
+let keystoreQueue: Promise<unknown> = Promise.resolve();
+
+function serialized<T>(task: () => Promise<T>): Promise<T> {
+  const run = keystoreQueue.then(task, task);
+  keystoreQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+// A temporarily unreadable keystore (before first unlock) rejects: the rows stay untouched.
+function loadKey(create: boolean): Promise<Uint8Array | null> {
+  if (cachedKey) return Promise.resolve(cachedKey);
+  return serialized(async () => {
+    if (cachedKey) return cachedKey; // created by the call queued before this one
     const stored = await SecureStore.getItemAsync(KEY_NAME, SECURE_OPTIONS);
     if (stored) {
       const decoded = base64UrlDecode(stored);
       if (decoded.length !== KEY_BYTES) throw new SessionCipherError('outbox key has wrong length');
-      key = decoded;
-      return key;
+      cachedKey = decoded;
+      return cachedKey;
     }
     if (!create) return null;
     const fresh = nativeRandomBytes(KEY_BYTES);
     await SecureStore.setItemAsync(KEY_NAME, base64UrlEncode(fresh), SECURE_OPTIONS);
-    key = fresh;
-    return key;
-  };
+    cachedKey = fresh;
+    return cachedKey;
+  });
+}
+
+function nativeCipher(): OutboxCipher {
   return {
     seal: async (eventUuid, plain) =>
       encryptValue(
