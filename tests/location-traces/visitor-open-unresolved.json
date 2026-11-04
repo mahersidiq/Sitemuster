@@ -1,0 +1,56 @@
+{
+  "fixture_version": 1,
+  "id": "visitor-open-unresolved",
+  "description": "Visitors are tracked separately: an unclosed visit becomes UNRESOLVED at close-out; workforce counts never include visitors.",
+  "spec_case": 48,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "NOT_ARMED",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T14:00:00Z",
+      "type": "VISITOR",
+      "direction": "ENTRY",
+      "visitor": "V1"
+    },
+    {
+      "at_utc": "2026-11-03T14:10:00Z",
+      "type": "VISITOR",
+      "direction": "ENTRY",
+      "visitor": "V2"
+    },
+    {
+      "at_utc": "2026-11-03T15:00:00Z",
+      "type": "VISITOR",
+      "direction": "EXIT",
+      "visitor": "V2"
+    },
+    {
+      "at_utc": "2026-11-04T01:30:00Z",
+      "type": "TIME_ADVANCE"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 0,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "visitors": {
+      "open": 0,
+      "closed": 1,
+      "unresolved": 1
+    },
+    "counts": {
+      "visitors_onsite": 0,
+      "visitors_unresolved": 1,
+      "estimated_onsite": 0
+    }
+  }
+}

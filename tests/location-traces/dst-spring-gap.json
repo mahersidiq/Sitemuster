@@ -1,0 +1,256 @@
+{
+  "fixture_version": 1,
+  "id": "dst-spring-gap",
+  "description": "Saturday 22:00-06:00 shift across the 8 Mar 2026 spring-forward gap (02:00-03:00 does not exist): 6 h 54 min elapsed.",
+  "spec_case": 17,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698,
+    "work_windows": [
+      {
+        "weekday": 6,
+        "local_start_time": "22:00",
+        "local_end_time": "06:00"
+      }
+    ]
+  },
+  "clock_start_utc": "2026-03-08T03:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-03-08T04:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-03-08T04:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T04:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T04:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T04:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T04:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T05:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T05:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T05:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T05:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T06:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T06:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T06:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T06:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T07:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T07:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T07:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T07:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T08:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T08:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T08:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T08:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T09:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T09:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T09:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T09:56:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T10:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T10:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T10:41:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T10:46:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-03-08T10:55:00Z",
+      "type": "EVENT_EXIT",
+      "accuracy_m": 20
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "arrival_at": "2026-03-08T04:01:00Z",
+    "departure_at": "2026-03-08T10:55:00Z",
+    "days": [
+      {
+        "local_date": "2026-03-07",
+        "estimated_worker_seconds": 7140
+      },
+      {
+        "local_date": "2026-03-08",
+        "estimated_worker_seconds": 17700
+      }
+    ]
+  }
+}

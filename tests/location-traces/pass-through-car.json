@@ -1,0 +1,42 @@
+{
+  "fixture_version": 1,
+  "id": "pass-through-car",
+  "description": "ENTER, one inside fix, EXIT two minutes later: never an arrival.",
+  "spec_case": 7,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:00:30Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:02:00Z",
+      "type": "EVENT_EXIT",
+      "accuracy_m": 20
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 0,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "arrival_at": null
+  }
+}

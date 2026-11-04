@@ -1,0 +1,57 @@
+{
+  "fixture_version": 1,
+  "id": "never-opens-app-30-days",
+  "description": "The worker never opens the app: a silent push renews the credential in the background and attendance still works on day 37.",
+  "spec_case": 59,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "device": {
+    "credential_age_days": 20
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-07T12:00:00Z",
+      "type": "SILENT_PUSH",
+      "delivered": true
+    },
+    {
+      "at_utc": "2026-11-20T11:50:00Z",
+      "type": "TIME_ADVANCE"
+    },
+    {
+      "at_utc": "2026-11-20T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-20T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-20T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-20T12:01:00Z",
+    "device_status": "ACTIVE"
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "fixture_version": 1,
+  "id": "phone-swapped",
+  "description": "New phone activated on site: the old device and its queued record are revoked; the new phone resumes the same session with the gap recorded.",
+  "spec_case": 35,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:16:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:21:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:31:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:32:00Z",
+      "type": "NETWORK_DOWN"
+    },
+    {
+      "at_utc": "2026-11-03T12:35:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:40:00Z",
+      "type": "DEVICE_REPLACED"
+    },
+    {
+      "at_utc": "2026-11-03T12:41:00Z",
+      "type": "NETWORK_UP"
+    },
+    {
+      "at_utc": "2026-11-03T12:45:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:50:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "queue_remaining": 0,
+    "sessions": [
+      {
+        "start_at": "2026-11-03T12:01:00Z",
+        "status": "OPEN",
+        "gap_count": 1
+      }
+    ]
+  }
+}

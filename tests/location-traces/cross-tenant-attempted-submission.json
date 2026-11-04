@@ -1,0 +1,51 @@
+{
+  "fixture_version": 1,
+  "id": "cross-tenant-attempted-submission",
+  "description": "A tampered client sends another tenant's fence identifier: rejected PROJECT_NOT_AUTHORIZED, nothing is read or written for that project.",
+  "spec_case": 55,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "other_projects": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "lat": 29.8053661,
+      "lng": -95.3698,
+      "radius_m": 150,
+      "bound": false
+    }
+  ],
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000005501",
+      "project_id": "00000000-0000-4000-8000-000000000002"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 0,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000005501": {
+        "status": "rejected",
+        "reason": "PROJECT_NOT_AUTHORIZED"
+      }
+    },
+    "rejected_reasons": ["PROJECT_NOT_AUTHORIZED"],
+    "other_project": {
+      "session_count": 0,
+      "receipts": 0
+    }
+  }
+}

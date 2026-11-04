@@ -1,0 +1,77 @@
+{
+  "fixture_version": 1,
+  "id": "backend-503-recovery",
+  "description": "Two uploads fail with HTTP 503; the queue is kept and the third attempt delivers everything once.",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:20:00Z",
+      "type": "SERVER_RESPONSE",
+      "http_status": 503,
+      "count": 2
+    },
+    {
+      "at_utc": "2026-11-03T12:21:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000009301"
+    },
+    {
+      "at_utc": "2026-11-03T12:26:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    },
+    {
+      "at_utc": "2026-11-03T12:31:00Z",
+      "type": "FIX",
+      "lat": 29.7604,
+      "lng": -95.3698,
+      "accuracy_m": 15
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "queue_remaining": 0,
+    "duplicate_responses": 0,
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000009301": {
+        "status": "accepted"
+      }
+    }
+  }
+}

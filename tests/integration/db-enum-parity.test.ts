@@ -21,6 +21,17 @@ function parseDbEnums(): Map<string, string[]> {
         [...body.matchAll(/'([^']*)'/g)].map((m) => m[1] ?? ''),
       );
     }
+    // Later migrations may extend an enum (`alter type … add value … [before|after …]`).
+    for (const match of sql.matchAll(
+      /alter type public\.(\w+) add value (?:if not exists )?'([^']*)'(?: (before|after) '([^']*)')?;/gi,
+    )) {
+      const [, name, value, where, reference] = match;
+      const values = name ? enums.get(name) : undefined;
+      if (!values || value === undefined) continue;
+      const at = reference ? values.indexOf(reference) : -1;
+      if (at < 0) values.push(value);
+      else values.splice(where?.toLowerCase() === 'before' ? at : at + 1, 0, value);
+    }
   }
   return enums;
 }

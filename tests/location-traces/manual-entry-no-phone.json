@@ -1,0 +1,44 @@
+{
+  "fixture_version": 1,
+  "id": "manual-entry-no-phone",
+  "description": "A superintendent enters attendance from a signed paper roster: a closed MANUAL session with reason.",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T16:30:00Z",
+      "type": "MANUAL_ATTENDANCE",
+      "corrected_start_utc": "2026-11-03T12:00:00Z",
+      "corrected_end_utc": "2026-11-03T16:00:00Z",
+      "reason": "Signed paper roster"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 1,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-03T12:00:00Z",
+    "departure_at": "2026-11-03T16:00:00Z",
+    "sessions": [
+      {
+        "start_at": "2026-11-03T12:00:00Z",
+        "end_at": "2026-11-03T16:00:00Z",
+        "status": "CLOSED",
+        "start_source": "MANUAL",
+        "end_source": "MANUAL"
+      }
+    ]
+  }
+}

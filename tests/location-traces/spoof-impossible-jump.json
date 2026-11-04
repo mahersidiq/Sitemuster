@@ -1,0 +1,59 @@
+{
+  "fixture_version": 1,
+  "id": "spoof-impossible-jump",
+  "description": "A 280 m jump in 2 s (135 m/s) is flagged as spoofing and ignored; genuine fixes still confirm the arrival.",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:00:00Z",
+      "type": "EVENT_ENTER",
+      "accuracy_m": 20
+    },
+    {
+      "at_utc": "2026-11-03T12:01:00Z",
+      "type": "FIX",
+      "lat": 29.759141,
+      "lng": -95.3698,
+      "accuracy_m": 5
+    },
+    {
+      "at_utc": "2026-11-03T12:01:02Z",
+      "type": "FIX",
+      "lat": 29.761659,
+      "lng": -95.3698,
+      "accuracy_m": 5,
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000009101"
+    },
+    {
+      "at_utc": "2026-11-03T12:11:00Z",
+      "type": "FIX",
+      "lat": 29.759141,
+      "lng": -95.3698,
+      "accuracy_m": 5
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "arrival_at": "2026-11-03T12:01:00Z",
+    "flags": ["SPOOF_SUSPECTED"],
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000009101": {
+        "status": "accepted",
+        "reason": "SPOOF_SUSPECTED",
+        "review": true
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "fixture_version": 1,
+  "id": "muster-self-report-not-presence",
+  "description": "An offsite worker's \"I'm safe\" and a physical verification never create attendance.",
+  "spec_case": 50,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "NOT_ARMED",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:30:00Z",
+      "type": "MUSTER_RESPONSE",
+      "action": "SELF_REPORT"
+    },
+    {
+      "at_utc": "2026-11-03T12:31:00Z",
+      "type": "MUSTER_RESPONSE",
+      "action": "PHYSICAL_VERIFICATION"
+    }
+  ],
+  "expected": {
+    "presence": "OFFSITE",
+    "session_count": 0,
+    "counted_worker_count": 0,
+    "unresolved_count": 0,
+    "muster_responses_recorded": 2
+  }
+}

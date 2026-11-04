@@ -1,0 +1,73 @@
+{
+  "fixture_version": 1,
+  "id": "foreman-bulk-duplicate",
+  "description": "A foreman sends the same crew check-in twice and then a second list: per-person sessions, never double counted.",
+  "spec_case": 44,
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "other_workers": [
+    {
+      "key": "B",
+      "has_phone": false
+    },
+    {
+      "key": "C",
+      "has_phone": false
+    }
+  ],
+  "clock_start_utc": "2026-11-03T11:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T12:30:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A", "B", "C"],
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004401"
+    },
+    {
+      "at_utc": "2026-11-03T12:35:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A", "B", "C"],
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004401"
+    },
+    {
+      "at_utc": "2026-11-03T12:40:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "workers": ["A", "B"],
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000004402"
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 3,
+    "unresolved_count": 0,
+    "duplicate_responses": 1,
+    "workers": {
+      "B": {
+        "session_count": 1,
+        "presence": "ONSITE_ESTIMATED"
+      },
+      "C": {
+        "session_count": 1
+      }
+    },
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000004401": {
+        "status": "accepted"
+      }
+    }
+  }
+}
