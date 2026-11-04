@@ -10,7 +10,7 @@
 | 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
 | 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
 | 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
-| 05 | Orientation sessions, badges, approval | in review | (PR pending) | |
+| 05 | Orientation sessions, badges, approval | done (NOT VERIFIED items) | [#5](https://github.com/mahersidiq/Sitemuster/pull/5) | squash-merged under #48 after CI green and the automated review |
 | 06 | Attendance state machine and deterministic replay | not started | | |
 | 07 | Native tracking and custom device ingestion | not started | | |
 | 08 | Kiosk, foreman, manual and visitor fallbacks | not started | | |
@@ -139,12 +139,13 @@
 - App: worker join by QR scan (camera for QR only) or typed code → details → disclosure (DRAFT label) → done; worker home/My Projects with honest statuses; offline 30-second badge from the phone keystore (works without signal after one-time activation); emergency contact editing; staff orientation screen (live QR computed on the phone + printable QR shared as PNG via the share sheet); roster/approvals with select-all ≤ 100, per-person results, employer confirmation, reject with reason; no-phone onboarding with the notice read in the worker's language; printed badge issue/share/cancel. Native camera permission text in EN/ES; device credentials wiped on sign-out.
 
 **Test results (local, Linux container)**
-- `supabase test db`: 15 files, **360** pgTAP tests pass (`021_orientation_badges`: 78 — who may start sessions, ±1-step rotating code, forged/expired/foreign codes, printed code only while open, PENDING-only joins, notice gating incl. production refusal, closed/expired sessions, rate limit counting failures, roster privacy, bulk 101 refused / 100 with per-person results, employer confirmation, managed no-phone worker, printed badge hash/re-issue/revoke, service-role-only device activation, previous device revoked, badge replay).
-- `npm run test:backend` against the local stack (Auth, PostgREST, Postgres, Edge runtime): **19/19** — adds the M05 flow: staff starts orientation via Edge, worker joins with a code computed by the app's own code (TS ↔ SQL HMAC parity), stays PENDING, Edge bulk approval, device activation (secret stored only encrypted), offline badge verified once and its replay rejected; printed QR rejected after close; workers refused by staff Edge Functions; activation refused without a worker profile.
-- Vitest unit **187**, integration 51, security **75**, i18n **18** (adds native permission texts EN/ES, legal-draft integrity), replay 3; Jest mobile-unit 7 + mobile-integration **35** (8 new: join with draft notice → PENDING, Spanish notice + closed-session error, camera-denied fallback, live/printable QR + share, bulk approve + employer confirmation, reject reason + no-phone worker, printed badge, offline badge without network).
+- `supabase test db`: 16 files, **373** pgTAP tests pass (`021_orientation_badges`: 78 — who may start sessions, ±1-step rotating code, forged/expired/foreign codes, printed code only while open, PENDING-only joins, notice gating incl. production refusal, closed/expired sessions, rate limit counting failures, roster privacy, bulk 101 refused / 100 with per-person results, employer confirmation, managed no-phone worker, printed badge hash/re-issue/revoke, service-role-only device activation, previous device revoked, badge replay; `022_review_fixes`: 13 — delegated PMs cannot invite SUPER/SAFETY, platform operators lose delegated powers, foreman grants limited to the granting company).
+- `npm run test:backend` against the local stack (Auth, PostgREST, Postgres, Edge runtime): **20/20** — adds the M05 flow: staff starts orientation via Edge, worker joins with a code computed by the app's own code (TS ↔ SQL HMAC parity), stays PENDING, Edge bulk approval, device activation (secret stored only encrypted), offline badge verified once and its replay rejected; printed QR rejected after close; workers refused by staff Edge Functions; activation refused without a worker profile; plus a two-connection race proving an organization always keeps an owner.
+- Vitest unit **190**, integration 51, security **75**, i18n **18** (adds native permission texts EN/ES, legal-draft integrity), replay 3; Jest mobile-unit 7 + mobile-integration **39** (8 orientation flows: join with draft notice → PENDING, Spanish notice + closed-session error, camera-denied fallback, live/printable QR + share, bulk approve + employer confirmation, reject reason + no-phone worker, printed badge, offline badge without network; 4 access-hardening tests: sign-out race, same-user offline cache, foreground re-check, revoked project data hidden).
 - typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
 - Web-render screenshots `docs/screenshots/m05` (13, EN + ES) against the local stack.
 - Found and fixed while testing: the printable-QR export updated state on every render (endless re-render on real devices); the Jest QR stand-in now behaves like the real component so this cannot regress.
+- GitHub Actions run 41765693418 (head `47cf2ca`): `code-quality` success (unit 190 + 7, integration 51 + 39, security 75 incl. the iOS/Android bundle canary scan, i18n 18, replay 3, expo config, audit: 0 high/critical); `database` success (pgTAP Files=16, Tests=373, PASS; `npm run test:backend` 20/20 incl. Edge Functions and the race test in the CI Supabase stack).
 
 **NOT VERIFIED (Milestone 05)**
 - Camera QR scanning, AFTER_FIRST_UNLOCK keystore behaviour and the share sheet/printing on real phones (`NOT_EXECUTED_PHYSICAL_DEVICE`); screenshots are web renders.
@@ -158,7 +159,7 @@
 
 **Decisions added:** #69 orientation/approval authority and session secrets, #70 environment marker (unmarked = production), #71 service-role-only device activation/redemption + installation hash, #72 rate limits count failed code attempts, #73 QR formats and join data rules, #74 on-phone credential storage, printed badges and PNG sharing (`expo-file-system`), #75 consent supersession and supervised acknowledgements, #76 review-finding fixes.
 
-**Next step:** after Milestone 05 merges, start Milestone 06 (attendance state machine and deterministic replay, ≥ 55 fixtures) on `milestone-06-attendance-engine`.
+**Next step:** done — Milestone 06 (attendance state machine and deterministic replay, ≥ 55 fixtures) starts on `milestone-06-attendance-engine`.
 
 ## Environment notes for future sessions (Linux build agent)
 
