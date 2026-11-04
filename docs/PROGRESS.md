@@ -9,7 +9,7 @@
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
 | 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
 | 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
-| 04 | GC organizations, projects, shifts and circles | in review | (PR pending) | |
+| 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
 | 05 | Orientation sessions, badges, approval | not started | | |
 | 06 | Attendance state machine and deterministic replay | not started | | |
 | 07 | Native tracking and custom device ingestion | not started | | |
@@ -116,6 +116,7 @@
 - Vitest unit **170**, integration **51**, security **75** (adds a real iOS + Android bundle build with planted canary secrets: no server key and no direct Google endpoint in the bundles), i18n **12**, replay contract **3**; Jest mobile-unit **7**, mobile-integration **27** (10 new project/organization/invitation flows incl. Spanish and a lost-response retry).
 - typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
 - Web-render screenshots (`docs/screenshots/m04`, 22 images, EN + ES) captured against the local stack, including the local Edge Function address adapter.
+- GitHub Actions run 41759095284 (head `c53264a`): `code-quality` success (unit 170 + 7, integration 51 + 27, security 75 incl. the iOS/Android bundle canary scan, i18n 12, replay 3, expo config, audit: 0 high/critical); `database` success (pgTAP Files=14, Tests=281, PASS; `npm run test:backend` 16/16 incl. Edge Functions in the CI Supabase stack). The first run failed because `supabase start` bundles the Edge Functions before `npm ci` had installed their pinned imports; the database job now installs dependencies first (no test or step removed).
 
 **NOT VERIFIED (Milestone 04)**
 - Real Google Places/Geocoding results — no Google Cloud project or keys yet (HUMAN_CHECKLIST §5). Local/CI use the labelled development adapter through the real Edge runtime.
