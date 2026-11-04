@@ -13,6 +13,7 @@ import {
   ms,
   type ProjectContext,
   type ReceiptRow,
+  type ReportStore,
   type SessionRecord,
   sweepTrack,
   type TrackLoad,
@@ -21,7 +22,16 @@ import {
   type VisitRecord,
 } from '@sitemuster/shared';
 
-import type { Eligibility, ServerBackend, StoredPosition } from './backend';
+import { MemoryReports } from '../../support/report-memory';
+import type {
+  Eligibility,
+  ReportAnswer,
+  ReportAnswerInput,
+  ServerBackend,
+  StoredPosition,
+  StoredReport,
+} from './backend';
+import { settingsOf } from './settings';
 
 /**
  * In-memory backend for the replay harness. `commit` enforces the same invariants as the database
@@ -101,8 +111,63 @@ export class MemoryBackend implements ServerBackend, AttendanceStore {
   private readonly positions = new Map<string, StoredPosition>();
   private readonly visitRows = new Map<string, VisitRecord>();
 
+  private readonly dailyReports = new MemoryReports(async (projectId) =>
+    this.reportInputs(projectId),
+  );
+
   get store(): AttendanceStore {
     return this;
+  }
+
+  get reports(): ReportStore {
+    return this.dailyReports.store;
+  }
+
+  /** What `edge_report_inputs` returns (the generator filters to the exact local day). */
+  private reportInputs(projectId: string): Record<string, unknown> | null {
+    const project = this.projects.get(projectId);
+    if (!project) return null;
+    return {
+      project: { ...project },
+      project_name: 'Replay site',
+      configs: (this.configs.get(projectId) ?? []).map((config) => ({
+        configVersionId: config.configVersionId,
+        projectId: config.projectId,
+        versionNumber: config.versionNumber,
+        effectiveAt: config.effectiveAt,
+        settings: settingsOf(config),
+        center: config.center,
+        radiusM: config.radiusM,
+        exitHysteresisM: config.exitHysteresisM,
+      })),
+      sessions: [...this.sessionRows.values()]
+        .filter((session) => session.projectId === projectId && session.status !== 'VOID')
+        .map((session) => ({ ...session })),
+      corrected_session_ids: this.correctionRows
+        .filter((row) => row.project_id === projectId && row.session_id)
+        .map((row) => row.session_id),
+    };
+  }
+
+  async answerReport(input: ReportAnswerInput): Promise<ReportAnswer> {
+    const result = this.dailyReports.confirm({ ...input, proposed: [] });
+    return result.ok
+      ? { ok: true, status: result.status, duplicate: result.duplicate }
+      : { ok: false, code: result.code, status: result.status };
+  }
+
+  async reportRows(projectId: string): Promise<StoredReport[]> {
+    return this.dailyReports.reports
+      .filter((report) => report.projectId === projectId)
+      .map((report) => ({
+        reportId: report.id,
+        companyId: report.companyId,
+        localDate: report.localDate,
+        version: report.version,
+        status: report.status,
+        dueAt: report.dueAt,
+        summary: report.summary,
+      }));
   }
 
   async createProject(project: ProjectContext, first: AttendanceConfig): Promise<void> {

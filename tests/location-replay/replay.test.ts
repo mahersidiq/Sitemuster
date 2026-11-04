@@ -23,8 +23,8 @@ const FIXTURES: LocationTraceFixture[] = listFiles(['tests/location-traces'], (p
   LocationTraceFixtureSchema.parse(JSON.parse(readFileSync(join(REPO_ROOT, path), 'utf8'))),
 );
 
-/** docs/spec/10 scenarios owned by later milestones (reports: Milestone 10). */
-const LATER_MILESTONES = new Set([47]);
+/** docs/spec/10 scenarios owned by later milestones (none left: reports arrived in Milestone 10). */
+const LATER_MILESTONES = new Set<number>([]);
 
 describe('deterministic location replay — suite size', () => {
   it('covers at least 55 named scenarios of docs/spec/10-testing.md plus edge cases', () => {

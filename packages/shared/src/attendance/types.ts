@@ -177,6 +177,8 @@ export type Evidence =
       correctedStartAt: string | null;
       correctedEndAt: string | null;
       reason: string;
+      /** The correction request this change approves (recorded with it; Milestone 10). */
+      requestId?: string | null;
     })
   | (EvidenceBase & { kind: 'APPROVE_UNSCHEDULED'; actorId: string; sessionId: string })
   | (EvidenceBase & {

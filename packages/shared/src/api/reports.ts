@@ -94,8 +94,6 @@ export const DailyReportsRequestSchema = z.discriminatedUnion('action', [
     local_date: LocalDateSchema,
     reason: z.string().trim().min(3).max(1000),
   }),
-  /** The scheduled job only (service role): generate yesterday's reports for every project. */
-  z.strictObject({ schema_version: SchemaVersionSchema, action: z.literal('generate_due') }),
 ]);
 export type DailyReportsRequest = z.infer<typeof DailyReportsRequestSchema>;
 

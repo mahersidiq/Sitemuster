@@ -804,6 +804,8 @@
     "COMPANY_NOT_AUTHORIZED": "You are not this company's foreman here.",
     "WORKER_NOT_IN_COMPANY": "Not in your company on this project.",
     "WORKER_NOT_ENROLLED": "Not enrolled on this project.",
+    "REQUEST_NOT_FOUND": "This correction request was not found for this worker and session.",
+    "REQUEST_ALREADY_DECIDED": "This correction request was already decided.",
     "SOME_WORKERS_REJECTED": "Some workers were not recorded. See each name.",
     "VISITOR_ID_CONFLICT": "Visitor record conflict. Sign the visitor in again.",
     "VISITOR_DETAILS_REQUIRED": "The visitor's name and purpose are required.",

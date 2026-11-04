@@ -7,6 +7,7 @@ import { functionEnvironment } from '../_shared/http.ts';
 import {
   badgeDeviceFromJson,
   contextFromJson,
+  correctionRequestFromJson,
   handleOperations,
   OperationsAuthError,
   receiptsFromJson,
@@ -86,6 +87,8 @@ Deno.serve((req) => {
         p_actor: input.actorId,
       })) as VisitorRegistration,
     applyVisitor: (input) => applyVisitorOperation(rpc, input),
+    correctionRequest: async (requestId) =>
+      correctionRequestFromJson(await rpc('edge_correction_request', { p_request_id: requestId })),
     store,
     // Safe structured lines (request id, codes and counts only) for refusals and failures.
     log: (entry) => {

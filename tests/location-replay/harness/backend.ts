@@ -1,6 +1,8 @@
 import type {
   AttendanceConfig,
   AttendanceStore,
+  CompanyDayReport,
+  ReportStore,
   ItemResult,
   ProjectContext,
   ReceiptRow,
@@ -38,6 +40,30 @@ export interface BackendSnapshot {
   visits: VisitRecord[];
 }
 
+/** One stored version of a daily company report (Milestone 10). */
+export interface StoredReport {
+  reportId: string;
+  companyId: string;
+  localDate: string;
+  version: number;
+  status: string;
+  dueAt: string;
+  summary: CompanyDayReport;
+}
+
+export interface ReportAnswerInput {
+  reportId: string;
+  version: number;
+  action: 'CONFIRM' | 'DISPUTE';
+  comment: string | null;
+  eventUuid: string;
+  actorId: string;
+  now: string;
+}
+
+export type ReportAnswer =
+  { ok: true; status: string; duplicate: boolean } | { ok: false; code: string; status: string };
+
 export interface ServerBackend {
   readonly mode: 'memory' | 'database';
   readonly store: AttendanceStore;
@@ -62,6 +88,11 @@ export interface ServerBackend {
   /** The scheduled close-out sweep at `now` (time rules only). */
   sweep(now: string): Promise<void>;
   visitorEvent(event: VisitorEvent): Promise<ItemResult>;
+  /** Daily report storage behind the production generator (`edge_*` report functions). */
+  readonly reports: ReportStore;
+  /** The company foreman's answer (`edge_confirm_report` rules). */
+  answerReport(input: ReportAnswerInput): Promise<ReportAnswer>;
+  reportRows(projectId: string): Promise<StoredReport[]>;
   snapshot(projectId: string): Promise<BackendSnapshot>;
   close(): Promise<void>;
 }

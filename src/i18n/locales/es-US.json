@@ -804,6 +804,8 @@
     "COMPANY_NOT_AUTHORIZED": "Usted no es el capataz de esta empresa aquí.",
     "WORKER_NOT_IN_COMPANY": "No pertenece a su empresa en este proyecto.",
     "WORKER_NOT_ENROLLED": "No está inscrito en este proyecto.",
+    "REQUEST_NOT_FOUND": "No se encontró esta solicitud de corrección para este trabajador y turno.",
+    "REQUEST_ALREADY_DECIDED": "Esta solicitud de corrección ya fue decidida.",
     "SOME_WORKERS_REJECTED": "Algunos trabajadores no se registraron. Vea cada nombre.",
     "VISITOR_ID_CONFLICT": "Conflicto con el registro del visitante. Registre su entrada otra vez.",
     "VISITOR_DETAILS_REQUIRED": "Se requieren el nombre y el motivo del visitante.",

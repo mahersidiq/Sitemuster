@@ -117,6 +117,16 @@ export function compareExpected(
       }
     });
   }
+  if (e.reports) {
+    check('reports.length', e.reports.length, observation.reports.length);
+    e.reports.forEach((want, index) => {
+      const got = observation.reports[index];
+      if (!got) return;
+      for (const [name, value] of Object.entries(want)) {
+        check(`reports[${index}].${name}`, value, got[name as keyof typeof got]);
+      }
+    });
+  }
   for (const flag of e.flags ?? []) {
     if (!observation.flags.includes(flag))
       out.push(`flags: expected ${flag} in ${JSON.stringify(observation.flags)}`);

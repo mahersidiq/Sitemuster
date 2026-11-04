@@ -243,6 +243,33 @@ export function buildCompanyDayReports(inputs: ReportInputs): CompanyDayReport[]
     });
 }
 
+/** A company report with no countable time (every session of the day was voided or moved). */
+export function emptyCompanyDayReport(
+  companyId: string,
+  localDate: string,
+  timeZone: string,
+): CompanyDayReport {
+  const day = localDayRange(parseLocalDate(localDate), timeZone);
+  return {
+    schema_version: REPORT_SCHEMA_VERSION,
+    company_id: companyId,
+    local_date: localDate,
+    time_zone: timeZone,
+    day_start_at: iso(day[0]),
+    day_end_at: iso(day[1]),
+    workers: [],
+    totals: {
+      workers: 0,
+      definite_seconds: 0,
+      uncertain_seconds: 0,
+      pending_approval_seconds: 0,
+      sessions_needing_review: 0,
+      peak_estimated_count: 0,
+    },
+    notice: ESTIMATE_NOTICE,
+  };
+}
+
 const NOON = 12 * 60;
 
 /**

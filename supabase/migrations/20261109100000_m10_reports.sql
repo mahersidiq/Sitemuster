@@ -94,7 +94,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- Generation inputs and storage (service role only; the Edge Function authorizes first)
 -- ---------------------------------------------------------------------------------------------
-create function public.edge_report_inputs(p_project uuid, p_local_date date, p_day_start timestamptz, p_day_end timestamptz)
+create function public.edge_report_inputs(p_project uuid, p_local_date date)
 returns jsonb
 language sql
 stable
@@ -102,11 +102,13 @@ security definer
 set search_path = ''
 set timezone = 'UTC'
 as $$
+  -- Every session that can touch the local day in any time zone (UTC-12 … UTC+14); the shared
+  -- report rules clip each one to the exact project-local day.
   with day_sessions as (
     select s.* from public.attendance_sessions s
      where s.project_id = p_project and s.status <> 'VOID'
-       and s.start_at < p_day_end
-       and coalesce(s.end_at, s.end_latest_at, 'infinity'::timestamptz) >= p_day_start)
+       and s.start_at < (p_local_date + 2)::timestamp at time zone 'UTC'
+       and coalesce(s.end_at, s.end_latest_at, 'infinity'::timestamptz) >= (p_local_date - 1)::timestamp at time zone 'UTC')
   select public.edge_visitor_context(p_project) || jsonb_build_object(
     'project_name', (select p.name from public.projects p where p.id = p_project),
     'sessions', coalesce((select jsonb_agg(app_private.attendance_session_json(s) order by s.start_at) from day_sessions s), '[]'::jsonb),
@@ -119,10 +121,45 @@ as $$
         from (select distinct on (subcontractor_id) * from public.daily_company_reports
                where project_id = p_project and local_date = p_local_date
                order by subcontractor_id, report_version desc) r), '[]'::jsonb))
+    where exists (select 1 from public.projects p where p.id = p_project)
+$$;
+
+-- Ended project-local days (within the last p_days) on which some company worked but has no
+-- report yet: lets the foreman's pending list generate only what is missing.
+create function public.edge_report_gaps(p_project uuid, p_days integer)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+set timezone = 'UTC'
+as $$
+  with project as (
+    select p.id, p.iana_timezone as tz, (now() at time zone p.iana_timezone)::date as today
+      from public.projects p where p.id = p_project),
+  touched as (
+    select distinct s.employer_snapshot_id as company_id, d::date as local_date
+      from project pr
+      join public.attendance_sessions s on s.project_id = pr.id
+      cross join lateral generate_series((s.start_at at time zone pr.tz)::date,
+                                         (coalesce(s.end_at, s.end_latest_at, now()) at time zone pr.tz)::date,
+                                         interval '1 day') d
+     where s.status <> 'VOID' and s.employer_snapshot_id is not null
+       and s.start_at >= now() - make_interval(days => least(greatest(p_days, 1), 14) + 2))
+  select jsonb_build_object(
+           'time_zone', pr.tz,
+           'dates', coalesce((
+             select jsonb_agg(distinct t.local_date order by t.local_date)
+               from touched t
+              where t.local_date < pr.today and t.local_date >= pr.today - least(greatest(p_days, 1), 14)
+                and not exists (select 1 from public.daily_company_reports r
+                                 where r.project_id = pr.id and r.subcontractor_id = t.company_id
+                                   and r.local_date = t.local_date)), '[]'::jsonb))
+    from project pr
 $$;
 
 -- Version 1 of each company's report for a day, once (concurrent generators insert nothing twice).
-create function public.edge_store_reports(p_project uuid, p_local_date date, p_reports jsonb)
+create function public.edge_store_reports(p_project uuid, p_local_date date, p_reports jsonb, p_now timestamptz default null)
 returns integer
 language plpgsql
 security definer
@@ -145,7 +182,7 @@ begin
     end if;
     insert into public.daily_company_reports (project_id, subcontractor_id, local_date, report_version, summary, status, due_at)
     values (p_project, (r ->> 'company_id')::uuid, p_local_date, 1, r -> 'summary',
-            case when (r ->> 'due_at')::timestamptz <= now() then 'NOT_CONFIRMED' else 'PENDING_CONFIRMATION' end::public.report_status,
+            case when (r ->> 'due_at')::timestamptz <= coalesce(p_now, now()) then 'NOT_CONFIRMED' else 'PENDING_CONFIRMATION' end::public.report_status,
             (r ->> 'due_at')::timestamptz)
     on conflict (project_id, subcontractor_id, local_date, report_version) do nothing
     returning id into v_id;
@@ -163,7 +200,8 @@ $$;
 
 -- A new version after corrections (staff); the earlier version is SUPERSEDED, never changed.
 create function public.edge_reissue_report(
-  p_project uuid, p_company uuid, p_local_date date, p_summary jsonb, p_due_at timestamptz, p_reason text, p_actor uuid
+  p_project uuid, p_company uuid, p_local_date date, p_summary jsonb, p_due_at timestamptz, p_reason text, p_actor uuid,
+  p_now timestamptz default null
 )
 returns jsonb
 language plpgsql
@@ -193,7 +231,7 @@ begin
   insert into public.daily_company_reports (project_id, subcontractor_id, local_date, report_version, summary, status,
                                             due_at, supersedes_id)
   values (p_project, p_company, p_local_date, v_version, p_summary,
-          case when p_due_at <= now() then 'NOT_CONFIRMED' else 'PENDING_CONFIRMATION' end::public.report_status,
+          case when p_due_at <= coalesce(p_now, now()) then 'NOT_CONFIRMED' else 'PENDING_CONFIRMATION' end::public.report_status,
           p_due_at, v_prev.id)
   returning id into v_id;
   perform app_private.write_audit('USER', p_actor, 'report.reissued', app_private.project_organization(p_project),
@@ -222,7 +260,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 create function public.edge_confirm_report(
   p_report_id uuid, p_version integer, p_action public.report_action, p_comment text, p_proposed jsonb,
-  p_event_uuid uuid, p_actor uuid
+  p_event_uuid uuid, p_actor uuid, p_now timestamptz default null
 )
 returns jsonb
 language plpgsql
@@ -256,7 +294,7 @@ begin
   if v_report.report_version <> p_version or v_report.status = 'SUPERSEDED' then
     return jsonb_build_object('ok', false, 'code', 'REPORT_VERSION_STALE', 'status', v_report.status);
   end if;
-  if v_report.status = 'PENDING_CONFIRMATION' and v_report.due_at <= now() then
+  if v_report.status = 'PENDING_CONFIRMATION' and v_report.due_at <= coalesce(p_now, now()) then
     update public.daily_company_reports set status = 'NOT_CONFIRMED' where id = v_report.id;
     return jsonb_build_object('ok', false, 'code', 'REPORT_DEADLINE_PASSED', 'status', 'NOT_CONFIRMED');
   end if;
@@ -761,10 +799,10 @@ revoke all on function
   from public, anon, authenticated, service_role;
 
 revoke all on function
-  public.report_context(uuid), public.edge_report_inputs(uuid, date, timestamptz, timestamptz),
-  public.edge_store_reports(uuid, date, jsonb),
-  public.edge_reissue_report(uuid, uuid, date, jsonb, timestamptz, text, uuid), public.edge_report_ref(uuid),
-  public.edge_confirm_report(uuid, integer, public.report_action, text, jsonb, uuid, uuid),
+  public.report_context(uuid), public.edge_report_inputs(uuid, date), public.edge_report_gaps(uuid, integer),
+  public.edge_store_reports(uuid, date, jsonb, timestamptz),
+  public.edge_reissue_report(uuid, uuid, date, jsonb, timestamptz, text, uuid, timestamptz), public.edge_report_ref(uuid),
+  public.edge_confirm_report(uuid, integer, public.report_action, text, jsonb, uuid, uuid, timestamptz),
   public.report_list(uuid, date), public.my_pending_reports(), public.edge_report_deadline_sweep(timestamptz),
   public.my_attendance(uuid, timestamptz, timestamptz),
   public.request_attendance_correction(uuid, uuid, timestamptz, timestamptz, text, uuid),
@@ -774,9 +812,9 @@ revoke all on function
   from public, anon, authenticated, service_role;
 
 grant execute on function
-  public.edge_report_inputs(uuid, date, timestamptz, timestamptz), public.edge_store_reports(uuid, date, jsonb),
-  public.edge_reissue_report(uuid, uuid, date, jsonb, timestamptz, text, uuid), public.edge_report_ref(uuid),
-  public.edge_confirm_report(uuid, integer, public.report_action, text, jsonb, uuid, uuid),
+  public.edge_report_inputs(uuid, date), public.edge_report_gaps(uuid, integer), public.edge_store_reports(uuid, date, jsonb, timestamptz),
+  public.edge_reissue_report(uuid, uuid, date, jsonb, timestamptz, text, uuid, timestamptz), public.edge_report_ref(uuid),
+  public.edge_confirm_report(uuid, integer, public.report_action, text, jsonb, uuid, uuid, timestamptz),
   public.edge_report_deadline_sweep(timestamptz), public.edge_correction_request(uuid)
   to service_role;
 
