@@ -92,4 +92,10 @@ describe('app bundle secret scan', () => {
       expect(bundle.text, bundle.path).not.toMatch(/GOOGLE_(PLACES|GEOCODING)_SERVER_KEY/);
     }
   });
+  it('never ships the simulated location SDK (CI trace driver) in a release bundle (decision #18)', () => {
+    expect(bundles.length).toBeGreaterThan(0);
+    for (const bundle of bundles) {
+      expect(bundle.text.includes('SITEMUSTER-SIMULATED-SDK')).toBe(false);
+    }
+  });
 });

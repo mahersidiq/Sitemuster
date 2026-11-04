@@ -22,6 +22,11 @@ export default function WorkerLayout() {
       <Tabs.Screen name="projects" options={tabScreenOptions(t('worker.tabs.projects'))} />
       <Tabs.Screen name="history" options={tabScreenOptions(t('worker.tabs.history'))} />
       <Tabs.Screen name="profile" options={tabScreenOptions(t('worker.tabs.profile'))} />
+      {/* Details screen opened from the home status card; not a tab of its own. */}
+      <Tabs.Screen
+        name="tracking"
+        options={{ ...tabScreenOptions(t('tracking.title')), href: null }}
+      />
     </Tabs>
   );
 }

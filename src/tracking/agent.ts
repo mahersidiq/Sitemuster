@@ -16,6 +16,7 @@ import {
   type PermissionSnapshot,
   type TrackerDriver,
 } from './driver';
+import type { QueuedRecord } from './gate';
 
 /**
  * Runs the pure controller against a driver: one event at a time (serialized), state persisted
@@ -62,9 +63,9 @@ export class TrackingAgent {
   /** Wires SDK events to the controller; returns the unsubscribe function. */
   attach(): () => void {
     const handlers: DriverHandlers = {
-      geofence: (event) => void this.step((s) => onGeofence(s, event)),
-      location: (record) => void this.step((s) => onLocation(s, record)),
-      heartbeat: () => void this.step(onHeartbeat),
+      geofence: (event) => void this.geofence(event),
+      location: (record) => void this.location(record),
+      heartbeat: () => void this.heartbeat(),
       provider: (permission) => this.listener.provider?.(permission),
       http: (event) => this.listener.http?.(event.status),
       authorization: (event) => this.listener.authorization?.(event),
@@ -73,6 +74,23 @@ export class TrackingAgent {
       },
     };
     return this.driver.subscribe(handlers);
+  }
+
+  /** Event entry points (also used by the Android headless task). */
+  geofence(event: {
+    identifier: string;
+    action: 'ENTER' | 'EXIT';
+    timestamp: string;
+  }): Promise<void> {
+    return this.step((s) => onGeofence(s, event));
+  }
+
+  location(record: QueuedRecord): Promise<void> {
+    return this.step((s) => onLocation(s, record));
+  }
+
+  heartbeat(): Promise<void> {
+    return this.step(onHeartbeat);
   }
 
   arm(fences: ControllerFence[], coordinatesAllowed: boolean): Promise<void> {

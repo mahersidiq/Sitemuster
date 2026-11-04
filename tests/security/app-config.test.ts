@@ -48,6 +48,7 @@ describe('app.config.ts security gates', () => {
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
     process.env.GOOGLE_MAPS_ANDROID_API_KEY = 'android-restricted-maps-key';
+    process.env.TRANSISTORSOFT_LICENSE_ANDROID = 'transistorsoft-release-license';
     const config = evaluate();
     expect(config.ios?.bundleIdentifier).toBe('com.sitemuster.app');
     expect(config.name).toBe('SiteMuster');
@@ -97,6 +98,40 @@ describe('app.config.ts security gates', () => {
         GOOGLE_MAPS_ANDROID_API_KEY: 'same-key',
       }),
     ).toThrow(/separate app-restricted key/);
+  });
+
+  it('fails closed for a production build without the Transistorsoft Android license', () => {
+    process.env.APP_ENV = 'production';
+    process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
+    process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
+    process.env.GOOGLE_MAPS_ANDROID_API_KEY = 'android-restricted-maps-key';
+    delete process.env.TRANSISTORSOFT_LICENSE_ANDROID;
+    expect(() => evaluate()).toThrow(/TRANSISTORSOFT_LICENSE_ANDROID/);
+  });
+
+  it('configures native background tracking: plugin, iOS background modes and texts, Android permissions', () => {
+    delete process.env.APP_ENV;
+    delete process.env.TRANSISTORSOFT_LICENSE_ANDROID;
+    const config = evaluate();
+    expect(config.plugins).toContainEqual(['react-native-background-geolocation', {}]);
+    expect(config.ios?.infoPlist).toMatchObject({
+      UIBackgroundModes: ['location', 'fetch', 'processing'],
+      NSLocationAlwaysAndWhenInUseUsageDescription: expect.stringContaining('Always'),
+      NSLocationWhenInUseUsageDescription: expect.any(String),
+      NSMotionUsageDescription: expect.any(String),
+    });
+    expect(config.android?.permissions).toEqual(
+      expect.arrayContaining([
+        'ACCESS_BACKGROUND_LOCATION',
+        'FOREGROUND_SERVICE_LOCATION',
+        'POST_NOTIFICATIONS',
+        'RECEIVE_BOOT_COMPLETED',
+      ]),
+    );
+    expect(
+      Object.keys(process.env).filter((n) => n.startsWith('EXPO_PUBLIC_TRANSISTORSOFT')),
+    ).toEqual([]);
   });
 
   it('rejects unknown APP_ENV values instead of guessing', () => {

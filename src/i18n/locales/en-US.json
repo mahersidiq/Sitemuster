@@ -613,5 +613,70 @@
     "revokeReason": "Reason to cancel (required)",
     "revoke": "Cancel this badge",
     "revoked": "Badge cancelled."
+  },
+  "tracking": {
+    "title": "Automatic attendance",
+    "estimateNote": "Automatic attendance is an estimate, not proof that you are on site. You can always check in at the site kiosk or with your foreman.",
+    "phase": {
+      "STARTING": "Checking your phone…",
+      "ACTIVE": "On. Your phone notes when you arrive at and leave your sites (estimated).",
+      "TRACKING_LIMITED": "Limited. Your phone notes only entering and leaving the site area, never your position. To be counted, check in at the site kiosk or with your foreman.",
+      "PERMISSION_REQUIRED": "Needs location permission: allow \"Always\" and keep Precise location on.",
+      "NO_DEVICE": "This phone is not set up yet. Open your badge once with a connection to set it up.",
+      "NOT_ENROLLED": "No approved project with an accepted site notice yet.",
+      "DEVICE_REVOKED": "Another phone is now your tracking phone, so automatic attendance is off on this one.",
+      "CREDENTIAL_EXPIRED": "Open SiteMuster with a connection to keep automatic attendance on.",
+      "UNAVAILABLE": "Status unavailable. Connect to the internet and try again."
+    },
+    "mode": {
+      "DISARMED": "Off",
+      "ARMED_OFFSITE": "Waiting for you to arrive at a site",
+      "ENTRY_PENDING": "Arriving: confirming you are on site (about 10 minutes)",
+      "ONSITE_ESTIMATED": "On site (estimated)"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "location": "Location set to \"Always\"",
+      "precise": "Precise location",
+      "services": "Location services on",
+      "ok": "OK",
+      "missing": "Needed",
+      "allow": "Allow location",
+      "iosHelp": "Choose \"Allow While Using App\" first. When iPhone asks later, choose \"Change to Always Allow\". Keep Precise Location on. iPhone may remind you from time to time that SiteMuster used your location in the background; that is expected.",
+      "androidHelp": "In Settings > Apps > SiteMuster > Location, choose \"Allow all the time\" and keep \"Use precise location\" on. Allow notifications so the on-site notice can be shown."
+    },
+    "credential": {
+      "title": "Connection key",
+      "OK": "Valid until {{date}}",
+      "EXPIRING": "Expires {{date}}. Open SiteMuster with a connection to renew it.",
+      "EXPIRED": "Expired. Open SiteMuster with a connection to renew it.",
+      "NONE": "Not set up"
+    },
+    "sync": {
+      "title": "Sync status",
+      "locationQueue": "Location records waiting to upload: {{count}}",
+      "operationsQueue": "Kiosk, foreman and manual records waiting to upload: none yet",
+      "syncNow": "Sync now",
+      "planStale": "Using the last saved site list (offline).",
+      "lastRefused": "The server refused the last upload. Open SiteMuster with a connection."
+    },
+    "sites": {
+      "monitored": "Monitored sites",
+      "notMonitored": "Not monitored",
+      "reason": {
+        "CONSENT_MISSING": "Accept the site notice",
+        "EMPLOYER_NOT_VERIFIED": "Employer not confirmed yet",
+        "PROJECT_NOT_ACTIVE": "Project not active",
+        "NOT_BOUND": "Not set up on this phone yet",
+        "NO_DEVICE": "Phone not set up",
+        "REGION_BUDGET": "Phone limit reached: the nearest and next sites are monitored first"
+      }
+    },
+    "openDetails": "Automatic attendance details",
+    "notification": {
+      "title": "SiteMuster",
+      "text": "Automatic attendance is on at your site.",
+      "channelName": "Automatic attendance"
+    }
   }
 }

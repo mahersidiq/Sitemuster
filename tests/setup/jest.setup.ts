@@ -155,3 +155,41 @@ jest.mock('expo-file-system', () => ({
 beforeEach(() => {
   (globalThis as CameraGlobals).__cameraGranted = true;
 });
+
+// Transistorsoft native module: absent in Jest. A benign stand-in that reports "While Using" so
+// the tracking service stays in PERMISSION_REQUIRED and never starts (screens test the UI only).
+jest.mock('react-native-background-geolocation', () => {
+  const ok = () => Promise.resolve(true);
+  const subscription = { remove: () => undefined };
+  return {
+    __esModule: true,
+    default: {
+      ready: () => Promise.resolve({}),
+      setConfig: () => Promise.resolve({}),
+      start: () => Promise.resolve({}),
+      startGeofences: () => Promise.resolve({}),
+      stop: () => Promise.resolve({}),
+      getState: () => Promise.resolve({}),
+      getGeofences: () => Promise.resolve([]),
+      addGeofences: ok,
+      removeGeofences: ok,
+      getLocations: () => Promise.resolve([]),
+      destroyLocation: ok,
+      destroyLocations: ok,
+      getCount: () => Promise.resolve(0),
+      sync: () => Promise.resolve([]),
+      getCurrentPosition: () => Promise.reject(new Error('no location in tests')),
+      getProviderState: () =>
+        Promise.resolve({ enabled: true, status: 4, gps: true, network: true, accuracyAuthorization: 0 }),
+      requestPermission: () => Promise.resolve(4),
+      registerHeadlessTask: () => undefined,
+      onGeofence: () => subscription,
+      onLocation: () => subscription,
+      onHeartbeat: () => subscription,
+      onProviderChange: () => subscription,
+      onHttp: () => subscription,
+      onAuthorization: () => subscription,
+      onConnectivityChange: () => subscription,
+    },
+  };
+});

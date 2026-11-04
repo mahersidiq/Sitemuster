@@ -1,5 +1,8 @@
 {
   "ios": {
-    "NSCameraUsageDescription": "SiteMuster uses the camera only to scan orientation and badge QR codes."
+    "NSCameraUsageDescription": "SiteMuster uses the camera only to scan orientation and badge QR codes.",
+    "NSLocationWhenInUseUsageDescription": "SiteMuster uses your location only to estimate when you arrive at and leave the jobsites you joined. It never sends where you are away from a site.",
+    "NSLocationAlwaysAndWhenInUseUsageDescription": "Automatic attendance needs \"Always\" so your phone can notice you arriving at or leaving a jobsite while the app is closed. Away from sites only entering or leaving is noted, never your position.",
+    "NSMotionUsageDescription": "SiteMuster uses motion only to save battery: it checks your location less often while you stand still on site."
   }
 }
