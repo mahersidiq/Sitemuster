@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { randomUUID } from 'expo-crypto';
 import { Platform } from 'react-native';
 
 import type { SiteMusterApi } from '../api/types';
@@ -40,6 +41,20 @@ export function createNativeTrackingService(input: {
     now: () => Date.now(),
     notification: input.notification,
     renewWithSecret: (token) => renewWithSecret(urls.renew, token, appVersion),
+    postRecord: async (record, token) => {
+      try {
+        const response = await fetch(urls.ingest, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ locations: [record] }),
+        });
+        return response.ok;
+      } catch {
+        // Offline: reported again at the next start (the caller logs the failure).
+        return false;
+      }
+    },
+    newUuid: () => randomUUID(),
     report: (entry) => console.warn('tracking:', JSON.stringify(entry)),
   });
 }

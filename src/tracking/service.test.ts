@@ -75,6 +75,7 @@ function setup(
   if (options.permission) sdk.permissionState = options.permission;
   const store = new MemoryTrackingStore();
   const log: string[] = [];
+  const posted: Record<string, unknown>[] = [];
   const device: StoredDevice | null =
     options.device === undefined
       ? {
@@ -129,9 +130,21 @@ function setup(
       (async () => {
         throw new Error('no renewal expected');
       }),
+    postRecord: async (record) => {
+      posted.push(record);
+      return true;
+    },
+    newUuid: () => `00000000-0000-4000-8000-${(posted.length + 1).toString().padStart(12, '0')}`,
     report: () => undefined,
   };
-  return { service: new TrackingService(deps), sdk, store, log, readyCalls: () => readyCalls };
+  return {
+    service: new TrackingService(deps),
+    sdk,
+    store,
+    log,
+    posted,
+    readyCalls: () => readyCalls,
+  };
 }
 
 describe('tracking service', () => {
@@ -260,6 +273,24 @@ describe('tracking service', () => {
     const status = await service.start(USER);
     expect(status.monitored).toHaveLength(15);
     expect(status.notMonitored.filter((p) => p.reason === 'REGION_BUDGET')).toHaveLength(1);
+  });
+
+  it('tells the server once when monitoring stops (coordinate-free provider change), and when it resumes', async () => {
+    const { service, sdk, posted } = setup({
+      permission: { location: 'WHEN_IN_USE', precise: false, servicesEnabled: true },
+    });
+    await service.start(USER);
+    await service.refresh();
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({
+      event: 'providerchange',
+      provider: { status: 4, gps: false, accuracyAuthorization: 1, enabled: true },
+    });
+    expect(JSON.stringify(posted[0])).not.toMatch(/latitude|longitude|coords/);
+    sdk.permissionState = { location: 'ALWAYS', precise: true, servicesEnabled: true };
+    await service.refresh();
+    expect(posted).toHaveLength(2);
+    expect(posted[1]).toMatchObject({ provider: { status: 3, gps: true } });
   });
 
   it('stop (sign-out) disarms, drops the queue and forgets the cached plan', async () => {

@@ -66,6 +66,12 @@ export interface TrackingServiceDeps {
   now(): number;
   notification: { title: string; text: string; channelName: string };
   renewWithSecret(token: string): Promise<RenewOutcome>;
+  /**
+   * Sends one coordinate-free record straight to ingest-location-batch with the device secret
+   * (decision #95): used only for permission/provider changes, which the native queue never holds.
+   */
+  postRecord(record: Record<string, unknown>, token: string): Promise<boolean>;
+  newUuid(): string;
   /** Non-fatal problems (warn-level, ids and codes only). */
   report(entry: Record<string, unknown>): void;
 }
@@ -95,11 +101,16 @@ export class TrackingService {
   private ready = false;
   private userId: string | null = null;
   private status: TrackingStatus = INITIAL;
+  /** Last permission usability the server was told about (null = not reported yet). */
+  private reportedUsable: boolean | null = null;
 
   constructor(private readonly deps: TrackingServiceDeps) {
     this.agent = new TrackingAgent(deps.driver, deps.store, {
       state: (state) => this.patch({ mode: state.mode }),
-      provider: (permission) => this.patch({ permission, phase: this.phaseFor(permission) }),
+      provider: (permission) => {
+        this.patch({ permission, phase: this.phaseFor(permission) });
+        void this.reportMonitoring(permission);
+      },
       http: (status) => this.patch({ lastHttpStatus: status }),
       authorization: (event) => void this.onNativeRefresh(event),
       failure: (failure) =>
@@ -198,6 +209,7 @@ export class TrackingService {
     });
 
     // No automatic OS prompt: the SDK starts only after SiteMuster's own permission screens.
+    await this.reportMonitoring(permission);
     if (!permissionUsable(permission)) {
       return this.patch({ phase: 'PERMISSION_REQUIRED', queued: await this.safeCount() });
     }
@@ -337,6 +349,41 @@ export class TrackingService {
       credential: credentialState(expiresAt, this.deps.now()),
       credentialExpiresAt: expiresAt,
     });
+  }
+
+  /**
+   * Tells the server when automatic monitoring stops or resumes (spec 03: MONITORING_UNAVAILABLE),
+   * with a coordinate-free provider-change record. Only changes are sent; a failed send is retried
+   * at the next start. The server never infers a departure from it.
+   */
+  private async reportMonitoring(permission: PermissionSnapshot): Promise<void> {
+    const usable = permissionUsable(permission);
+    if (this.reportedUsable === usable || !this.userId) return;
+    // Nothing to stop yet if the phone was never armed and permission was never usable.
+    if (this.reportedUsable === null && usable) {
+      this.reportedUsable = true;
+      return;
+    }
+    const device = await this.deps.devices.load(this.userId);
+    if (!device) return;
+    const sent = await this.deps.postRecord(
+      {
+        uuid: this.deps.newUuid(),
+        timestamp: new Date(this.deps.now()).toISOString(),
+        event: 'providerchange',
+        provider: {
+          enabled: permission.servicesEnabled,
+          status:
+            permission.location === 'ALWAYS' ? 3 : permission.location === 'WHEN_IN_USE' ? 4 : 2,
+          gps: permission.precise,
+          network: true,
+          accuracyAuthorization: permission.precise ? 0 : 1,
+        },
+      },
+      device.uploadToken,
+    );
+    if (sent) this.reportedUsable = usable;
+    else this.deps.report({ area: 'tracking', step: 'monitoring-report', usable });
   }
 
   private phaseFor(permission: PermissionSnapshot): TrackingPhase {

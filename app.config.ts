@@ -38,7 +38,7 @@ export const PRODUCTION_REQUIRED_PUBLIC_ENV = [
 export const PRODUCTION_REQUIRED_BUILD_ENV = [
   'GOOGLE_MAPS_ANDROID_API_KEY',
   // Transistorsoft Android release license (decision #12), bound to the final package id.
-  'TRANSISTORSOFT_LICENSE_ANDROID',
+  'TS_ANDROID_LICENSE_KEY',
 ] as const;
 
 /** Native tracking permissions (docs/spec/03 "Permissions and platform policies"). */
@@ -187,9 +187,7 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
       // development build runs without it (Transistorsoft DEBUG builds), production fails closed.
       [
         'react-native-background-geolocation',
-        process.env.TRANSISTORSOFT_LICENSE_ANDROID
-          ? { license: process.env.TRANSISTORSOFT_LICENSE_ANDROID }
-          : {},
+        process.env.TS_ANDROID_LICENSE_KEY ? { license: process.env.TS_ANDROID_LICENSE_KEY } : {},
       ],
       [
         '@sentry/react-native/expo',

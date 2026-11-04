@@ -11,8 +11,8 @@
 | 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
 | 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
 | 05 | Orientation sessions, badges, approval | done (NOT VERIFIED items) | [#5](https://github.com/mahersidiq/Sitemuster/pull/5) | squash-merged under #48 after CI green and the automated review |
-| 06 | Attendance state machine and deterministic replay | in review | (PR pending) | |
-| 07 | Native tracking and custom device ingestion | not started | | |
+| 06 | Attendance state machine and deterministic replay | done (NOT VERIFIED items) | [#6](https://github.com/mahersidiq/Sitemuster/pull/6) | squash-merged under #48 after CI green and the automated review (`edbe76f`) |
+| 07 | Native tracking and custom device ingestion | in review | (PR pending) | |
 | 08 | Kiosk, foreman, manual and visitor fallbacks | not started | | |
 | 09 | Mobile superintendent dashboard and map | not started | | |
 | 10 | Daily reports, foreman confirmation and worker CSV | not started | | |
@@ -188,7 +188,51 @@
 
 **Decisions added:** #78 single rules engine + transactional reconciler, #79 ENDED_UNVERIFIED and bounded hand-over, #80 time rules + SQL sweep parity + pg_cron, #81 arrival/departure details, #82 witnessed evidence, #83 late and skewed records, #84 kiosk clock offset, #85 device-record privacy and normalization, #86 replay contract and scope, #87 basic counts, #88 fixes from PR #6's own review (approval close-out, united uncertain intervals).
 
-**Next step:** after Milestone 06 merges, start Milestone 07 (native tracking and custom device ingestion) on `milestone-07-native-tracking`.
+**Next step:** done — PR #6's two review findings were fixed (decision #88); GitHub Actions run 41776787549 on the final head `a5cf927` was green (pgTAP Files=17, Tests=430; backend 103/103 incl. 81 database replays); squash-merged as `edbe76f`. Milestone 07 started on `milestone-07-native-tracking`.
+
+## Milestone 07 — Native tracking and custom device ingestion
+
+**What was built**
+- **Server.**
+  - Migration `20261106100000_m07_device_ingestion.sql`:
+    - Device ↔ project bindings derived by triggers from approval, employer verification, consent and project status (decision #89).
+    - Service-role-only `edge_device_authenticate`, `edge_device_rate_limit` (60 requests/min, 600 events/h), `edge_location_receipt_lookup`, `edge_record_location_terminals` (receipts + quarantine in one transaction), `edge_device_renew` (24 h overlap; only the newest secret renews), `edge_worker_open_session_projects`.
+    - The continuous-coordinate release gate (dev/staging, or a per-platform/app-version privacy sign-off; decision #90).
+    - `my_tracking_plan` (worker), `project_tracking_health` (staff roster flags), `revoke_my_device` (sign-out).
+  - Edge Functions `ingest-location-batch` and `device-renew` (`verify_jwt=false` for exactly these two, custom device-secret authentication), on shared cores (`supabase/functions/_shared/ingest-core.ts`, `renew-core.ts`) with whole-batch 200/503, idempotent resend, foreign-uuid refusal, quarantine and safe logs.
+  - `device-activate` now flags open sessions DEVICE_REPLACED.
+  - One store codec (`packages/shared/src/attendance/store-codec.ts`) for the reconciler RPCs.
+- **Replay.** The harness's simulated phone uploads every batch through the production `handleIngest`, with fences derived by the production rule: 81 fixtures, in memory and against the database.
+- **Phone (`src/tracking`).**
+  - Transistorsoft v5 nested configuration checked against the installed types: coordinate-free geofence template, minimal location template, provider-change records off, logging off, native token refresh.
+  - Pure two-mode controller with the JavaScript egress gate (decision #91).
+  - Native driver (the only SDK import) and the simulated SDK, the CI trace driver with a captured wire; it never ships, and the bundle test guards that.
+  - Tracking agent (serialized, persisted) shared with the Android headless task.
+  - Tracking service: plan, renewal (SDK first, then storage), permission gating without OS prompts, region budget, offline plan, monitoring reports (decision #95).
+  - Encrypted on-phone state; `TrackingProvider` (start, foreground refresh, stop at sign-out).
+- **App.**
+  - Worker home card and `/tracking` screen (EN/ES): phase, mode, permission checklist with platform help, key validity, location queue and Sync now, monitored and unmonitored sites. Tracking is armed right after phone setup.
+  - `app.config.ts`: Transistorsoft plugin, iOS background modes and EN/ES usage texts, Android permissions. Production fails closed without `TS_ANDROID_LICENSE_KEY`.
+  - Android headless entry (`index.js`).
+- Screenshots: `docs/screenshots/m07` (web render of the real screens against the local stack).
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db`: **18 files, 491** pgTAP tests (`024_device_ingestion`: 61 — derived bindings for consent, employer, project status and phone; credential states incl. rotated overlap; fences = current + open-session version; release gate incl. per-build sign-off; rate limits; terminal recording, coordinate refusal, foreign uuid; renewal paths, supersession, revocation, audit; worker plan; staff health authorization; sign-out revocation).
+- `npm run test:backend`: **110/110** — incl. `device-ingestion.test.ts` (7, real Edge Functions over HTTP: 401/405/415/422, accepted then duplicate with one session, project A/B isolation with zero B rows, whole-batch 503 while the reconciler is unavailable then exactly-once, replaced phone 401 + DEVICE_REPLACED, renewal in the middle of a 25-record queue with zero loss/duplicates and the overlap ending, foreground renewal after expiry) and the 81 database replays through the production ingest handler.
+- Vitest unit **281** (Edge cores 46 incl. instrumented cross-project zero access and mixed 200/503; tracking 24 incl. the full-day captured-wire privacy trace and its negative control, limited mode, overlapping sites, offline queue, native refresh, refusal, disarm, service phases, renewal ordering, region budget, monitoring reports), integration 51, security **78** (incl. the native config gates and the bundle guard), i18n 18, replay **180**; Jest **50** (mobile-unit 11 incl. the tracking screen EN/ES, mobile-integration 39).
+- typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
+- GitHub Actions: _pending — recorded after the run._
+
+**NOT VERIFIED (Milestone 07)**
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): native background delivery, iOS relaunch and Android headless events, reboot, Force Stop, permission flows, battery, the rendered HTTP wire of the real SDK, its interpretation of `expires` (decision #92), and the egress gate in killed-app conditions. No EAS development build exists yet (needs Expo account, checklist §2).
+- **Production continuous coordinates stay OFF** (TRACKING_LIMITED) until the real-device privacy sign-off in checklist §10 is recorded per platform and app version (decision #90).
+- Transistorsoft production license (`TS_ANDROID_LICENSE_KEY`, checklist §10): production builds refuse to build without it.
+- Push-based renewal (silent push and the 7/3/1-day reminders) arrives with the push pipeline in Milestone 11; the roster UI that shows CREDENTIAL_EXPIRING comes in Milestone 09.
+- Hosted deployment of the two new Edge Functions (checklist §3).
+
+**Decisions added:** #89 derived device bindings and current/open-session fences, #90 continuous-coordinate release gate (TRACKING_LIMITED), #91 two-mode SDK operation and JavaScript egress gate, #92 native authorization refresh and renewal paths, #93 ingest endpoint details, #94 sign-out revocation and replacement flag, #95 coordinate-free monitoring reports.
+
+**Next step:** after Milestone 07 merges, start Milestone 08 (kiosk, foreman, manual and visitor fallbacks; operational outbox) on `milestone-08-fallbacks`.
 
 ## Environment notes for future sessions (Linux build agent)
 

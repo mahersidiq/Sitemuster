@@ -48,7 +48,7 @@ describe('app.config.ts security gates', () => {
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
     process.env.GOOGLE_MAPS_ANDROID_API_KEY = 'android-restricted-maps-key';
-    process.env.TRANSISTORSOFT_LICENSE_ANDROID = 'transistorsoft-release-license';
+    process.env.TS_ANDROID_LICENSE_KEY = 'transistorsoft-release-license';
     const config = evaluate();
     expect(config.ios?.bundleIdentifier).toBe('com.sitemuster.app');
     expect(config.name).toBe('SiteMuster');
@@ -106,13 +106,13 @@ describe('app.config.ts security gates', () => {
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'public-anon-key';
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@o0.ingest.sentry.io/0';
     process.env.GOOGLE_MAPS_ANDROID_API_KEY = 'android-restricted-maps-key';
-    delete process.env.TRANSISTORSOFT_LICENSE_ANDROID;
-    expect(() => evaluate()).toThrow(/TRANSISTORSOFT_LICENSE_ANDROID/);
+    delete process.env.TS_ANDROID_LICENSE_KEY;
+    expect(() => evaluate()).toThrow(/TS_ANDROID_LICENSE_KEY/);
   });
 
   it('configures native background tracking: plugin, iOS background modes and texts, Android permissions', () => {
     delete process.env.APP_ENV;
-    delete process.env.TRANSISTORSOFT_LICENSE_ANDROID;
+    delete process.env.TS_ANDROID_LICENSE_KEY;
     const config = evaluate();
     expect(config.plugins).toContainEqual(['react-native-background-geolocation', {}]);
     expect(config.ios?.infoPlist).toMatchObject({
@@ -129,9 +129,7 @@ describe('app.config.ts security gates', () => {
         'RECEIVE_BOOT_COMPLETED',
       ]),
     );
-    expect(
-      Object.keys(process.env).filter((n) => n.startsWith('EXPO_PUBLIC_TRANSISTORSOFT')),
-    ).toEqual([]);
+    expect(Object.keys(process.env).filter((n) => n.startsWith('EXPO_PUBLIC_TS_'))).toEqual([]);
   });
 
   it('rejects unknown APP_ENV values instead of guessing', () => {
