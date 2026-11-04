@@ -17,6 +17,17 @@ Claude Code can draft policy/disclosure texts but CANNOT approve legal translati
 
 Statuses are exact enum `DRAFT_REQUIRES_HUMAN_REVIEW`, `REVIEWED`, `APPROVED`, `RETIRED`; only `APPROVED` can be published for production. At approval record `document_id`, `sha256_content`, `reviewer_id`, `reviewer_role`, `reviewed_at`, `approved_at`, `published_at`, `version`, `locale`, and legal scope in private admin record, not in this public template. Rejection returns to DRAFT with correction notes. For every material custom text change generate new document version and re-review both languages.
 
+## Drafts currently in the repository (Milestone 05)
+
+Seeded into `legal_notice_versions` by migration `20261104130000_m05_orientation_badges.sql` with status `DRAFT_REQUIRES_HUMAN_REVIEW`. Production refuses acceptance (`CONSENT_NOTICE_NOT_APPROVED`); development and staging show a DRAFT label. The SHA-256 is computed by the database over the stored text (the file content without its final newline) and is checked by `tests/i18n/legal-drafts.test.ts`.
+
+| Document ID | File | Stored content SHA-256 | Status |
+|---|---|---|---|
+| `WORKER_LOCATION_DISCLOSURE_EN_V1` | `docs/legal/drafts/WORKER_LOCATION_DISCLOSURE_EN_V1.md` | `97c5edd0db681a158c888165050c022564c0d0d4d36599275f9f7c0810cc0dd3` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+| `WORKER_LOCATION_DISCLOSURE_ES_V1` | `docs/legal/drafts/WORKER_LOCATION_DISCLOSURE_ES_V1.md` | `6c9ce509de9bf01fd699ab83c9f81e0ebf11a542ab233f77583ff5cf2d3d893d` | `DRAFT_REQUIRES_HUMAN_REVIEW` |
+
+Approving a reviewed text means inserting it as a NEW version, or setting `review_status = 'APPROVED'` with `approved_by`/`approved_at` on the exact reviewed row, through the private operator workflow — never editing the stored text (the database forbids it).
+
 ## Topics counsel must review before approval
 
 - Clear, prominent background/Always, precise/approximate, work-site-only location use, limitations, who sees coordinates, the unavoidable local offsite geofence monitoring, worker refusal and fallback kiosk/foreman rights.

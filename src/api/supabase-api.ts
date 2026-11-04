@@ -3,13 +3,27 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   AddressResolveResponseSchema,
   AddressSearchResponseSchema,
+  BulkApproveResultSchema,
+  DeviceActivateResponseSchema,
+  OrientationSessionSchema,
+  type DeviceActivateRequest,
   type Locale,
   type ProjectStatus,
 } from '@sitemuster/shared';
 
 import {
   ApiError,
+  type BulkResult,
   type CreateProjectInput,
+  type EmergencyContact,
+  type JoinInput,
+  type ManagedWorkerInput,
+  type MyEnrollment,
+  type Notice,
+  type OrientationPreview,
+  type OrientationSessionSummary,
+  type PrintedBadge,
+  type RosterEntry,
   type InviteStaffInput,
   type MyInvitation,
   type OrganizationSummary,
@@ -231,5 +245,157 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
       attribution: parsed.attribution,
       provider: parsed.provider,
     };
+  }
+
+  // ---------------------------------------------------------------- Milestone 05
+
+  /** RPCs that report code failures as `{ error }` (so rate limits keep counting) — rethrown here. */
+  private async rpcOrError<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+    const data = await this.rpc<T & { error?: string }>(fn, args);
+    if (data && typeof data === 'object' && typeof data.error === 'string')
+      throw new ApiError(data.error);
+    return data;
+  }
+
+  async startOrientation(projectId: string, idempotencyKey: string) {
+    const data = (await this.invoke('orientation-session', {
+      action: 'START',
+      project_id: projectId,
+      idempotency_key: idempotencyKey,
+    })) as { session?: unknown };
+    return OrientationSessionSchema.parse(data.session);
+  }
+
+  async getOrientationSession(sessionId: string) {
+    return OrientationSessionSchema.parse(
+      await this.rpc('get_orientation_session', { p_session_id: sessionId }),
+    );
+  }
+
+  listOrientationSessions(projectId: string) {
+    return this.rpc<OrientationSessionSummary[]>('list_orientation_sessions', {
+      p_project_id: projectId,
+    });
+  }
+
+  async closeOrientation(projectId: string, sessionId: string) {
+    await this.invoke('orientation-session', {
+      action: 'CLOSE',
+      project_id: projectId,
+      session_id: sessionId,
+    });
+  }
+
+  previewOrientation(code: string, locale: Locale) {
+    return this.rpcOrError<OrientationPreview>('preview_orientation', {
+      p_code: code,
+      p_locale: locale,
+    });
+  }
+
+  completeOrientation(input: JoinInput) {
+    return this.rpcOrError<{
+      enrollment_id: string;
+      enrollment_status: MyEnrollment['enrollment_status'];
+    }>('complete_orientation', {
+      p_code: input.code,
+      p_locale: input.locale,
+      p_legal_name: input.legalName,
+      p_company_id: input.companyId,
+      p_company_name: input.companyId ? null : input.companyName,
+      p_trade: input.trade,
+      p_emergency_name: input.emergencyName,
+      p_emergency_phone: input.emergencyPhone,
+      p_emergency_relationship: input.emergencyRelationship,
+      p_notice_version_id: input.noticeVersionId,
+      p_accept: input.accept,
+    });
+  }
+
+  myEnrollments() {
+    return this.rpc<MyEnrollment[]>('my_enrollments');
+  }
+
+  getMyEmergencyContact() {
+    return this.rpc<EmergencyContact | null>('get_my_emergency_contact');
+  }
+
+  async updateMyEmergencyContact(contact: EmergencyContact) {
+    await this.rpc('update_my_emergency_contact', {
+      p_name: contact.name,
+      p_phone: contact.phone,
+      p_relationship: contact.relationship,
+    });
+  }
+
+  listEnrollments(projectId: string) {
+    return this.rpc<RosterEntry[]>('list_project_enrollments', { p_project_id: projectId });
+  }
+
+  async bulkApprove(projectId: string, enrollmentIds: string[]): Promise<BulkResult[]> {
+    const data = (await this.invoke('enrollment-bulk-approve', {
+      project_id: projectId,
+      enrollment_ids: enrollmentIds,
+    })) as { results?: unknown };
+    return BulkApproveResultSchema.array().parse(data.results);
+  }
+
+  confirmEmployer(projectId: string, enrollmentIds: string[], decision: 'VERIFIED' | 'REJECTED') {
+    return this.rpc<BulkResult[]>('bulk_confirm_employer', {
+      p_project_id: projectId,
+      p_enrollment_ids: enrollmentIds,
+      p_decision: decision,
+    });
+  }
+
+  async decideEnrollment(enrollmentId: string, decision: 'REJECTED' | 'REVOKED', reason: string) {
+    await this.rpc('decide_enrollment', {
+      p_enrollment_id: enrollmentId,
+      p_decision: decision,
+      p_reason: reason,
+    });
+  }
+
+  getProjectNotice(projectId: string, locale: Locale) {
+    return this.rpc<{ notice: Notice; notice_acceptable: boolean }>('get_project_notice', {
+      p_project_id: projectId,
+      p_locale: locale,
+    });
+  }
+
+  createManagedWorker(input: ManagedWorkerInput) {
+    return this.rpc<{ worker_id: string; enrollment_id: string }>('create_managed_worker', {
+      p_project_id: input.projectId,
+      p_legal_name: input.legalName,
+      p_company_id: input.companyId,
+      p_company_name: input.companyId ? null : input.companyName,
+      p_trade: input.trade,
+      p_emergency_name: input.emergencyName,
+      p_emergency_phone: input.emergencyPhone,
+      p_emergency_relationship: input.emergencyRelationship,
+      p_locale: input.locale,
+      p_notice_version_id: input.noticeVersionId,
+      p_acknowledged: input.acknowledged,
+      p_idempotency_key: input.idempotencyKey,
+    });
+  }
+
+  issuePrintedBadge(projectId: string, workerId: string) {
+    return this.rpc<PrintedBadge>('issue_printed_badge', {
+      p_project_id: projectId,
+      p_worker_id: workerId,
+    });
+  }
+
+  async revokePrintedBadge(projectId: string, badgeId: string, reason: string) {
+    await this.rpc('revoke_printed_badge', {
+      p_project_id: projectId,
+      p_badge_id: badgeId,
+      p_reason: reason,
+    });
+  }
+
+  async activateDevice(input: DeviceActivateRequest) {
+    return DeviceActivateResponseSchema.parse(await this.invoke('device-activate', input));
   }
 }

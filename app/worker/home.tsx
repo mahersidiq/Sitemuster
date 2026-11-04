@@ -1,10 +1,28 @@
 import { useTranslation } from 'react-i18next';
 
+import { Screen } from '../../src/components/Screen';
 import { ShellScreen } from '../../src/components/ShellScreen';
+import { Body, Title } from '../../src/components/Typography';
+import { WorkerProjects } from '../../src/components/WorkerProjects';
+import { useAuth } from '../../src/state/auth';
 
 export default function WorkerHomeScreen() {
   const { t } = useTranslation();
+  const { api } = useAuth();
+  if (!api) {
+    return (
+      <ShellScreen
+        testID="worker-home"
+        title={t('worker.home.title')}
+        body={t('worker.home.body')}
+      />
+    );
+  }
   return (
-    <ShellScreen testID="worker-home" title={t('worker.home.title')} body={t('worker.home.body')} />
+    <Screen testID="worker-home">
+      <Title>{t('worker.home.title')}</Title>
+      <Body>{t('workerProjects.homeIntro')}</Body>
+      <WorkerProjects showJoin />
+    </Screen>
   );
 }

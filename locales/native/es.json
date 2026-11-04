@@ -1,0 +1,5 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "SiteMuster usa la cámara solo para escanear los códigos QR de orientación y de credenciales."
+  }
+}

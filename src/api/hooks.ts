@@ -8,6 +8,9 @@ export const queryKeys = {
   projects: ['projects'] as const,
   project: (id: string) => ['project', id] as const,
   invitations: ['my-invitations'] as const,
+  myEnrollments: ['my-enrollments'] as const,
+  roster: (projectId: string) => ['roster', projectId] as const,
+  orientationSessions: (projectId: string) => ['orientation-sessions', projectId] as const,
 };
 
 export function useOrganizations() {
@@ -31,4 +34,17 @@ export function useProject(projectId: string) {
 export function useMyInvitations() {
   const api = useApi();
   return useQuery({ queryKey: queryKeys.invitations, queryFn: () => api.myInvitations() });
+}
+
+export function useMyEnrollments() {
+  const api = useApi();
+  return useQuery({ queryKey: queryKeys.myEnrollments, queryFn: () => api.myEnrollments() });
+}
+
+export function useRoster(projectId: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: queryKeys.roster(projectId),
+    queryFn: () => api.listEnrollments(projectId),
+  });
 }

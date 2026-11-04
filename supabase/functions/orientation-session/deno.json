@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "zod": "../../../node_modules/zod/index.js",
+    "@noble/hashes/": "../../../node_modules/@noble/hashes/"
+  }
+}

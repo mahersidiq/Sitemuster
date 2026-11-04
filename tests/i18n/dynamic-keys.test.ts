@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { ORGANIZATION_ROLES, PROJECT_STAFF_ROLES, PROJECT_STATUSES } from '@sitemuster/shared';
+import {
+  BULK_APPROVE_RESULTS,
+  ORGANIZATION_ROLES,
+  PROJECT_STAFF_ROLES,
+  PROJECT_STATUSES,
+} from '@sitemuster/shared';
 
 import { KNOWN_API_ERRORS, SENSITIVE_CHANGES } from '../../src/api/errors';
 import enUS from '../../src/i18n/locales/en-US.json';
@@ -24,6 +29,17 @@ const SCHEDULE_ERRORS = [
 ];
 
 const families: Record<string, readonly string[]> = {
+  enrollmentStatus: ['PENDING', 'APPROVED', 'REJECTED', 'REVOKED'],
+  employerStatus: ['PENDING_CONFIRMATION', 'VERIFIED', 'REJECTED'],
+  bulkResult: [
+    ...BULK_APPROVE_RESULTS,
+    'VERIFIED',
+    'REJECTED',
+    'UNCHANGED',
+    'NO_COMPANY',
+    'NOT_ACTIVE',
+  ],
+  'workers.consent': ['DIGITAL', 'SUPERVISED'],
   apiErrors: KNOWN_API_ERRORS,
   scheduleErrors: SCHEDULE_ERRORS,
   sensitive: SENSITIVE_CHANGES,

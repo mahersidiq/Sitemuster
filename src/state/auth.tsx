@@ -15,6 +15,7 @@ import { AccessSchema, type Access } from '../auth/access';
 import { createAuthBackend, type AuthBackend } from '../auth/create-gateway';
 import type { AuthGateway } from '../auth/gateway';
 import { deriveAuthState, type AuthState } from '../auth/routing';
+import { wipeDeviceCredentials } from '../device/device-store';
 import type { RuntimeEnv } from '../config/runtime-env';
 import { useLanguage } from './language';
 
@@ -113,6 +114,8 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
     if (!backend) return;
     await backend.gateway.signOut();
     await backend.storage.wipe();
+    // The badge secret and upload token belong to this worker only (decision #74).
+    await wipeDeviceCredentials();
     queryClient.clear();
     savedLocale.current = null;
     setState({ status: 'signed_out' });

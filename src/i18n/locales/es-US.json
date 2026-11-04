@@ -158,7 +158,7 @@
   },
   "access": {
     "joinTitle": "Únase a su proyecto",
-    "joinBody": "Ya inició sesión. Para unirse a una obra, escanee el código QR de orientación que muestra su superintendente. Unirse a un proyecto llegará en la próxima actualización.",
+    "joinBody": "Ya inició sesión. Para unirse a una obra, escanee el QR de orientación que muestra su superintendente o que está impreso en la obra.",
     "noOrgTitle": "Todavía no tiene organización",
     "noOrgBody": "Su cuenta de personal está verificada. Cree la organización de su empresa o revise si su empresa ya lo invitó.",
     "operatorTitle": "Las cuentas de operador no pueden usar la aplicación móvil",
@@ -203,7 +203,25 @@
     "DELEGATION_REQUIRES_ORG_ADMIN": "Solo el dueño o un administrador de la organización puede dar estos permisos adicionales.",
     "INVITATION_NOT_FOUND": "No se encontró esta invitación. Puede ser para otro correo.",
     "INVITATION_NOT_ACTIVE": "Esta invitación ya se usó, se canceló o venció.",
-    "SENSITIVE_CHANGE_REQUIRES_CONFIRMATION": "Este cambio necesita su confirmación."
+    "SENSITIVE_CHANGE_REQUIRES_CONFIRMATION": "Este cambio necesita su confirmación.",
+    "ORIENTATION_CODE_INVALID": "Ese no es un código de orientación válido. Escanee otra vez el código en la pantalla del supervisor.",
+    "ORIENTATION_CODE_EXPIRED": "Ese código ya cambió. Escanee otra vez el código en la pantalla del supervisor. Si sigue fallando, revise la fecha y hora del teléfono.",
+    "ORIENTATION_SESSION_CLOSED": "Esta sesión de orientación terminó. Pida al supervisor que inicie una nueva.",
+    "PROJECT_NOT_ACTIVE": "Este proyecto no está activo, así que por ahora nadie puede unirse.",
+    "NOTICE_OUTDATED": "El aviso se actualizó. Regrese y lea la versión actual.",
+    "NOTICE_UNAVAILABLE": "El aviso del proyecto no está disponible. Pregunte al supervisor.",
+    "CONSENT_REQUIRED": "Debe leer y confirmar el aviso para unirse.",
+    "CONSENT_NOTICE_NOT_APPROVED": "Este aviso todavía no está aprobado, así que aquí no es posible unirse.",
+    "COMPANY_REQUIRED": "Elija o escriba su empleador.",
+    "COMPANY_NOT_ON_PROJECT": "Esa empresa no está en este proyecto. Elija otra o escriba el nombre.",
+    "EMERGENCY_CONTACT_REQUIRED": "Escriba el nombre y el teléfono de un contacto de emergencia.",
+    "TRADE_TOO_LONG": "El oficio puede tener como máximo 100 caracteres.",
+    "NO_ENROLLMENTS": "Seleccione al menos un trabajador.",
+    "TOO_MANY_ENROLLMENTS": "Seleccione como máximo 100 trabajadores a la vez.",
+    "INVALID_DECISION": "Esa acción no es posible con el estado actual de este trabajador.",
+    "ENROLLMENT_NOT_APPROVED": "Primero hay que aprobar a este trabajador.",
+    "WORKER_PROFILE_REQUIRED": "Primero únase a un proyecto.",
+    "IDEMPOTENCY_KEY_REQUIRED": "Algo salió mal. Intente de nuevo."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Elija al menos un día para cada turno.",
@@ -389,7 +407,11 @@
     "noPending": "No hay invitaciones pendientes.",
     "pendingLine": "{{role}} · vence el {{date}}",
     "revokeInvitation": "Cancelar invitación",
-    "inviteStaff": "Invitar personal"
+    "inviteStaff": "Invitar personal",
+    "workforceTitle": "Trabajadores y orientación",
+    "runOrientation": "Dar orientación",
+    "orientationNeedsActive": "Active el proyecto para dar orientación.",
+    "workersAndApprovals": "Trabajadores y aprobaciones"
   },
   "edit": {
     "title": "Cambiar la configuración de la obra",
@@ -443,5 +465,153 @@
     "ownerHint": "Usted es el dueño de esta organización.",
     "inviteAdmin": "Invitar a un administrador de la organización",
     "inviteAdminBody": "Los administradores pueden crear proyectos y manejar el personal de toda la organización. Aceptan al iniciar sesión con este correo."
+  },
+  "enrollmentStatus": {
+    "PENDING": "Esperando aprobación",
+    "APPROVED": "Aprobado",
+    "REJECTED": "No aprobado",
+    "REVOKED": "Aprobación retirada"
+  },
+  "employerStatus": {
+    "PENDING_CONFIRMATION": "empleador sin confirmar",
+    "VERIFIED": "empleador confirmado",
+    "REJECTED": "empleador no confirmado"
+  },
+  "bulkResult": {
+    "APPROVED": "aprobado",
+    "ALREADY_APPROVED": "ya estaba aprobado",
+    "NOT_FOUND": "no se encontró en este proyecto",
+    "NOT_PENDING": "no está esperando aprobación",
+    "ORIENTATION_MISSING": "no completó la orientación",
+    "VERIFIED": "empleador confirmado",
+    "REJECTED": "empleador no confirmado",
+    "UNCHANGED": "sin cambios",
+    "NO_COMPANY": "no indicó empleador",
+    "NOT_ACTIVE": "no está activo"
+  },
+  "join": {
+    "scanCta": "Escanear QR de orientación",
+    "typeCta": "Escribir o pegar un código",
+    "scanTitle": "Escanee el QR de orientación",
+    "scanBody": "Apunte la cámara al código en el teléfono del supervisor o en la hoja impresa.",
+    "cameraNeeded": "Se necesita la cámara para escanear. También puede escribir o pegar el código abajo.",
+    "allowCamera": "Permitir cámara",
+    "typeLabel": "Código de orientación",
+    "useCode": "Usar este código",
+    "notOrientationCode": "Ese no es un código de orientación de SiteMuster.",
+    "formTitle": "Unirse al proyecto",
+    "sessionUntil": "Orientación abierta hasta las {{time}}",
+    "legalName": "Su nombre completo",
+    "employer": "Su empleador",
+    "otherCompany": "Otra empresa",
+    "companyName": "Nombre del empleador",
+    "employerHint": "El equipo del proyecto confirmará a su empleador.",
+    "trade": "Oficio (opcional)",
+    "emergencyTitle": "Contacto de emergencia",
+    "emergencyHint": "Solo las personas con una función de emergencia en sus proyectos pueden verlo.",
+    "emergencyName": "Nombre del contacto",
+    "emergencyPhone": "Teléfono del contacto",
+    "emergencyRelationship": "Parentesco (opcional)",
+    "noticeTitle": "Aviso del proyecto",
+    "noticeIntro": "Lea este aviso antes de unirse. Explica qué se registra y cuáles son sus opciones.",
+    "acknowledge": "Leí y entendí este aviso",
+    "acceptAndJoin": "Aceptar y unirme",
+    "decline": "No acepto",
+    "declined": "No aceptó el aviso, así que no se unió. Hable con su supervisor sobre otras opciones.",
+    "doneTitle": "Orientación completa.",
+    "doneBody": "Su supervisor todavía debe aprobarlo y confirmar a su empleador. Su credencial y la asistencia automática estarán disponibles solo después de la aprobación.",
+    "goHome": "Ir al inicio"
+  },
+  "notice": {
+    "draftWatermark": "BORRADOR — este texto legal todavía no está aprobado. Solo para pruebas.",
+    "notApproved": "Este aviso todavía no está aprobado para usarse.",
+    "versionLine": "{{id}} · versión {{version}}"
+  },
+  "workerProjects": {
+    "homeIntro": "Sus proyectos y su estado.",
+    "none": "Todavía no se ha unido a ningún proyecto.",
+    "offlineSaved": "Sin conexión — mostrando los proyectos guardados en este teléfono.",
+    "employerLine": "{{company}} · {{status}}",
+    "showBadge": "Mostrar mi credencial",
+    "joinAnother": "Unirme a otro proyecto"
+  },
+  "badge": {
+    "title": "Mi credencial",
+    "activateIntro": "Configure este teléfono una vez (necesita conexión). Después la credencial funciona sin señal.",
+    "activate": "Configurar este teléfono",
+    "changesIn": "Cambia en {{seconds}} s",
+    "offlineNote": "Funciona sin señal. Muéstrela en el quiosco de la obra.",
+    "oneUse": "Cada código funciona una sola vez. No comparta capturas de pantalla."
+  },
+  "profile": {
+    "saveEmergency": "Guardar contacto de emergencia",
+    "emergencySaved": "Contacto de emergencia guardado."
+  },
+  "orientation": {
+    "title": "Orientación",
+    "intro": "Inicie una sesión de orientación de 120 minutos. Los trabajadores escanean el QR, leen el aviso y se unen. Después usted los aprueba.",
+    "start": "Iniciar orientación",
+    "expired": "La última sesión ya terminó.",
+    "openUntil": "Abierta hasta las {{time}}",
+    "modeLabel": "Tipo de QR",
+    "rotatingTab": "QR en vivo",
+    "printedTab": "QR para imprimir",
+    "rotatesIn": "Código nuevo en {{seconds}} s",
+    "rotatingNote": "El código cambia cada minuto y funciona sin señal en este teléfono.",
+    "printedCaption": "Válido hasta las {{time}}",
+    "printedNote": "El código impreso solo funciona mientras esta sesión esté abierta.",
+    "sharePrint": "Compartir o imprimir",
+    "shareUnavailable": "Compartir no está disponible en este dispositivo.",
+    "neverApproves": "Escanear un QR nunca aprueba a nadie. Usted aprueba a los trabajadores en Trabajadores y aprobaciones.",
+    "close": "Terminar sesión",
+    "toApprovals": "Trabajadores y aprobaciones"
+  },
+  "workers": {
+    "title": "Trabajadores y aprobaciones",
+    "addNoPhone": "Agregar un trabajador sin teléfono",
+    "pendingTitle": "Esperando aprobación ({{count}})",
+    "nonePending": "Nadie está esperando aprobación.",
+    "selectAll": "Seleccionar todos (hasta {{max}})",
+    "approveSelected": "Aprobar seleccionados ({{count}})",
+    "confirmEmployerSelected": "Confirmar empleador de seleccionados ({{count}})",
+    "maxSelected": "Puede seleccionar hasta {{max}} trabajadores a la vez.",
+    "resultsTitle": "Resultados",
+    "resultLine": "{{name}}: {{result}}",
+    "approvedTitle": "Aprobados ({{count}})",
+    "employerHint": "Seleccione trabajadores aprobados para confirmar a su empleador.",
+    "inactiveTitle": "No activos",
+    "noPhone": "Sin teléfono (supervisado)",
+    "appUser": "Usa la app",
+    "consent": {
+      "DIGITAL": "aviso aceptado en la app",
+      "SUPERVISED": "aviso leído por un supervisor"
+    },
+    "printedBadge": "credencial impresa activa",
+    "printedBadgeAction": "Credencial impresa",
+    "reject": "No aprobar",
+    "rejectTitle": "¿No aprobar a {{name}}?",
+    "rejectReason": "Motivo (obligatorio)",
+    "confirmReject": "Confirmar"
+  },
+  "addWorker": {
+    "title": "Trabajador sin teléfono",
+    "intro": "Cree un perfil supervisado. No se inventa ningún teléfono, correo ni cuenta de la app. La aprobación es un paso aparte.",
+    "noticeTitle": "Lea el aviso al trabajador",
+    "workerLanguage": "Idioma del trabajador",
+    "acknowledged": "Leí este aviso al trabajador y él lo confirmó",
+    "acknowledgedHint": "Su nombre queda registrado como el supervisor que lo leyó.",
+    "create": "Agregar trabajador",
+    "done": "Trabajador agregado y esperando aprobación."
+  },
+  "printedBadge": {
+    "title": "Credencial impresa",
+    "intro": "Una credencial impresa no tiene información personal. En el quiosco, el encargado debe revisar el nombre y la cara de la persona.",
+    "issue": "Emitir credencial impresa",
+    "caption": "Credencial de SiteMuster",
+    "custody": "Se muestra una sola vez. Imprímala ahora y entréguela al trabajador. Emitir una credencial nueva cancela la anterior.",
+    "sharePrint": "Compartir o imprimir",
+    "revokeReason": "Motivo para cancelar (obligatorio)",
+    "revoke": "Cancelar esta credencial",
+    "revoked": "Credencial cancelada."
   }
 }

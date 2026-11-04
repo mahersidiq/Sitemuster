@@ -133,7 +133,7 @@ Resolved once in Milestone 01 (2026-11-03) per decision #33. Every version below
 | Localization | `expo-localization` / `i18next` / `react-i18next` | 58.0.5 / 26.7.1 / 17.1.12 |
 | Monitoring | `@sentry/react-native` | 8.28.0 |
 | Push | `expo-notifications` | 58.1.8 |
-| Worker CSV share | `expo-sharing` (`expo-print` NOT installed: V1.1 only) | 58.0.22 |
+| Worker CSV / printable QR share | `expo-sharing` / `expo-file-system` (`expo-print` NOT installed: V1.1 only) | 58.0.22 / 58.0.13 |
 | Native dev builds | `expo-dev-client` / `expo-status-bar` / `expo-system-ui` | 58.0.18 / 58.0.4 / 58.0.7 |
 | Unit tests (shared/Edge) | `vitest` / `vite` | 5.1.0 / 8.3.5 |
 | Mobile tests | `jest` / `jest-expo` / `@react-native/jest-preset` / `@testing-library/react-native` / `test-renderer` / `babel-preset-expo` | 30.5.2 / 58.0.14 / 0.88.1 / 14.1.0 / 1.3.0 / 58.0.24 |

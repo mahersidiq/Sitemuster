@@ -11,6 +11,7 @@ export * from './api/operations.ts';
 export * from './api/badge.ts';
 export * from './api/broadcast.ts';
 export * from './api/address.ts';
+export * from './api/orientation.ts';
 export * from './replay/fixture-schema.ts';
 export * from './providers/types.ts';
 export * from './providers/registry.ts';
