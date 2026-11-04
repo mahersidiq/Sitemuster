@@ -957,11 +957,15 @@ export class FakeSiteMusterApi implements SiteMusterApi {
     const project = this.world.projects.find((p) => p.id === projectId);
     if (project?.status !== 'ACTIVE') throw new ApiError('PROJECT_NOT_ACTIVE');
     for (const s of this.world.sessions) if (s.project_id === projectId) s.open = false;
+    // 120 minutes from now on the real clock, like the server: the orientation screen compares the
+    // expiry with the phone's own clock (a fixed 14:00–16:00 window expired for good on
+    // 2026-11-04 at 16:00 UTC and the screen then showed "Start" instead of the QR).
+    const startedAt = Date.now();
     const session: FakeSession = {
       session_id: randomUUID(),
       project_id: projectId,
-      starts_at: '2026-11-04T14:00:00Z',
-      expires_at: '2026-11-04T16:00:00Z',
+      starts_at: new Date(startedAt).toISOString(),
+      expires_at: new Date(startedAt + 120 * 60_000).toISOString(),
       rotating_secret: FAKE_ROTATING_SECRET,
       static_code: 'S'.repeat(43),
       open: true,

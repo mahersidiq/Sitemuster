@@ -562,6 +562,8 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
   - a deleted person's lines leave stored daily reports and foremen's proposed corrections when no contract basis applies;
   - switching location off, or a required renewal, removes the last on-site position at once.
 
+- CI on the review-fix head failed one unrelated phone test, the orientation QR. Root cause: the shared fake API (Milestone 05) opened every orientation session from 14:00 to 16:00 UTC on 2026-11-04, while the screen compares the expiry with the real clock. From 16:00 UTC that day the session looked expired and the screen showed "Start". The fake now opens a 120-minute session from the real clock, as the server does. It is a test-only fix; `main` would have failed the same way.
+
 **Decisions added:** #123–#139.
 
 **Next step:** open the Milestone 12 PR, watch CI, address the automated review, merge, then start Milestone 13 (native release preparation, review demo and field pilot) on `milestone-13-release`.
