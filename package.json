@@ -25,7 +25,8 @@
     "test:location-replay": "vitest run --project replay",
     "test": "npm run test:unit && npm run test:integration && npm run test:security && npm run test:i18n && npm run test:location-replay",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
-    "test:backend": "vitest run --project backend"
+    "test:backend": "vitest run --project backend",
+    "operator": "node scripts/operator/cli.mts"
   },
   "dependencies": {
     "@expo/metro-runtime": "58.0.17",
