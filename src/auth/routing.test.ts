@@ -15,6 +15,7 @@ const base: Access = {
   email_verified: false,
   phone_verified: true,
   is_platform_operator: false,
+  account_deletion_pending: false,
   worker_profile_id: null,
   is_foreman: false,
   org_roles: [],
@@ -105,5 +106,29 @@ describe('routeFor and guards', () => {
     expect(canOpenWorkerShell(derive({ ...base, worker_profile_id: base.user_id }, aal1))).toBe(
       true,
     );
+  });
+});
+
+describe('account deletion pending (decision #137)', () => {
+  it('goes straight to the deletion screen, without an authenticator step, for staff and workers', () => {
+    const deleting = { ...staff, account_deletion_pending: true };
+    const state = derive(deleting, aal1, []);
+    expect(state.status).toBe('signed_in');
+    expect(routeFor(state, true)).toBe('/account/deletion-pending');
+    const worker = derive({ ...base, account_deletion_pending: true }, aal1);
+    expect(routeFor(worker, true)).toBe('/account/deletion-pending');
+    // Even if a stale answer still carried roles, the shells stay closed.
+    const stale = derive(
+      {
+        ...staff,
+        worker_profile_id: '33333333-3333-4333-8333-333333333333',
+        account_deletion_pending: true,
+      },
+      aal2,
+      ['f1'],
+    );
+    expect(canOpenWorkerShell(stale)).toBe(false);
+    expect(canOpenStaffShell(stale)).toBe(false);
+    expect(routeFor(stale, true)).toBe('/account/deletion-pending');
   });
 });

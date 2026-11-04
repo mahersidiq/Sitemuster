@@ -1294,7 +1294,9 @@
       "now": "Delete my account now",
       "done": "Your account is being deleted. Your name and contact details are removed within 30 days (normally within a day).",
       "noContact": "This account has no phone number or e-mail to send a code to. Ask your superintendent for help.",
-      "keepHint": "Nothing is deleted until the last step."
+      "keepHint": "Nothing is deleted until the last step.",
+      "pendingTitle": "Your account is being deleted",
+      "pendingBody": "You asked to delete this account. Everything stopped at that moment, and your name and contact details are removed within 30 days (normally within a day). There is nothing else to do here. To use SiteMuster again later, sign up again after that."
     }
   }
 }

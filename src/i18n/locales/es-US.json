@@ -1275,7 +1275,7 @@
     "renewalNeeded": "El aviso de la obra cambió. Léalo y acéptelo para volver a usar la ubicación. Mientras tanto, el quiosco y su capataz siguen funcionando.",
     "accept": "Lo leí y lo acepto",
     "renewed": "Gracias. La ubicación está encendida otra vez para este proyecto.",
-    "accepted": "Aceptó la versión {{version}} el {{date}}."
+    "accepted": "Versión {{version}} aceptada el {{date}}"
   },
   "account": {
     "delete": {
@@ -1294,7 +1294,9 @@
       "now": "Eliminar mi cuenta ahora",
       "done": "Su cuenta se está eliminando. Su nombre y sus datos de contacto se eliminan en un plazo de 30 días (normalmente en un día).",
       "noContact": "Esta cuenta no tiene número de teléfono ni correo para enviar un código. Pida ayuda a su superintendente.",
-      "keepHint": "No se elimina nada hasta el último paso."
+      "keepHint": "No se elimina nada hasta el último paso.",
+      "pendingTitle": "Su cuenta se está eliminando",
+      "pendingBody": "Usted pidió eliminar esta cuenta. Todo se detuvo en ese momento y su nombre y sus datos de contacto se eliminan en un plazo de 30 días (normalmente en un día). No tiene que hacer nada más aquí. Para volver a usar SiteMuster más adelante, regístrese de nuevo después."
     }
   }
 }

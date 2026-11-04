@@ -9,6 +9,8 @@ export const AccessSchema = z.object({
   email_verified: z.boolean(),
   phone_verified: z.boolean(),
   is_platform_operator: z.boolean(),
+  /** The person asked to delete their account; nothing else is open to them (decision #137). */
+  account_deletion_pending: z.boolean().default(false),
   worker_profile_id: z.uuid().nullable(),
   is_foreman: z.boolean(),
   org_roles: z.array(z.object({ organization_id: z.uuid(), role: z.enum(ORGANIZATION_ROLES) })),

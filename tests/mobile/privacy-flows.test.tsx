@@ -180,6 +180,17 @@ describe('account deletion', () => {
     expect(world.deletionRequests).toHaveLength(0);
   });
 
+  it('signing in again while the deletion is processed shows only that, in Spanish too', async () => {
+    const world = new FakeWorld(access({ account_deletion_pending: true }), '+15555550123');
+    const { backend } = signIn(world, '+15555550123');
+    await chooseLanguage('es-US');
+    await renderRouter('./app', { initialUrl: '/' });
+    expect(await screen.findByTestId('deletion-pending-screen')).toBeTruthy();
+    expect(screen.getByText('Su cuenta se está eliminando')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('sign-out'));
+    await waitFor(() => expect(backend.gateway.session).toBeNull());
+  });
+
   it('speaks Spanish', async () => {
     signIn(workerWorld(), '+15555550123');
     await chooseLanguage('es-US');

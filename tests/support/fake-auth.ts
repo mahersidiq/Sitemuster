@@ -217,6 +217,7 @@ export function access(overrides: Partial<Access>): Access {
     email_verified: false,
     phone_verified: true,
     is_platform_operator: false,
+    account_deletion_pending: false,
     worker_profile_id: null,
     is_foreman: false,
     org_roles: [],

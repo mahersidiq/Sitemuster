@@ -12,6 +12,7 @@
 --    QR secrets deleted; revoked badge keys and revoked push tokens are deleted after 24 hours;
 --    expired orientation join passes after 7 days.
 -- 5. Operator RPCs to list and review flags (MFA, reason, audited; pseudonymous ids only).
+-- 6. Signing in again during the deletion window shows only "your account is being deleted".
 
 -- ---------------------------------------------------------------------------------------------
 -- 1. Rate-limit saturation → security flags
@@ -387,7 +388,66 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 6. Grants (deny by default; decision #57)
+-- 6. Signing in again while the account is being deleted (decision #137)
+-- ---------------------------------------------------------------------------------------------
+-- Unchanged from Milestone 03 except: the answer says so, and shows no worker profile (every
+-- tenant call already refuses such a person; the app shows only "your account is being deleted").
+create or replace function public.get_my_access()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_worker uuid;
+  v_deleting boolean;
+  v_result jsonb;
+begin
+  if v_uid is null then
+    raise exception 'authentication required' using errcode = '28000';
+  end if;
+  v_deleting := exists (select 1 from app_private.account_deletion_requests r where r.auth_user_id = v_uid);
+
+  select w.id into v_worker
+    from public.worker_profiles w
+   where w.auth_user_id = v_uid and w.deleted_at is null and not v_deleting;
+
+  select jsonb_build_object(
+    'user_id', v_uid,
+    'aal', coalesce(auth.jwt() ->> 'aal', 'aal1'),
+    'email_verified', coalesce(u.email is not null and u.email_confirmed_at is not null, false),
+    'phone_verified', coalesce(u.phone is not null and u.phone_confirmed_at is not null, false),
+    'is_platform_operator', app_private.is_platform_operator(),
+    'account_deletion_pending', v_deleting,
+    'worker_profile_id', v_worker,
+    'is_foreman', exists (
+      select 1 from public.subcontractor_members m
+       where m.worker_profile_id = v_worker and m.role = 'FOREMAN' and m.verification_status = 'VERIFIED'
+         and m.valid_from <= now() and (m.valid_until is null or m.valid_until > now())
+    ),
+    'org_roles', coalesce((
+      select jsonb_agg(jsonb_build_object('organization_id', m.organization_id, 'role', m.role) order by m.organization_id, m.role)
+        from public.organization_members m
+       where m.user_id = v_uid and m.membership_status = 'ACTIVE'
+    ), '[]'::jsonb),
+    'project_roles', coalesce((
+      select jsonb_agg(jsonb_build_object('project_id', s.project_id, 'role', s.role) order by s.project_id, s.role)
+        from public.project_staff s
+       where s.user_id = v_uid and s.status = 'ACTIVE'
+    ), '[]'::jsonb)
+  )
+  into v_result
+  from auth.users u
+  where u.id = v_uid;
+
+  return v_result;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 7. Grants (deny by default; decision #57)
 -- ---------------------------------------------------------------------------------------------
 revoke all on table app_private.security_flags from public, anon, authenticated, service_role;
 

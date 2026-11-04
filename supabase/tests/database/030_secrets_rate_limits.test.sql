@@ -2,7 +2,7 @@
 -- (report exports, phone activation), security flags (flag, never erase) and secrets hygiene
 -- (docs/spec/09-security-privacy.md; decisions #132–#135; docs/security/secrets-audit.md).
 begin;
-select plan(41);
+select plan(44);
 select tests.seed_world();
 
 -- ---------------------------------------------------------------------------------------------
@@ -141,6 +141,13 @@ reset role;
 select tests.as_postgres();
 select is((select count(*)::int from public.device_installations where worker_id = tests.id('w_a2')), 0,
   'no device or credential was created for them');
+select tests.authenticate_as(tests.id('u_worker_a2'), 'aal1');
+select is(public.get_my_access() ->> 'account_deletion_pending', 'true',
+  'signing in again during the deletion window: the app is told the account is being deleted');
+select is(public.get_my_access() ->> 'worker_profile_id', null, 'and is shown no worker profile');
+select tests.authenticate_as(tests.id('u_worker_a1'), 'aal1');
+select is(public.get_my_access() ->> 'account_deletion_pending', 'false', 'everyone else is unaffected');
+select tests.as_postgres();
 
 -- ---------------------------------------------------------------------------------------------
 -- Secrets hygiene (hourly)
