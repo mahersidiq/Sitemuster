@@ -20,6 +20,9 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Add `EXPO_TOKEN` in **GitHub Actions secret** (short-scope service token; never in app). If EAS GitHub integration does not need it for a workflow, do not generate unnecessary token.
 - [ ] Record `EAS_PROJECT_ID` and `EXPO_OWNER` as repository/EAS nonsecret variables. Claude Code stores exact settings in environment-specific config.
 - [ ] Run owner-assisted EAS dev build and test on physical iPhone/Android when prerequisites ready; Expo Go is insufficient for native Transistorsoft behavior.
+- [ ] Muster alerts (Milestone 11): set the non-secret build variable `EAS_PROJECT_ID` for every EAS environment. The app needs it to get an Expo push token; without it the phone shows "Muster alerts are not set up in this build" and registers nothing.
+- [ ] Muster alerts: let EAS manage the push credentials: an Apple Push Notifications key for iOS (`eas credentials` → iOS → Push Notifications) and an FCM V1 service account key for Android (`eas credentials` → Android → FCM V1). Keep them in EAS only, never in the repository or the app.
+- [ ] Optional: turn on "Enhanced push security" in the Expo project, create an Expo access token for push, and store it as the Edge Function secret `EXPO_ACCESS_TOKEN` on staging and production (`supabase secrets set EXPO_ACCESS_TOKEN=… --project-ref <ref>`). Without enhanced security leave it unset.
 
 ## 3. Supabase Pro — staging and production (`SB`)
 
@@ -40,6 +43,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Assign kiosk attendants: invite the people who run the gate kiosk to the project with the **Kiosk attendant** role (they need e-mail sign-in and an authenticator app, like other staff). A foreman may run a crew kiosk only after the GC grants it: project → **Foreman kiosk access** (Milestone 10, decision #113).
 - [ ] Deploy the Milestone 10 functions: `supabase functions deploy daily-reports report-confirm --project-ref <ref>`. JWT verification stays **on** for both (`supabase/config.toml`). They need no new secret: reports are generated when someone opens a finished day, so no service key is stored in the database (decision #108).
 - [ ] After deploying the Milestone 10 migration, confirm the job `sitemuster-report-deadline-sweep` (every 5 minutes) is listed by `select jobname, schedule, active from cron.job;` and its recent runs succeed. It marks unanswered reports NOT_CONFIRMED after 12:00 on the next workday; like the attendance sweep it does nothing on a database marked `development`.
+- [ ] Deploy the Milestone 11 functions: `supabase functions deploy muster-start muster-close --project-ref <ref>`, and redeploy `ingest-operations` (muster checks). JWT verification stays **on** for both. Staging and production use the Expo Push Service (decision #116); a development value of `SITEMUSTER_ENV` would use the fake adapter, so check the secret is `staging` / `production`.
+- [ ] Give each project its emergency contact (decision #114): invite the safety manager to the project with the **Safety manager** role, or (as an organization admin) invite another person with **Emergency role** turned on. Only they can start and close a muster, always with the authenticator app.
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] After deploying the Milestone 06 migrations, open *Database → Cron* (or run `select jobname, schedule, active from cron.job;` in the SQL editor) and confirm the job `sitemuster-attendance-sweep` runs every minute and its recent runs succeed. It applies the attendance time rules (unknown after 20 min, end-of-shift close-out, 24/7 review, visitor close-out) and only works when the environment marker above is `staging` or `production` — on a database marked `development` it deliberately does nothing. The migration enables the `pg_cron` and `btree_gist` extensions; if the deploy reports a permission error for either, enable it under *Database → Extensions* and deploy again.
 - [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
@@ -143,6 +148,22 @@ Needs an EAS development build (§2) and a staging project with one company, its
 - [ ] Worker: **Time History** → this week's and last week's estimated hours per day and the week total. **Ask for a correction** on one visit; the superintendent sees it under **Correction requests**, rejects it with a reason, and the worker sees "Rejected" with that reason.
 - [ ] Worker: **Share my hours (CSV)** on iPhone and on Android. Save it and open it in Numbers, Google Sheets and Excel. → Columns Date, Project, Arrival, Departure, "Estimated onsite hours (not payroll)", Status; only this worker's visits; in Spanish the headers and accents (e.g. "nómina") read correctly.
 - [ ] Superintendent: **Foreman kiosk access** → allow it for the foreman with a reason. → The foreman's Home shows the crew kiosk; remove it and the kiosk is refused on the next scan.
+
+### Real-device muster drill (Milestone 11)
+
+Needs an EAS development build with `EAS_PROJECT_ID` and push credentials (§2), a staging project with the Safety role assigned, two workers with phones (one iPhone, one Android), one worker without a phone, their verified foreman, a kiosk attendant and one signed-in visitor. Run it as a planned drill, never during a real emergency. Status: `NOT_EXECUTED_PHYSICAL_DEVICE`.
+- [ ] Both workers: Home → **Turn on muster alerts** → allow notifications. → The card disappears (the phone is registered).
+- [ ] Safety manager: project → **Emergency muster** → write "Drill" → **Start muster** → **Yes, start the muster**. → The board opens at once; "Alerts sent: 2 of 2".
+- [ ] Within a few seconds both phones show "Emergency muster — tap I'M SAFE" (Spanish for a Spanish-language worker), also on the lock screen.
+- [ ] iPhone worker: long-press the alert on the **locked** phone → **I'M SAFE**. → The phone asks to unlock (Face ID / code); after unlocking the app opens and shows "You said you are safe. That is not a physical check…". The board shows the worker as "Said safe (not checked)", never "Seen".
+- [ ] Android worker: airplane mode on, open the app, tap **I'M SAFE**. → "Waiting to sync — not confirmed". Airplane mode off → "Recorded"; the board updates.
+- [ ] Foreman: Home → **Emergency muster: check your crew** → only their own company's workers are listed → tap **Seen at the assembly point** for the worker without a phone. → It becomes "Seen at the assembly point" on the board.
+- [ ] Kiosk attendant: board → **Scan badges at the assembly point** → scan the iPhone worker's badge with the kiosk in airplane mode. → "Waiting to sync"; after reconnecting, "<name>: recorded" and the worker moves from "Said safe" to "Seen".
+- [ ] Visitor: the safety manager taps **Seen at the assembly point** on the visitor's row. → Counted under Visitors only, never under Workers.
+- [ ] Turn notifications off for the app on one phone and start a second drill. → The muster starts anyway; the board shows that phone's alert as failed or "No phone registered", and the in-app I'M SAFE still works.
+- [ ] Close: **Close the muster** without a note or without the acknowledgement is refused; with both, the report opens, says "not a certified life-safety record", lists who was never seen, and **Share text summary** opens the share sheet with the same text.
+- [ ] After closing: **Add a correction** for one person → it appears under "Added after closing" with your name; the report above it is unchanged.
+- [ ] Sign out on one worker phone and start another drill. → That phone gets no alert.
 
 ### Real-device location privacy sign-off (release gate, decision #90)
 

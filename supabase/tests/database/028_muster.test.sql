@@ -6,7 +6,7 @@
 -- are signed append-only amendments; push delivery is metadata only; GC B, the operator, workers
 -- and foremen of other companies are refused.
 begin;
-select plan(70);
+select plan(71);
 select tests.seed_world();
 
 select set_config('t.p', tests.id('p_a1')::text, false), set_config('t.seed', tests.id('m_a')::text, false);
@@ -272,6 +272,13 @@ set constraints all immediate;
 select is((select count(*)::int from realtime.messages where id not in (select id from seen_messages)
             and event = 'MUSTER_CHANGED' and topic = 'project:' || current_setting('t.p')), 1,
   'the starts send one MUSTER_CHANGED message on the private project topic');
+
+-- An archived project cannot start a muster (decision #114).
+select tests.as_postgres();
+update public.projects set status = 'ARCHIVED' where id = tests.id('p_b1');
+select tests.authenticate_as(tests.id('u_b_super'));
+select throws_ok($$select public.start_muster(tests.id('p_b1'), 'Fire', gen_random_uuid())$$, '22023', 'PROJECT_NOT_ACTIVE',
+  'an archived project cannot start a muster, even for its designated person');
 
 select * from finish();
 rollback;

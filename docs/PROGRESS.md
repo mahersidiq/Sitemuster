@@ -15,8 +15,8 @@
 | 07 | Native tracking and custom device ingestion | done (NOT VERIFIED items) | [#7](https://github.com/mahersidiq/Sitemuster/pull/7) | squash-merged under #48 after CI green and the automated review (`d509baf`) |
 | 08 | Kiosk, foreman, manual and visitor fallbacks | done (NOT VERIFIED items) | [#8](https://github.com/mahersidiq/Sitemuster/pull/8) | squash-merged under #48 after CI green and the automated review (`41a0307`) |
 | 09 | Mobile superintendent dashboard and map | done (NOT VERIFIED items) | [#9](https://github.com/mahersidiq/Sitemuster/pull/9) | squash-merged under #48 after CI green and the automated review (`1016894`) |
-| 10 | Daily reports, foreman confirmation and worker CSV | in review | (PR pending) | |
-| 11 | Active Muster Mode | not started | | |
+| 10 | Daily reports, foreman confirmation and worker CSV | done (NOT VERIFIED items) | [#10](https://github.com/mahersidiq/Sitemuster/pull/10) | squash-merged under #48 after CI green and the automated review (`c50426f`) |
+| 11 | Active Muster Mode | in review | (PR pending) | |
 | 12 | Security, privacy, resilience and operator CLI | not started | | |
 | 13 | Native release preparation, review demo and field pilot | not started | | |
 
@@ -418,7 +418,7 @@
   - A correction reason of 1,001–2,000 characters passed validation but broke the 1,000-character column (a generic 503). Every answer reason is now 3–1,000 characters, checked in the schema, the UI and SQL (`REASON_TOO_LONG`).
   - The foreman's list did not say which project and day each report covers. Each card now shows "Project · day".
 - typecheck, ESLint + shellcheck, Prettier: pass.
-- GitHub Actions: run 41823662075 green on the first head (`45e3f44`). The review-fix push is recorded in the PR.
+- GitHub Actions: run 41823662075 green on the first head (`45e3f44`) and run 41825670319 green on the review-fix head (`9dd0593`); squash-merged as `c50426f`.
 
 **NOT VERIFIED (Milestone 10)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the share sheet with a real CSV on iOS and Android (opening it in Numbers / Sheets / Excel with Spanish accents), and the report and answer screens on phones. Checklist: "Real-device reports and CSV share check" (EX for the share sheet).
@@ -427,7 +427,53 @@
 
 **Decisions added:** #108 daily company reports, #109 foreman answers, #110 reissue, #111 correction requests, #112 personal CSV, #113 foreman kiosk grants.
 
-**Next step:** open the Milestone 10 PR, watch CI, address the automated review, merge, then start Milestone 11 (Active Muster Mode) on `milestone-11-muster`.
+**Next step:** done — merged. Milestone 11 below.
+
+## Milestone 11 — Active Muster Mode
+
+Supplemental emergency headcount, **not** a certified life-safety or evacuation system (spec 12). An alert or an I'M SAFE tap never counts as "seen at the assembly point".
+
+**What was built**
+- **Server** (`20261110100000_m11_muster.sql`):
+  - `start_muster`: only the project's emergency role with MFA (decision #114). It is idempotent, one ACTIVE muster per project unless the commander explicitly starts a separate one, refused on archived projects, and audited.
+  - The snapshot is frozen in the same transaction (decision #115): approved roster plus anyone still detected or with an open, pending or unresolved session; source and last detection per person; UNACCOUNTED or STATUS_UNKNOWN; open visitor visits as separate rows; sha256 digest.
+  - `edge_muster_respond`: duplicates by event id; a self-report never becomes verified and never downgrades a verified person; a late offline check observed before the close becomes a LATE_RESPONSE amendment, after it is refused `MUSTER_CLOSED` (decisions #118, #120).
+  - `close_muster`: note required (3–2,000 characters); unresolved people need an explicit acknowledgement; the immutable report (`muster_reports`, digest) is written in the same transaction.
+  - `amend_muster`: append-only, digest-chained corrections after the close.
+  - Reads: `muster_board` (counts kept apart by evidence, company breakdown, alert results, people), `project_musters`, `my_active_musters` (own row only), `foreman_active_musters` / `foreman_muster` (own companies' workers, no visitors), `muster_report`.
+  - Push: `register_push_token` / `revoke_my_push_tokens`; service-only push targets (worker language) and delivery records (SENT / FAILED / NO_DEVICE).
+  - MUSTER_CHANGED Broadcast on every change; the operations context gains `muster_command` and `muster_worker_id`.
+- **Edge Functions:** `muster-start` and `muster-close` (`verify_jwt = true`, caller's own JWT for the decision; the service role only reads push targets and records delivery). Push goes through the Expo Push Service in staging/production and the typed fake in development, and never blocks or fails a muster (decision #116). `ingest-operations` handles `MUSTER_SELF_REPORT` and `MUSTER_PHYSICAL_VERIFY` (safety team, own-company foreman, visitor desk for visitors, attended kiosk badge scans that do not spend the badge step — decisions #117, #119).
+- **Phone (EN/ES):**
+  - safety console: confirmed start, the board with separate counters (seen at the assembly point / said safe, not checked / unknown / not accounted for; visitors apart), alert results, company breakdown, people "not seen yet" first, "Seen at the assembly point" taps through the offline outbox with "waiting to sync" until the server answers;
+  - close with the unresolved count, acknowledgement and note; the immutable report with responders and methods, a plain-text share, and corrections appended below it;
+  - worker home: the muster card with **I'M SAFE** (self-report only, says so), works offline through the outbox;
+  - muster alerts: explanation card before the permission request, token registration (needs the EAS project id), the I'M SAFE button on the alert (opens the app and needs the phone unlocked — decision #121), token revoked at sign-out;
+  - foreman: active musters on Home → own crew check; kiosk muster mode (badge scans as physical checks, printed badges still need the face-and-name confirmation);
+  - the console follows the project's live channel; counts are always the server's (decision #122).
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db` on a fresh reset: **22 files, 752** pgTAP tests. `028_muster` has 71:
+  - who may start/close: the designated role with MFA; refused for a superintendent and an organization owner without the designation, another organization's designated person, a foreman, the platform operator, no MFA, and an archived project;
+  - the frozen roster and visitor rows, sources, employers, initial statuses and digest; a second start joins the active muster; idempotent retries; an explicit separate incident;
+  - self-report vs physical verification, no downgrade, duplicates, own-company foreman only;
+  - late offline checks before/after the close, the immutable report, chained amendments, report rows carrying their list ids;
+  - push token rules and delivery records; reads scoped by role; one MUSTER_CHANGED message.
+- `npm run test:backend`: **127/127**, incl. `muster.test.ts` (5) on the real stack: the acceptance case (2 workers + 1 visitor: I'M SAFE, a foreman check and a visitor check stay in separate counters; self never becomes verified); an attended kiosk badge scan; two simultaneous starts give one muster and only the designated role starts; push records; close with acknowledgement and late offline checks as amendments.
+- Vitest: unit/integration/security/i18n/replay all green (muster core 8 tests, operations core 21 tests incl. 5 muster cases).
+- Jest mobile-unit **27** and mobile-integration **84**, incl. 13 new muster flows (start with confirmation; retry after a lost answer keeps one muster; superintendent read-only; the acceptance case; I'M SAFE offline then synced; Spanish and no downgrade; the alert's I'M SAFE button; alert setup, registration and "turned off"; foreman own company only; kiosk muster scan offline then counted once; close with note, acknowledgement, text share and an appended correction) and unit tests for the list/outbox/summary helpers and the push module.
+- typecheck, ESLint + shellcheck, Prettier: pass.
+- Web-render screenshots `docs/screenshots/m11` (10, EN + ES) against the local stack, through the real `muster-start`, `ingest-operations` and `muster-close` functions.
+
+**NOT VERIFIED (Milestone 11)**
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): real push delivery to iPhone and Android, the lock-screen I'M SAFE button with unlock, notification permission prompts, the native share sheet for the report text, and the kiosk camera scan at an assembly point. Checklist: "Real-device muster drill" (needs EX: `EAS_PROJECT_ID` and APNs/FCM credentials).
+- **Expo Push Service** in staging (the adapter is unit-tested against recorded response shapes only).
+- **Hosted staging (SB):** the migration and the `muster-start` / `muster-close` functions.
+- **Legal/safety review:** the EN/ES muster wording (alert text, "not a certified life-safety system", "not a physical check") is AI-drafted and blocked for production until approved (TRANSLATION_REVIEW "Muster safety copy").
+
+**Decisions added:** #114 muster command, #115 snapshot, #116 alerts, #117 muster badge scans, #118 late records and corrections, #119 operations contract, #120 status rules, #121 alert I'M SAFE needs unlock, #122 phone muster screen.
+
+**Next step:** open the Milestone 11 PR, watch CI, address the automated review, merge, then start Milestone 12 (security, privacy, resilience and operator CLI) on `milestone-12-security`.
 
 ## Environment notes for future sessions (Linux build agent)
 
