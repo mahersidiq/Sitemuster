@@ -48,6 +48,7 @@ describe('CI workflow contract', () => {
       'supabase start',
       'supabase db reset --local',
       'supabase test db',
+      'npm run test:backend',
     ]) {
       expect(workflow).toContain(command);
     }

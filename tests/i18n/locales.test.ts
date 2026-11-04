@@ -5,7 +5,13 @@ import esUS from '../../src/i18n/locales/es-US.json';
 import { compareDictionaries, flatten, type Dictionary } from './parity';
 
 /** Keys whose value is intentionally identical in both languages (proper nouns / endonyms). */
-const SAME_IN_BOTH = new Set(['app.name', 'language.english', 'language.spanish']);
+const SAME_IN_BOTH = new Set([
+  'app.name',
+  'language.english',
+  'language.spanish',
+  // Number-format example, language neutral.
+  'auth.phonePlaceholder',
+]);
 
 describe('EN/ES UI dictionaries', () => {
   it('have exactly matching keys, placeholders and plural categories', () => {

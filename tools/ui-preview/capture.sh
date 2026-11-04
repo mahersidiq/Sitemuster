@@ -17,7 +17,8 @@ mkdir -p "$scratch"
 # Hard-link copy of node_modules so the repository's installed tree is never modified.
 cp -al "$repo_root/node_modules" "$scratch/node_modules"
 
-cp "$repo_root/tools/ui-preview/shims/language-preference.web.ts" "$scratch/src/i18n/language-preference.web.ts"
+# Web-only shims mirror repository paths (e.g. shims/src/auth/native-storage.web.ts).
+cp -R "$repo_root/tools/ui-preview/shims/." "$scratch/"
 
 # Enable the web platform in the scratch copy only.
 node - "$scratch/app.config.ts" <<'NODE'
@@ -43,7 +44,14 @@ for pkg_dir in "$scratch/.rnw/node_modules"/* "$scratch/.rnw/node_modules"/@*/*;
   fi
 done
 
-(cd "$scratch" && EXPO_OFFLINE=1 CI=1 npx expo export --platform web --output-dir dist >/dev/null)
+# Point the web render at the LOCAL Supabase stack when one is exported (never a hosted project).
+supabase_url="${API_URL:-}"
+if [[ -n "$supabase_url" && "$supabase_url" != http://127.0.0.1* && "$supabase_url" != http://localhost* ]]; then
+  echo "[ui-preview] refusing to render against a non-local API_URL" >&2
+  exit 1
+fi
+(cd "$scratch" && EXPO_OFFLINE=1 CI=1 EXPO_PUBLIC_SUPABASE_URL="$supabase_url" \
+  EXPO_PUBLIC_SUPABASE_ANON_KEY="${ANON_KEY:-}" npx expo export --platform web --output-dir dist >/dev/null)
 
 port=8765
 (cd "$scratch/dist" && python3 -m http.server "$port" >/dev/null 2>&1) &

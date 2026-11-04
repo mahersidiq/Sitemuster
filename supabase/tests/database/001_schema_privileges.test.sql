@@ -103,8 +103,8 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['create_organization'],
-  'the only client-callable RPC in public is create_organization'
+  array['create_organization', 'get_my_access', 'get_my_profile', 'set_my_language'],
+  'client-callable RPCs in public are exactly the reviewed allowlist'
 );
 
 select is(

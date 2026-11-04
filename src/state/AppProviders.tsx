@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import type { RuntimeEnv } from '../config/runtime-env';
+import { AuthProvider } from './auth';
 import { LanguageProvider } from './language';
 import { SessionProvider } from './session';
 
@@ -21,7 +22,9 @@ export function AppProviders({ env, children }: { env: RuntimeEnv; children: Rea
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <LanguageProvider appEnv={env.appEnv}>
-          <SessionProvider env={env}>{children}</SessionProvider>
+          <SessionProvider env={env}>
+            <AuthProvider env={env}>{children}</AuthProvider>
+          </SessionProvider>
         </LanguageProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

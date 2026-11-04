@@ -1,6 +1,8 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { canOpenWorkerShell } from '../../src/auth/routing';
+import { useAuth } from '../../src/state/auth';
 import { useSession } from '../../src/state/session';
 import { tabNavigatorOptions, tabScreenOptions } from '../../src/navigation/tabOptions';
 
@@ -8,8 +10,9 @@ import { tabNavigatorOptions, tabScreenOptions } from '../../src/navigation/tabO
 export default function WorkerLayout() {
   const { t } = useTranslation();
   const { previewRole } = useSession();
-  // Milestone 01: only the development preview can open this shell. Milestone 03 adds real auth.
-  if (previewRole !== 'worker') return <Redirect href="/sign-in" />;
+  const { state } = useAuth();
+  // Real access needs the server-confirmed role (staff: MFA aal2); the preview is development-only.
+  if (previewRole !== 'worker' && !canOpenWorkerShell(state)) return <Redirect href="/" />;
   return (
     <Tabs screenOptions={tabNavigatorOptions}>
       <Tabs.Screen name="home" options={tabScreenOptions(t('worker.tabs.home'))} />

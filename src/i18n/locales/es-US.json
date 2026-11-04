@@ -5,7 +5,7 @@
   "common": {
     "loading": "Cargando…",
     "notAvailableYet": "Todavía no está disponible en esta versión.",
-    "previewBanner": "Solo vista previa — sin datos reales. El inicio de sesión llegará en una versión posterior.",
+    "previewBanner": "Solo vista previa — todavía sin datos reales.",
     "developmentWarning": "Versión de desarrollo"
   },
   "language": {
@@ -31,7 +31,9 @@
     "noPhoneBody": "Pregunte a su capataz o al encargado del quiosco de la obra. Pueden registrar su entrada sin teléfono.",
     "devPreviewHeading": "Vista previa para desarrolladores (solo versiones de desarrollo)",
     "devPreviewWorker": "Ver pantallas de trabajador",
-    "devPreviewStaff": "Ver pantallas de personal"
+    "devPreviewStaff": "Ver pantallas de personal",
+    "recoveryLink": "¿Problemas para entrar?",
+    "backendUnavailable": "Para iniciar sesión se necesita un servidor de SiteMuster. Esta versión de desarrollo no tiene uno configurado."
   },
   "worker": {
     "tabs": {
@@ -91,5 +93,77 @@
     "configBody": "A esta versión le falta configuración obligatoria, por eso no funcionará. Comuníquese con su administrador.",
     "routeNotFound": "Esta pantalla no existe.",
     "goHome": "Ir al inicio"
+  },
+  "auth": {
+    "phoneTitle": "Su número de celular",
+    "phoneBody": "Le enviaremos un código de 6 dígitos por mensaje de texto. Pueden aplicarse cargos de mensajes y datos.",
+    "phoneLabel": "Número de celular",
+    "phonePlaceholder": "(555) 555-0123",
+    "sendCode": "Enviar código",
+    "sending": "Enviando…",
+    "codeTitle": "Escriba el código de 6 dígitos",
+    "codeSentTo": "Enviamos un código a {{destination}}. Vence en 10 minutos.",
+    "codeLabel": "Código de 6 dígitos",
+    "verify": "Verificar",
+    "verifying": "Verificando…",
+    "resend": "Enviar un código nuevo",
+    "resendIn": "Podrá pedir un código nuevo en {{seconds}} s",
+    "changeNumber": "Usar otro número",
+    "changeEmail": "Usar otro correo",
+    "emailTitle": "Su correo de trabajo",
+    "emailBody": "Le enviaremos un código de 6 dígitos por correo. Luego confirmará con su aplicación de autenticación.",
+    "emailLabel": "Correo de trabajo",
+    "emailPlaceholder": "nombre@empresa.com",
+    "noPhoneHint": "¿No tiene un teléfono que reciba mensajes? Su capataz o el encargado del quiosco pueden registrarlo.",
+    "errors": {
+      "invalidPhone": "Escriba un número de celular válido, por ejemplo (555) 555-0123.",
+      "invalidEmail": "Escriba un correo electrónico válido.",
+      "invalidCode": "Ese código no es correcto. Revise el mensaje e intente de nuevo.",
+      "expiredCode": "Este código ya venció. Pida un código nuevo.",
+      "rateLimited": "Demasiados intentos. Espere un momento e intente de nuevo.",
+      "network": "Sin conexión. Revise su señal e intente de nuevo. No se envió nada.",
+      "smsUnavailable": "Los mensajes de texto no están disponibles ahora. Pida a su capataz o al encargado del quiosco que lo registren.",
+      "mfaInvalid": "Ese código de autenticación no funcionó. Use el código actual de 6 dígitos.",
+      "unknown": "Algo salió mal. Intente de nuevo."
+    }
+  },
+  "mfa": {
+    "enrollTitle": "Configure su aplicación de autenticación",
+    "enrollBody": "Las cuentas del personal necesitan un segundo paso. Escanee este código con una aplicación de autenticación (por ejemplo Google Authenticator o Microsoft Authenticator) y escriba el código de 6 dígitos que muestra.",
+    "secretLabel": "O escriba esta clave de configuración manualmente:",
+    "qrLabel": "Código QR de configuración del autenticador",
+    "verifyTitle": "Escriba su código de autenticación",
+    "verifyBody": "Abra su aplicación de autenticación y escriba el código actual de 6 dígitos de SiteMuster.",
+    "codeLabel": "Código de autenticación",
+    "confirm": "Confirmar",
+    "lostDevice": "¿Perdió su autenticador?",
+    "preparing": "Preparando su código de configuración…"
+  },
+  "recovery": {
+    "title": "Problemas para iniciar sesión",
+    "workerHeading": "Trabajadores",
+    "workerNewPhone": "Teléfono nuevo con el mismo número: solo inicie sesión otra vez con un código por mensaje de texto. Su teléfono anterior deja de funcionar para la asistencia automática.",
+    "workerNewNumber": "Número nuevo: pida al superintendente o al encargado del quiosco que actualicen su identidad. Mientras tanto pueden registrarlo en el quiosco o su capataz.",
+    "staffHeading": "Personal de obra",
+    "staffEmail": "Si perdió acceso a su correo: pida a un dueño de su organización que invite su nueva dirección.",
+    "staffAuthenticator": "Si perdió su aplicación de autenticación: use su autenticador de respaldo si configuró uno. Si no, contacte al soporte de SiteMuster por medio del dueño de su organización; se verifica su identidad antes de restaurar el acceso.",
+    "back": "Regresar"
+  },
+  "access": {
+    "joinTitle": "Únase a su proyecto",
+    "joinBody": "Ya inició sesión. Para unirse a una obra, escanee el código QR de orientación que muestra su superintendente. Unirse a un proyecto llegará en la próxima actualización.",
+    "noOrgTitle": "Todavía no tiene organización",
+    "noOrgBody": "Su cuenta de personal está verificada. Pida a un dueño de la organización que lo invite, o cree la organización de su empresa (llegará en la próxima actualización).",
+    "operatorTitle": "Las cuentas de operador no pueden usar la aplicación móvil",
+    "operatorBody": "Las cuentas de operador de la plataforma se limitan a las herramientas privadas de operación y nunca ven datos de trabajadores.",
+    "chooseTitle": "Elija cómo continuar",
+    "asWorker": "Continuar como trabajador",
+    "asStaff": "Continuar como personal de obra",
+    "signOut": "Cerrar sesión",
+    "signedInAs": "Sesión iniciada como {{identity}}",
+    "offlineTitle": "Está sin conexión",
+    "offlineBody": "Ya inició sesión, pero SiteMuster no pudo confirmar su acceso sin conexión. Conéctese para continuar. No se perdió nada.",
+    "retry": "Intentar de nuevo",
+    "staleNotice": "Sin conexión — se muestra su último acceso conocido."
   }
 }

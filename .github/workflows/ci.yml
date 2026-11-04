@@ -75,6 +75,17 @@ jobs:
         run: supabase db reset --local
       - name: Run pgTAP, RLS and SQL database tests
         run: supabase test db
+      - name: Node (backend end-to-end tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies (backend tests)
+        run: npm ci
+      - name: Backend end-to-end tests against local Supabase (Auth, RPC, Edge Functions)
+        run: |
+          eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|DB_URL|MAILPIT_URL|FUNCTIONS_URL)=' | sed 's/^/export /')"
+          npm run test:backend
       - name: Clean up
         if: always()
         run: supabase stop --no-backup || true

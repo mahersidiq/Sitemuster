@@ -5,7 +5,7 @@
   "common": {
     "loading": "Loading…",
     "notAvailableYet": "Not available in this build yet.",
-    "previewBanner": "Preview only — no real data. Sign-in arrives in a later build.",
+    "previewBanner": "Preview only — no real data yet.",
     "developmentWarning": "Development build"
   },
   "language": {
@@ -31,7 +31,9 @@
     "noPhoneBody": "Ask your foreman or the site kiosk attendant. You can be checked in without a phone.",
     "devPreviewHeading": "Developer preview (development builds only)",
     "devPreviewWorker": "Preview worker screens",
-    "devPreviewStaff": "Preview staff screens"
+    "devPreviewStaff": "Preview staff screens",
+    "recoveryLink": "Trouble signing in?",
+    "backendUnavailable": "Sign-in needs a SiteMuster server. This development build has none configured."
   },
   "worker": {
     "tabs": {
@@ -91,5 +93,77 @@
     "configBody": "This build is missing required configuration, so it will not run. Contact your administrator.",
     "routeNotFound": "This screen does not exist.",
     "goHome": "Go to start"
+  },
+  "auth": {
+    "phoneTitle": "Your mobile number",
+    "phoneBody": "We will text you a 6-digit code. Message and data rates may apply.",
+    "phoneLabel": "Mobile number",
+    "phonePlaceholder": "(555) 555-0123",
+    "sendCode": "Send code",
+    "sending": "Sending…",
+    "codeTitle": "Enter the 6-digit code",
+    "codeSentTo": "We sent a code to {{destination}}. It expires in 10 minutes.",
+    "codeLabel": "6-digit code",
+    "verify": "Verify",
+    "verifying": "Checking…",
+    "resend": "Send a new code",
+    "resendIn": "You can request a new code in {{seconds}} s",
+    "changeNumber": "Use a different number",
+    "changeEmail": "Use a different email",
+    "emailTitle": "Your work email",
+    "emailBody": "We will email you a 6-digit code. Then you confirm with your authenticator app.",
+    "emailLabel": "Work email",
+    "emailPlaceholder": "name@company.com",
+    "noPhoneHint": "No phone that receives texts? Your foreman or the site kiosk attendant can check you in.",
+    "errors": {
+      "invalidPhone": "Enter a valid mobile number, for example (555) 555-0123.",
+      "invalidEmail": "Enter a valid email address.",
+      "invalidCode": "That code is not correct. Check the message and try again.",
+      "expiredCode": "This code has expired. Request a new code.",
+      "rateLimited": "Too many attempts. Wait a moment and try again.",
+      "network": "No connection. Check your signal and try again. Nothing was sent.",
+      "smsUnavailable": "Text messages are not available right now. Ask your foreman or the kiosk attendant to check you in.",
+      "mfaInvalid": "That authenticator code did not work. Use the current 6-digit code.",
+      "unknown": "Something went wrong. Try again."
+    }
+  },
+  "mfa": {
+    "enrollTitle": "Set up your authenticator app",
+    "enrollBody": "Staff accounts need a second step. Scan this code with an authenticator app (for example Google Authenticator or Microsoft Authenticator), then enter the 6-digit code it shows.",
+    "secretLabel": "Or enter this setup key manually:",
+    "qrLabel": "Authenticator setup QR code",
+    "verifyTitle": "Enter your authenticator code",
+    "verifyBody": "Open your authenticator app and enter the current 6-digit code for SiteMuster.",
+    "codeLabel": "Authenticator code",
+    "confirm": "Confirm",
+    "lostDevice": "Lost your authenticator?",
+    "preparing": "Preparing your setup code…"
+  },
+  "recovery": {
+    "title": "Trouble signing in",
+    "workerHeading": "Workers",
+    "workerNewPhone": "New phone, same number: just sign in again with a text-message code. Your old phone stops working for automatic attendance.",
+    "workerNewNumber": "New number: ask the site superintendent or kiosk attendant to update your identity. Until then you can be checked in at the kiosk or by your foreman.",
+    "staffHeading": "Site staff",
+    "staffEmail": "Lost access to your email: ask an owner of your organization to invite your new address.",
+    "staffAuthenticator": "Lost your authenticator app: use your backup authenticator if you set one up. Otherwise contact SiteMuster support through your organization owner; your identity is checked before access is restored.",
+    "back": "Back"
+  },
+  "access": {
+    "joinTitle": "Join your project",
+    "joinBody": "You are signed in. To join a jobsite, scan the orientation QR code shown by your superintendent. Joining a project arrives in the next update.",
+    "noOrgTitle": "No organization yet",
+    "noOrgBody": "Your staff account is verified. Ask an organization owner to invite you, or create your company's organization (coming in the next update).",
+    "operatorTitle": "Operator accounts cannot use the mobile app",
+    "operatorBody": "Platform operator accounts are limited to the private operator tools and never see worker data.",
+    "chooseTitle": "Choose how to continue",
+    "asWorker": "Continue as worker",
+    "asStaff": "Continue as site staff",
+    "signOut": "Sign out",
+    "signedInAs": "Signed in as {{identity}}",
+    "offlineTitle": "You are offline",
+    "offlineBody": "You are signed in, but SiteMuster could not confirm your access without a connection. Connect to continue. Nothing was lost.",
+    "retry": "Try again",
+    "staleNotice": "Offline — showing your last known access."
   }
 }
