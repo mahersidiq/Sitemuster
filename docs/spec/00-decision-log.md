@@ -655,3 +655,17 @@ Reason: reproducible builds on the owner's account and staging/production separa
 - no other request (crash reports, renewals, other hosts, query strings) carries coordinate fields.
 
 It prints only counts, distances, host names and times, never a coordinate, a token or a header, and exits non-zero on any failure. It helps the person who walked the route; it does not replace reading the capture. Reason: spec 10 "Physical privacy capture must inspect actual outbound HTTPS payloads"; makes the human check repeatable.
+
+**153.** The location SDK is configured before it asks for permission. On "Continue" in SiteMuster's own disclosure (#148), the app first gives the SDK its full configuration (`ready`), then asks (`requestPermission`). Transistorsoft reads the "Always" request, the localized Android 11+ "Allow all the time" rationale and the disabled SDK alert from that configuration, so asking without it showed no rationale on Android 11+ (only "While using the app" could be granted) and could show the SDK's own English-only alert.
+- Configuring arms nothing and uploads nothing (`autoSync` stays off until arming, #96). Tracking still starts only once the permission is usable.
+- The SDK never asks when it cannot be configured (no phone set up, not enrolled, no plan), or when the person signed out while it was being configured.
+- The app's start still never configures the SDK on its own: no OS prompt before the disclosure.
+
+Reason: the SDK's documented order (`ready`, then `requestPermission`) and Google Play's background-location flow; found by the automated review of PR #13.
+
+**154.** The privacy capture checker (#152) checks everything that left the phone, whether or not the server would accept it:
+- an upload's query string, header names and body fields beside `locations` must be coordinate-free;
+- a record may carry coordinates only as a complete numeric `coords.latitude` / `coords.longitude` position, which is checked against the site circle. Anything else (other field names, half a position, coordinates beside a valid position) fails as unchecked;
+- every other request is checked in its query string, header names, form fields and JSON body.
+
+Header and field values are never printed. Reason: the sign-off must not PASS a capture that sent off-site coordinates outside the records; found by the automated review of PR #13 (an upload with no records and off-site coordinates in the body and query passed).

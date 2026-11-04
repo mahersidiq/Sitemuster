@@ -157,6 +157,100 @@ describe('privacy capture check', () => {
     }
   });
 
+  it('fails coordinates in form fields and header names of other requests (decision #154)', () => {
+    const at = '2026-11-04T16:00:00Z';
+    for (const leak of [
+      {
+        startedDateTime: at,
+        request: {
+          method: 'POST',
+          url: 'https://analytics.example.test/collect',
+          postData: { mimeType: 'application/x-www-form-urlencoded', text: 'lat=30.3&lng=-97.8' },
+        },
+      },
+      {
+        startedDateTime: at,
+        request: {
+          method: 'POST',
+          url: 'https://analytics.example.test/upload',
+          postData: {
+            mimeType: 'multipart/form-data',
+            params: [{ name: 'longitude', value: '-97' }],
+          },
+        },
+      },
+      {
+        startedDateTime: at,
+        request: {
+          method: 'GET',
+          url: 'https://analytics.example.test/ping',
+          headers: [{ name: 'Geo', value: '30.3;-97.8' }],
+        },
+      },
+    ]) {
+      const report = checkCapture(har(...cleanDay(), leak), SITE);
+      expect(report.verdict).toBe('FAIL');
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'COORDINATES_IN_OTHER_REQUEST',
+      );
+    }
+  });
+
+  it('fails coordinates anywhere in an upload outside its records: query, other body fields, header names (decision #154)', () => {
+    const offsite = { latitude: 30.31, longitude: -97.81 };
+    const changed = (change: (entry: ReturnType<typeof upload>) => void) => {
+      const entry = upload([], '2026-11-04T14:00:00Z');
+      change(entry);
+      return entry;
+    };
+    for (const leak of [
+      // The review's reproduction: no records at all, offsite coordinates in the body and the query.
+      changed((entry) => {
+        entry.request.url += '?lat=30.31&lng=-97.81';
+        entry.request.postData.text = JSON.stringify({ locations: [], coords: offsite });
+      }),
+      changed((entry) => {
+        entry.request.url += '?latitude=30.31';
+      }),
+      changed((entry) => {
+        entry.request.postData.text = JSON.stringify({
+          locations: [],
+          extras: { position: offsite },
+        });
+      }),
+      changed((entry) => {
+        entry.request.headers.push({ name: 'Latitude', value: '30.31' });
+      }),
+    ]) {
+      const report = checkCapture(har(...cleanDay(), leak), SITE);
+      expect(report.verdict).toBe('FAIL');
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'COORDINATES_IN_UPLOAD_ENVELOPE',
+      );
+      expect(formatReport(report, SITE)).not.toMatch(/30\.31|97\.81/);
+    }
+  });
+
+  it('fails record coordinates the site check cannot place instead of counting them as "other" (decision #154)', () => {
+    const onsite = fix('2026-11-04T14:00:00Z');
+    for (const record of [
+      { ...onsite, coords: { lat: 30.31, lng: -97.81 } },
+      { ...onsite, extras: { location: { latitude: 30.31, longitude: -97.81 } } },
+      { ...onsite, coords: { latitude: 30.31 } },
+      { ...onsite, coords: '30.31,-97.81' },
+      { uuid: crypto.randomUUID(), timestamp: '2026-11-04T14:00:00Z', position: '30.31,-97.81' },
+    ]) {
+      const report = checkCapture(
+        har(...cleanDay(), upload([record], '2026-11-04T14:00:01Z')),
+        SITE,
+      );
+      expect(report.verdict).toBe('FAIL');
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'UNCHECKED_RECORD_COORDINATES',
+      );
+    }
+  });
+
   it('fails an upload it cannot read instead of passing it unread', () => {
     const broken = { ...upload([], '2026-11-04T14:00:00Z') };
     broken.request.postData = { mimeType: 'application/json', text: 'not json' };

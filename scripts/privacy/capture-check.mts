@@ -10,7 +10,11 @@ import { containsCoordinateKeys } from '../../packages/shared/src/privacy/coordi
  * - geofence records never carry a position;
  * - every position lies inside the site circle plus the exit margin;
  * - no position was recorded after leaving (after an EXIT, before the next ENTER);
- * - no other request (crash reports, push, renewals, any other host) carries coordinates.
+ * - nothing else carries coordinates (decision #154): not an upload's query string, header names
+ *   or body fields beside its records, not a record outside a complete `coords.latitude` /
+ *   `coords.longitude` position, and no other request (crash reports, push, renewals, any other
+ *   host) in its query string, header names, form fields or JSON body. Whatever left the phone is
+ *   checked, whether or not the server would have accepted it.
  *
  * The report never prints a coordinate, a token or a header: only counts, distances in metres,
  * host names and record times.
@@ -32,6 +36,8 @@ export interface Finding {
     | 'POSITION_OUTSIDE_SITE'
     | 'POSITION_AFTER_EXIT'
     | 'POSITION_BEFORE_ENTER'
+    | 'COORDINATES_IN_UPLOAD_ENVELOPE'
+    | 'UNCHECKED_RECORD_COORDINATES'
     | 'COORDINATES_IN_OTHER_REQUEST'
     | 'UNREADABLE_BODY';
   message: string;
@@ -54,7 +60,8 @@ interface HarEntry {
   request?: {
     method?: string;
     url?: string;
-    postData?: { text?: string; mimeType?: string };
+    headers?: unknown;
+    postData?: { text?: string; mimeType?: string; params?: unknown };
   };
 }
 
@@ -127,10 +134,59 @@ function jsonBody(entry: HarEntry): { ok: true; value: unknown } | { ok: false }
   }
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** HAR `{name, value}` lists (headers, form params) as one name → value map. */
+function named(list: unknown): Record<string, unknown> {
+  if (!Array.isArray(list)) return {};
+  return Object.fromEntries(
+    list
+      .filter((item): item is { name: string; value?: unknown } => {
+        return isObject(item) && typeof item.name === 'string';
+      })
+      .map((item) => [item.name, item.value]),
+  );
+}
+
+/**
+ * Every part of a request outside its JSON body, checked by name: the query string, the header
+ * names and form-encoded fields. Values are never printed.
+ */
+function namedParts(entry: HarEntry, url: URL): Record<string, unknown>[] {
+  const parts = [
+    Object.fromEntries(url.searchParams.entries()),
+    named(entry.request?.headers),
+    named(entry.request?.postData?.params),
+  ];
+  const text = entry.request?.postData?.text;
+  if (
+    typeof text === 'string' &&
+    /x-www-form-urlencoded/i.test(entry.request?.postData?.mimeType ?? '')
+  ) {
+    parts.push(Object.fromEntries(new URLSearchParams(text).entries()));
+  }
+  return parts;
+}
+
 function positionOf(record: SdkRecord): { lat: number; lng: number } | null {
   const lat = Number(record.coords?.latitude);
   const lng = Number(record.coords?.longitude);
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+/**
+ * Coordinates the site-circle check cannot place: any coordinate field of a record other than a
+ * complete numeric `coords.latitude` / `coords.longitude` pair.
+ */
+function hasUncheckedCoordinates(record: SdkRecord): boolean {
+  const { coords, ...rest } = record as Record<string, unknown>;
+  if (containsCoordinateKeys(rest)) return true;
+  if (coords === undefined || coords === null) return false;
+  if (!isObject(coords)) return true;
+  const { latitude, longitude, ...inner } = coords;
+  if (containsCoordinateKeys(inner)) return true;
+  return (latitude !== undefined || longitude !== undefined) && positionOf(record) === null;
 }
 
 function timeOf(record: SdkRecord, fallback: string | undefined): number {
@@ -149,16 +205,27 @@ export function checkCapture(har: unknown, site: Site): CaptureReport {
     const url = urlOf(entry);
     if (!url) continue;
     hosts.set(url.host, (hosts.get(url.host) ?? 0) + 1);
+    // Query string, header names and form fields: checked on every request, uploads included.
+    const outsideBody = namedParts(entry, url).some((part) => containsCoordinateKeys(part));
+    const body = jsonBody(entry);
     const isUpload = url.pathname.endsWith(INGEST_PATH) && entry.request?.method === 'POST';
     if (isUpload) {
       uploads += 1;
-      const body = jsonBody(entry);
-      const locations = body.ok ? (body.value as { locations?: unknown }).locations : undefined;
+      const at = entry.startedDateTime ?? 'an unknown time';
+      const parsed: Record<string, unknown> = body.ok && isObject(body.value) ? body.value : {};
+      const { locations, ...envelope } = parsed;
+      if (outsideBody || containsCoordinateKeys(envelope)) {
+        findings.push({
+          level: 'FAIL',
+          code: 'COORDINATES_IN_UPLOAD_ENVELOPE',
+          message: `An upload at ${at} carries coordinate fields outside its "locations" records (query string, header names or other body fields).`,
+        });
+      }
       if (!Array.isArray(locations)) {
         findings.push({
           level: 'FAIL',
           code: 'UNPARSABLE_UPLOAD',
-          message: `An upload at ${entry.startedDateTime ?? 'an unknown time'} has no readable "locations" list; inspect it by hand.`,
+          message: `An upload at ${at} has no readable "locations" list; inspect it by hand.`,
         });
         continue;
       }
@@ -168,11 +235,9 @@ export function checkCapture(har: unknown, site: Site): CaptureReport {
       continue;
     }
     if (url.pathname.endsWith(RENEW_PATH)) renewals += 1;
-    // Every other request: no coordinates in its JSON body or its query string.
-    const query = Object.fromEntries(url.searchParams.entries());
-    const body = jsonBody(entry);
+    // Every other request: no coordinates anywhere in it.
     const text = entry.request?.postData?.text;
-    if (containsCoordinateKeys(query) || (body.ok && containsCoordinateKeys(body.value))) {
+    if (outsideBody || (body.ok && containsCoordinateKeys(body.value))) {
       findings.push({
         level: 'FAIL',
         code: 'COORDINATES_IN_OTHER_REQUEST',
@@ -209,6 +274,7 @@ export function checkCapture(har: unknown, site: Site): CaptureReport {
   let outside = 0;
   let afterExit = 0;
   let beforeEnter = 0;
+  let unchecked = 0;
   let maxDistance: number | null = null;
   for (const { record } of records) {
     if (record.event === 'geofence') {
@@ -229,6 +295,7 @@ export function checkCapture(har: unknown, site: Site): CaptureReport {
       }
       continue;
     }
+    if (hasUncheckedCoordinates(record)) unchecked += 1;
     const position = positionOf(record);
     if (!position) {
       other += 1;
@@ -253,6 +320,13 @@ export function checkCapture(har: unknown, site: Site): CaptureReport {
       level: 'FAIL',
       code: 'POSITION_AFTER_EXIT',
       message: `${afterExit} position(s) were recorded after leaving the site (after an EXIT, before the next ENTER).`,
+    });
+  }
+  if (unchecked > 0) {
+    findings.push({
+      level: 'FAIL',
+      code: 'UNCHECKED_RECORD_COORDINATES',
+      message: `${unchecked} record(s) carry coordinate fields other than a complete coords.latitude/coords.longitude position, so they cannot be checked against the site; inspect them by hand.`,
     });
   }
   if (beforeEnter > 0) {

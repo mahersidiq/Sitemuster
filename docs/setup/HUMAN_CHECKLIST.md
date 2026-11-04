@@ -243,11 +243,12 @@ Until this is recorded, production phones run **TRACKING_LIMITED**: only coordin
 - [ ] Build a development or staging build (`com.sitemuster.app.dev`) pointing at **staging**, on one real iPhone and one real Android phone. Sign in as a test worker approved on a test project, accept the notice and set up the phone from the badge.
 - [ ] Route the phone's traffic through an intercepting proxy you control (for example mitmproxy or Charles with its certificate installed on the test phone only) and record every request to `/functions/v1/ingest-location-batch` and `/functions/v1/device-renew`.
 - [ ] Walk this route, with the app in the background and later swiped away: start ≥ 2 km from the site, arrive, stay ≥ 15 minutes (including 5+ minutes standing still), walk out past the site edge, and drive ≥ 2 km away. Repeat once in airplane mode for the middle part, then reconnect.
-- [ ] Export the capture as a HAR file and run `npm run privacy:capture-check -- <capture.har> --site <site latitude>,<site longitude>,<site radius in metres>` (decision #152). It must print PASS; it never prints coordinates or tokens, so its output can go into the sign-off notes. Then still read the bodies yourself:
+- [ ] Export the capture as a HAR file and run `npm run privacy:capture-check -- <capture.har> --site <site latitude>,<site longitude>,<site radius in metres>` (decisions #152, #154). It must print PASS; it never prints coordinates or tokens, so its output can go into the sign-off notes. Then still read the bodies yourself:
 - [ ] Check every captured upload body:
   - **geofence** records contain no `latitude`/`longitude`/`coords`;
   - every **location** record lies inside the site circle plus 50 m;
   - nothing after leaving carries a position;
+  - no query string, header name or body field outside the records carries a coordinate;
   - the record shape matches `src/tracking/templates.ts` (event names, `accuracy`, quoted booleans).
 
   Note anything else the SDK adds.

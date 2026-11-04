@@ -588,7 +588,7 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 - `supabase test db` on a fresh reset: **26 files, 943** pgTAP tests. New `032_reviewer_demo` (41); `031_cross_tenant_pen` (21) now also sweeps every function, table and view as the reviewer account; `001` allowlists updated.
 - Backend end-to-end on the local stack: **19 files, 137**, including the new `demo.test.ts` (2): a simulated arrival and departure through the real Edge Function with the dashboard and map following; no reach into a real project, a real person or another tenant (fingerprint unchanged).
 - Load smoke (100 workers): passed.
-- Vitest: unit 48 files / 409 (demo core 13, capture checker 11, tracking rationale), integration 3 / 51, security 14 / 140 (release pipeline 20, release documents 14, environment inventory 5, Maestro flows 2, app config 21), i18n 6 / 26, replay 2 / 184.
+- Vitest: unit 48 files / 416 (demo core 13, capture checker 14, tracking rationale, permission request order 4), integration 3 / 51, security 14 / 140 (release pipeline 20, release documents 14, environment inventory 5, Maestro flows 2, app config 21), i18n 6 / 26, replay 2 / 184.
 - Jest: mobile-unit 30 (location disclosure), mobile-integration 97 (demo flows 6).
 - typecheck, ESLint + shellcheck, Prettier, `npx expo config --json`, `npm audit --audit-level=high` (0 high/critical), `actionlint` on all workflows: pass.
 - `expo prebuild --no-install` with production settings (scratch copy): iOS and Android projects generated; checked the pinned SDK versions, the privacy manifest, the removed permissions, `allowBackup=false`, the production bundle id.
@@ -601,7 +601,11 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the phone test checklist, the location privacy network capture, the Play background-location video, the Maestro flows.
 - **Field pilot**: `FIELD_PILOT_PENDING` — not run, not signed; SiteMuster is **not ready for public release** (`docs/release/release-readiness.md`).
 
-**Decisions added:** #140–#152.
+**Decisions added:** #140–#154.
+
+**Automated review of PR #13 — two findings, both fixed with regression tests that fail on the earlier code:**
+- The SDK is now configured before it asks for location permission (decision #153). Before, Android 11+ never received the "Allow all the time" rationale on a fresh install.
+- The capture checker now inspects everything that left the phone (decision #154): an upload's query string, header names and other body fields, coordinates in records outside a complete `coords` position, and the form fields and header names of other requests. Before, an upload with no records and off-site coordinates in its body and query passed.
 
 **Merged:** PR #13 squash-merged under #48 after CI was green on its final head and the automated review was addressed. This line was written in the pull request before the merge, so it reaches `main` only through that merge.
 
