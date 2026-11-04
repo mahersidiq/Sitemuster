@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { WorkerDemoBanner } from '../../src/components/DemoBanner';
 import { Screen } from '../../src/components/Screen';
 import { ShellScreen } from '../../src/components/ShellScreen';
 import { TrackingStatusCard } from '../../src/components/TrackingStatusCard';
@@ -24,6 +25,7 @@ export default function WorkerHomeScreen() {
   return (
     <Screen testID="worker-home">
       <Title>{t('worker.home.title')}</Title>
+      <WorkerDemoBanner />
       <WorkerMusterAlerts />
       <TrackingStatusCard />
       <ForemanCard />

@@ -32,6 +32,18 @@ export interface SdkConfigInput {
   renewAfterEpochSeconds: number;
   /** Localized Android foreground-service notification (continuous onsite mode only). */
   notification: { title: string; text: string; channelName: string };
+  /**
+   * Localized Android 11+ dialog shown before the SDK opens Settings for "Allow all the time"
+   * (Google Play background-location rules; decision #148). Omitted, Android 11+ never asks.
+   */
+  permissionRationale?: PermissionRationaleText;
+}
+
+export interface PermissionRationaleText {
+  title: string;
+  message: string;
+  positiveAction: string;
+  negativeAction: string;
 }
 
 /** Authorization block: the SDK sends `Authorization: Bearer <token>` and refreshes natively. */
@@ -128,6 +140,9 @@ export function buildSdkConfig(input: SdkConfigInput, mode: SdkMode): Config {
         priority: NOTIFICATION_PRIORITY_LOW,
         sticky: true,
       },
+      ...(input.permissionRationale
+        ? { backgroundPermissionRationale: { ...input.permissionRationale } }
+        : {}),
       ...modal.app,
     },
   };

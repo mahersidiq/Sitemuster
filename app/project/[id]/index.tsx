@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 import type { ProjectStatus } from '@sitemuster/shared';
 
 import { errorMessageKey } from '../../../src/api/errors';
-import { queryKeys, useProject } from '../../../src/api/hooks';
+import { queryKeys, useDemoStatus, useProject } from '../../../src/api/hooks';
 import type { ProjectDetail } from '../../../src/api/types';
 import { AppButton } from '../../../src/components/AppButton';
 import { Banner } from '../../../src/components/Banner';
 import { Card } from '../../../src/components/Card';
+import { DemoBanner } from '../../../src/components/DemoBanner';
 import { QueryState } from '../../../src/components/QueryState';
 import { Screen } from '../../../src/components/Screen';
 import { SiteMap } from '../../../src/components/SiteMap';
@@ -59,6 +60,7 @@ function ProjectDetailBody() {
             <Banner tone="success" text={t('project.createdBanner')} testID="project-created" />
           ) : null}
           <Title>{data.project.name}</Title>
+          <DemoBanner projectId={data.project.id} />
           <StatusPill status={data.project.status} testID="project-status" />
           <Body>{t(`projectStatusHelp.${data.project.status}`)}</Body>
           {data.project.project_number ? (
@@ -87,6 +89,7 @@ function ProjectDetailBody() {
 function WorkforceCard({ detail }: { detail: ProjectDetail }) {
   const { t } = useTranslation();
   const { permissions, project } = detail;
+  const demo = useDemoStatus(project.id);
   if (
     !permissions.can_view_roster &&
     !permissions.can_run_orientation &&
@@ -165,6 +168,16 @@ function WorkforceCard({ detail }: { detail: ProjectDetail }) {
             router.push({ pathname: '/project/[id]/requests', params: { id: project.id } })
           }
           testID="open-requests-project"
+        />
+      ) : null}
+      {permissions.can_correct_attendance && demo.demo && demo.active ? (
+        <AppButton
+          variant="secondary"
+          label={t('demo.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/demo', params: { id: project.id } })
+          }
+          testID="open-demo"
         />
       ) : null}
       {permissions.can_correct_attendance ? (

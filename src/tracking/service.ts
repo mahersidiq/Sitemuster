@@ -15,7 +15,7 @@ import {
 } from './credential';
 import type { PermissionSnapshot, StoredAuthorization, TrackerDriver } from './driver';
 import { gateFences, regionBudget, selectMonitoredProjects, type TrackingPlan } from './plan';
-import { authorizationConfig, buildSdkConfig } from './sdk-config';
+import { authorizationConfig, buildSdkConfig, type PermissionRationaleText } from './sdk-config';
 
 /**
  * Turns the server plan, the device secret and the OS permissions into an armed (or disarmed)
@@ -93,6 +93,8 @@ export interface TrackingServiceDeps {
   now(): number;
   /** Localized Android foreground-service notification, read when the SDK starts. */
   notification(): { title: string; text: string; channelName: string };
+  /** Localized Android 11+ "Allow all the time" explanation, read when the SDK starts. */
+  permissionRationale?(): PermissionRationaleText;
   renewWithSecret(token: string): Promise<RenewOutcome>;
   /**
    * Sends one coordinate-free record straight to ingest-location-batch with the device secret
@@ -303,6 +305,7 @@ export class TrackingService {
             token: credential.token,
             renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
             notification: this.deps.notification(),
+            permissionRationale: this.deps.permissionRationale?.(),
           },
           onsite ? 'ONSITE' : 'OFFSITE',
         ),

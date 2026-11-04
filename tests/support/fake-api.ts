@@ -15,6 +15,10 @@ import {
   type ProjectStaffRole,
   type ProjectStatus,
   type DailyReportsResponse,
+  type DemoProject,
+  type DemoSimulateRequest,
+  type DemoSimulateResponse,
+  type DemoWorker,
   type ReportConfirmRequest,
   type ReportConfirmResponse,
   type ReportView,
@@ -253,6 +257,10 @@ export class FakeWorld {
   /** Milestone 12: the signed-in worker's consents per project, and deletion requests. */
   readonly consents: MyConsent[];
   readonly deletionRequests: { userId: string; at: number }[];
+  /** Milestone 13: allowlisted demo projects and their synthetic people (server state). */
+  readonly demoProjects: DemoProject[];
+  readonly demoWorkers: Map<string, DemoWorker[]>;
+  readonly demoSimulations: DemoSimulateRequest[];
   /** The fake server clock for report deadlines. */
   now = Date.parse('2026-11-04T15:00:00Z');
   private broadcastVersion = 0;
@@ -281,6 +289,9 @@ export class FakeWorld {
     this.pushTokens = shared?.pushTokens ?? [];
     this.consents = shared?.consents ?? [];
     this.deletionRequests = shared?.deletionRequests ?? [];
+    this.demoProjects = shared?.demoProjects ?? [];
+    this.demoWorkers = shared?.demoWorkers ?? new Map();
+    this.demoSimulations = shared?.demoSimulations ?? [];
   }
 
   /** Test helper: a worker (with or without an app account) enrolled in a project. */
@@ -2376,6 +2387,47 @@ export class FakeSiteMusterApi implements SiteMusterApi {
       status: 'REQUESTED' as const,
       process_after: new Date(this.world.now + 86_400_000).toISOString(),
       duplicate: false,
+    });
+  }
+
+  async demoProjects(): Promise<DemoProject[]> {
+    this.before('demoProjects');
+    return this.after(this.world.demoProjects.map((row) => ({ ...row })));
+  }
+
+  async demoWorkers(projectId: string): Promise<DemoWorker[]> {
+    this.before('demoWorkers');
+    if (!this.world.demoProjects.some((row) => row.project_id === projectId && row.active)) {
+      throw new ApiError('DEMO_NOT_ALLOWED');
+    }
+    return this.after((this.world.demoWorkers.get(projectId) ?? []).map((row) => ({ ...row })));
+  }
+
+  async demoSimulate(request: DemoSimulateRequest): Promise<DemoSimulateResponse> {
+    this.before('demoSimulate');
+    if (
+      !this.world.demoProjects.some((row) => row.project_id === request.project_id && row.active)
+    ) {
+      throw new ApiError('DEMO_NOT_ALLOWED');
+    }
+    const person = (this.world.demoWorkers.get(request.project_id) ?? []).find(
+      (row) => row.worker_id === request.worker_id,
+    );
+    if (!person) throw new ApiError('NOT_A_DEMO_WORKER');
+    this.world.demoSimulations.push(request);
+    person.presence = request.action === 'ARRIVE' ? 'ONSITE_ESTIMATED' : 'OFFSITE';
+    person.last_seen_at = new Date(this.world.now).toISOString();
+    const count = request.action === 'ARRIVE' ? 3 : 1;
+    return this.after({
+      schema_version: 1 as const,
+      request_id: randomUUID(),
+      action: request.action,
+      simulated: true as const,
+      results: Array.from({ length: count }, () => ({
+        event_uuid: randomUUID(),
+        status: 'accepted' as const,
+        reason: null,
+      })),
     });
   }
 

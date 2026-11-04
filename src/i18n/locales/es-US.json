@@ -247,7 +247,10 @@
     "CONSENT_RENEWAL_REQUIRED": "El aviso de la obra cambió. Primero acepte la nueva versión.",
     "REAUTHENTICATION_REQUIRED": "Por su seguridad, confirme otra vez que es usted.",
     "MFA_REQUIRED": "Escriba el código de su app de autenticación para continuar.",
-    "ORG_OWNER_TRANSFER_REQUIRED": "Usted es dueño de una organización. Pase la propiedad a otra persona antes de eliminar su cuenta."
+    "ORG_OWNER_TRANSFER_REQUIRED": "Usted es dueño de una organización. Pase la propiedad a otra persona antes de eliminar su cuenta.",
+    "DEMO_NOT_ALLOWED": "Esto solo funciona en la demostración de SiteMuster, con sus personas de ejemplo.",
+    "NOT_A_DEMO_WORKER": "Solo se pueden mover las personas de ejemplo de la demostración. Las cuentas reales, incluida la suya, nunca.",
+    "DEMO_WAIT": "La regla de llegada de 10 minutos también se aplica aquí. Espere unos 10 minutos desde el último cambio de esta persona e intente de nuevo."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Elija al menos un día para cada turno.",
@@ -705,6 +708,18 @@
       "title": "SiteMuster",
       "text": "La asistencia automática está activada en su obra.",
       "channelName": "Asistencia automática"
+    },
+    "disclosure": {
+      "title": "Antes de permitir la ubicación",
+      "body": "SiteMuster recopila datos de ubicación para registrar cuándo llega y sale de las obras a las que se unió, incluso cuando la aplicación está cerrada o no se está usando. Fuera de sus obras solo se registra la llegada o la salida, nunca su ubicación. En la obra su teléfono también puede enviar su ubicación aproximada para que el personal del proyecto vea quién está allí. Puede desactivar la ubicación de cualquier proyecto en Perfil → Ubicación y consentimiento, y usar el quiosco de la obra o a su capataz.",
+      "continue": "Continuar",
+      "cancel": "Ahora no"
+    },
+    "rationale": {
+      "title": "¿Permitir la ubicación todo el tiempo?",
+      "message": "Para registrar su llegada y salida con SiteMuster cerrada, elija \"Permitir todo el tiempo\" en la siguiente pantalla. Fuera de sus obras solo se registra la llegada o la salida, nunca su ubicación.",
+      "positive": "Cambiar a \"Permitir todo el tiempo\"",
+      "negative": "Ahora no"
     }
   },
   "outbox": {
@@ -1298,5 +1313,18 @@
       "pendingTitle": "Su cuenta se está eliminando",
       "pendingBody": "Usted pidió eliminar esta cuenta. Todo se detuvo en ese momento y su nombre y sus datos de contacto se eliminan en un plazo de 30 días (normalmente en un día). No tiene que hacer nada más aquí. Para volver a usar SiteMuster más adelante, regístrese de nuevo después."
     }
+  },
+  "demo": {
+    "banner": "DEMOSTRACIÓN: las personas son ficticias y sus ubicaciones están simuladas. No es GPS real ni una obra real.",
+    "workerBanner": "Esta es una cuenta de demostración de SiteMuster. Las demás personas y la obra son ficticias.",
+    "open": "Demostración: simular llegadas y salidas",
+    "title": "Simular llegadas (demostración)",
+    "intro": "Mueva a una persona de ejemplo a la obra de demostración o fuera de ella. El servidor lo registra como lo haría su teléfono, con la misma regla de llegada de 10 minutos, así que el panel, el mapa, la lista y el pase de lista reaccionan como en una obra real.",
+    "arrive": "Simular llegada",
+    "leave": "Simular salida",
+    "arrived": "{{name}} llegó (simulado). Se cuenta en la obra como estimación.",
+    "left": "{{name}} se fue (simulado).",
+    "notDemo": "Este proyecto no es una demostración de SiteMuster. La simulación no está disponible.",
+    "footnote": "La simulación solo funciona con las personas de ejemplo de la demostración. Nunca afecta un proyecto real, a una persona real ni a su propio teléfono."
   }
 }

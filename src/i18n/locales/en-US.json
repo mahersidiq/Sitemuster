@@ -247,7 +247,10 @@
     "CONSENT_RENEWAL_REQUIRED": "The site notice changed. Accept the new version first.",
     "REAUTHENTICATION_REQUIRED": "For your security, confirm it is you again.",
     "MFA_REQUIRED": "Enter the code from your authenticator app to continue.",
-    "ORG_OWNER_TRANSFER_REQUIRED": "You own an organization. Give ownership to someone else before deleting your account."
+    "ORG_OWNER_TRANSFER_REQUIRED": "You own an organization. Give ownership to someone else before deleting your account.",
+    "DEMO_NOT_ALLOWED": "This works only in the SiteMuster demo, for its sample people.",
+    "NOT_A_DEMO_WORKER": "Only the demo's sample people can be moved. Real accounts, including yours, never are.",
+    "DEMO_WAIT": "The 10-minute arrival rule applies here too. Wait about 10 minutes after the last change for this person, then try again."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Pick at least one day for each shift.",
@@ -705,6 +708,18 @@
       "title": "SiteMuster",
       "text": "Automatic attendance is on at your site.",
       "channelName": "Automatic attendance"
+    },
+    "disclosure": {
+      "title": "Before you allow location",
+      "body": "SiteMuster collects location data to note when you arrive at and leave the jobsites you joined, even when the app is closed or not in use. Away from your sites only the arrival or departure is noted, never your position. On site your phone may also send your approximate position so the project's staff can see who is there. You can switch location off for any project in Profile → Location and consent, and use the site kiosk or your foreman instead.",
+      "continue": "Continue",
+      "cancel": "Not now"
+    },
+    "rationale": {
+      "title": "Allow location all the time?",
+      "message": "To note your arrival and departure while SiteMuster is closed, choose \"Allow all the time\" on the next screen. Away from your sites only the arrival or departure is noted, never your position.",
+      "positive": "Change to \"Allow all the time\"",
+      "negative": "Not now"
     }
   },
   "outbox": {
@@ -1298,5 +1313,18 @@
       "pendingTitle": "Your account is being deleted",
       "pendingBody": "You asked to delete this account. Everything stopped at that moment, and your name and contact details are removed within 30 days (normally within a day). There is nothing else to do here. To use SiteMuster again later, sign up again after that."
     }
+  },
+  "demo": {
+    "banner": "DEMO: the people here are synthetic and their locations are simulated. This is not real GPS and not a real site.",
+    "workerBanner": "This is a SiteMuster demo account. The other people and the site are synthetic.",
+    "open": "Demo: simulate arrivals and departures",
+    "title": "Simulate arrivals (demo)",
+    "intro": "Move a sample person onto the demo site or off it. The server records it as their phone would, with the same 10-minute arrival rule, so the dashboard, map, roster and muster react as they would on a real site.",
+    "arrive": "Simulate arrival",
+    "leave": "Simulate departure",
+    "arrived": "{{name}} arrived (simulated). Counted on site as an estimate.",
+    "left": "{{name}} left (simulated).",
+    "notDemo": "This project is not a SiteMuster demo. Simulation is not available.",
+    "footnote": "Simulation works only for the demo's sample people. It never touches a real project, a real person or your own phone."
   }
 }

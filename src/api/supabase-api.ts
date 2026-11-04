@@ -1,8 +1,13 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 
 import {
   ACCOUNT_DELETE_CONFIRMATION,
   AccountDeleteResponseSchema,
+  DemoProjectSchema,
+  DemoSimulateRequestSchema,
+  DemoSimulateResponseSchema,
+  DemoWorkerSchema,
   AddressResolveResponseSchema,
   AddressSearchResponseSchema,
   BulkApproveResultSchema,
@@ -16,6 +21,7 @@ import {
   parseBroadcastPayload,
   projectTopic,
   ReportConfirmResponseSchema,
+  type DemoSimulateRequest,
   type DeviceActivateRequest,
   type IngestOperationsRequest,
   type Locale,
@@ -683,6 +689,24 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
         schema_version: 1,
         confirmation: ACCOUNT_DELETE_CONFIRMATION,
       }),
+    );
+  }
+
+  // ---------------------------------------------------------------- Milestone 13
+
+  async demoProjects() {
+    return z.array(DemoProjectSchema).parse(await this.rpc('my_demo_projects'));
+  }
+
+  async demoWorkers(projectId: string) {
+    return z
+      .array(DemoWorkerSchema)
+      .parse(await this.rpc('demo_workers', { p_project_id: projectId }));
+  }
+
+  async demoSimulate(request: DemoSimulateRequest) {
+    return DemoSimulateResponseSchema.parse(
+      await this.invoke('demo-simulate', DemoSimulateRequestSchema.parse(request)),
     );
   }
 
