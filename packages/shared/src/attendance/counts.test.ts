@@ -71,6 +71,36 @@ describe('estimated hours', () => {
     expect(out.uncertain).toEqual([[ms('2026-11-03T15:00:00Z'), ms('2026-11-03T15:30:00Z')]]);
   });
 
+  it('unites a gap that lies inside the unresolved tail (no double counting; review finding on PR #6)', () => {
+    // Qualified fixes 08:00 and 08:10 local, a band fix at 08:40 (gap 08:10–08:40), close-out
+    // at 19:00: the uncertain time is 08:10–19:00 once, as one segment.
+    const unresolved = session({
+      status: 'UNRESOLVED',
+      startAt: '2026-11-03T14:00:00Z',
+      endAt: null,
+      endSource: null,
+      endEarliestAt: '2026-11-03T14:10:00Z',
+      lastConfirmedInsideAt: '2026-11-03T14:10:00Z',
+      lastSeenAt: '2026-11-03T14:40:00Z',
+      unresolvedAt: '2026-11-04T01:00:00Z',
+      gaps: [{ from: '2026-11-03T14:10:00Z', to: '2026-11-03T14:40:00Z' }],
+      reviewReasons: ['CLOSEOUT_STALE'],
+    });
+    const at = ms('2026-11-04T01:00:00Z');
+    const out = sessionIntervals(unresolved, at, 1200);
+    expect(out.uncertain).toEqual([[ms('2026-11-03T14:10:00Z'), at]]);
+    const day = daySummary(
+      [unresolved],
+      '2026-11-03',
+      'America/Chicago',
+      '2026-11-04T01:00:00Z',
+      1200,
+    );
+    expect(day.estimated_worker_seconds).toBe(600);
+    expect(day.unresolved_segment_count).toBe(1);
+    expect(day.unresolved_segment_seconds).toBe((at - ms('2026-11-03T14:10:00Z')) / 1000);
+  });
+
   it('keeps the unapproved unscheduled part out of the estimated hours', () => {
     const out = sessionIntervals(
       session({ unscheduled: true, unscheduledUntil: '2026-11-03T13:00:00Z' }),

@@ -1,0 +1,60 @@
+{
+  "fixture_version": 1,
+  "id": "approved-early-unscheduled-keeps-shift",
+  "description": "A foreman checks a worker in at 04:00, before the 06:00 window; overtime is approved at 04:05. The approved session keeps the shift's close-out (window end + grace) instead of the pending 05:00 deadline, so the worker stays counted into the shift (review finding on PR #6).",
+  "project": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "timezone": "America/Chicago",
+    "config_version": 1,
+    "radius_m": 150,
+    "lat": 29.7604,
+    "lng": -95.3698
+  },
+  "worker": {
+    "has_phone": false
+  },
+  "clock_start_utc": "2026-11-03T09:55:00Z",
+  "initial_state": "ARMED_OFFSITE",
+  "inputs": [
+    {
+      "at_utc": "2026-11-03T10:00:00Z",
+      "type": "FOREMAN_ENTRY",
+      "direction": "ENTRY",
+      "method": "PHYSICAL_CONFIRMATION",
+      "event_uuid": "eeeeeeee-0000-4000-8000-000000009601"
+    },
+    {
+      "at_utc": "2026-11-03T10:05:00Z",
+      "type": "APPROVE_UNSCHEDULED",
+      "session": "CURRENT"
+    },
+    {
+      "at_utc": "2026-11-03T11:30:00Z",
+      "type": "TIME_ADVANCE"
+    },
+    {
+      "at_utc": "2026-11-03T12:30:00Z",
+      "type": "TIME_ADVANCE"
+    }
+  ],
+  "expected": {
+    "presence": "ONSITE_ESTIMATED",
+    "session_count": 1,
+    "counted_worker_count": 1,
+    "unresolved_count": 0,
+    "sessions": [
+      {
+        "start_at": "2026-11-03T10:00:00Z",
+        "status": "OPEN",
+        "end_at": null,
+        "start_source": "FOREMAN",
+        "unscheduled": true
+      }
+    ],
+    "results": {
+      "eeeeeeee-0000-4000-8000-000000009601": {
+        "status": "accepted"
+      }
+    }
+  }
+}

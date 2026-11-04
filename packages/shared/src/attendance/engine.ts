@@ -1347,6 +1347,14 @@ class Machine {
     if (target.status === 'PENDING_APPROVAL') {
       target.status = 'OPEN';
       target.authorizeAt = null;
+      // The pending deadline (next window minus grace) no longer applies once approved: the
+      // session closes out like an authorized one — at the end of the window it runs into —
+      // capped by the 16 h review, never before the shift it was approved for.
+      const cap =
+        ms(target.startAt) + this.cfg(target.configVersionId).alwaysOpenReviewHours * HOUR;
+      target.closeoutAt = iso(
+        target.authorizedCloseoutAt ? Math.min(cap, ms(target.authorizedCloseoutAt)) : cap,
+      );
     }
     this.touch(target);
     this.event(item, {

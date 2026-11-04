@@ -77,6 +77,18 @@ function subtract(interval: Interval, holes: readonly Interval[]): Interval[] {
   return pieces.filter(([start, end]) => end > start);
 }
 
+/** Union of intervals: overlapping or touching pieces become one segment. */
+function union(intervals: readonly Interval[]): Interval[] {
+  const sorted = intervals.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  const out: Interval[] = [];
+  for (const [start, end] of sorted) {
+    const last = out[out.length - 1];
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else out.push([start, end]);
+  }
+  return out;
+}
+
 /**
  * Definite (countable) intervals of a session up to `now`, the uncertain ones (unresolved ends
  * and evidence gaps, itemized separately) and the unscheduled part still awaiting approval.
@@ -103,7 +115,9 @@ export function sessionIntervals(
     if (latest > definiteEnd) uncertain.push([definiteEnd, latest]);
   }
   const gaps: Interval[] = session.gaps.map((gap) => [ms(gap.from), ms(gap.to)]);
-  uncertain.push(...gaps);
+  // A gap can lie inside the uncertain tail (it starts at the last confirmed inside fix): unite
+  // them so no uncertain time is counted twice and one stretch is one segment.
+  const uncertainUnion = union([...uncertain, ...gaps]);
   const counted = subtract([start, Math.max(start, definiteEnd)], gaps);
   let pendingUntil: number | null = null;
   if (session.unscheduled && !session.overtimeApprovedAt) {
@@ -111,14 +125,15 @@ export function sessionIntervals(
       ? ms(session.unscheduledUntil)
       : Number.POSITIVE_INFINITY;
   }
-  if (pendingUntil === null) return { definite: counted, uncertain, pendingApproval: [] };
+  if (pendingUntil === null)
+    return { definite: counted, uncertain: uncertainUnion, pendingApproval: [] };
   const pending = counted.flatMap(([a, b]): Interval[] =>
     a < pendingUntil ? [[a, Math.min(b, pendingUntil)]] : [],
   );
   const definite = counted.flatMap(([a, b]): Interval[] =>
     b > pendingUntil ? [[Math.max(a, pendingUntil), b]] : [],
   );
-  return { definite, uncertain, pendingApproval: pending };
+  return { definite, uncertain: uncertainUnion, pendingApproval: pending };
 }
 
 export interface DaySummary {
