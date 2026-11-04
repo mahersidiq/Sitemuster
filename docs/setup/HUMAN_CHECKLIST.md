@@ -6,6 +6,7 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 
 - [ ] Sign into GitHub; create **private** new repository `sitemuster` (EMPTY: do not upload old `jobsite-presence-mvp.zip`).
 - [ ] Configure branches: `main` protected; require PR and passing `ci`; disallow direct main writes and self-merge; owner reviews/merges each milestone PR.
+  - **Autonomy mode (decision #48) adjustment:** while autonomy mode is active, protect `main` with "Require a pull request before merging" and "Require status checks to pass" selecting the two `ci` jobs **`code-quality`** and **`database`**, block force pushes and deletions, but do **not** require an approving review (Claude Code cannot approve its own PR and must never bypass protection). Re-enable required reviews when autonomy mode ends. Claude Code squash-merges only when every #48 condition holds.
 - [ ] Give Claude Code repository access via the GitHub CLI (`gh auth login`) on your machine or the Claude GitHub app; never provide a personal access token in prompt.
 - [ ] Create GitHub Environments `staging` and `production`, with restricted deployment approvals; use secrets per environment.
 - [ ] Configure repository Actions enabled and allow standard checkout/setup-node; verify workflow can run Ubuntu/Docker.

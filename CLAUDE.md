@@ -108,3 +108,41 @@ Recorded in full in `docs/spec/00-decision-log.md` #48. It replaces exactly thes
 - Spec ambiguity/conflict → pick the option safest for privacy and data integrity, record a new numbered decision in `docs/spec/00-decision-log.md` with reasoning, note it in the PR, continue (this replaces "stop and ask" for ambiguity only).
 - Stop and ask the owner ONLY for: a real secret, real money, publishing anything, or deleting/rewriting merged history.
 - `docs/PROGRESS.md` is the resume point. After any context reset: re-read this file and `docs/PROGRESS.md`, then continue. Never redo merged work.
+
+## Pinned dependency manifest
+
+Resolved once in Milestone 01 (2026-11-03) per decision #33. Every version below is exact (no `^`/`~`) in `package.json`; `package-lock.json` is committed and CI installs with `npm ci`. Do not upgrade the Expo SDK, React Native or any native module outside a dedicated upgrade PR with native compatibility checks.
+
+| Area | Package | Exact version |
+|---|---|---|
+| Runtime | Node.js (CI `actions/setup-node`) / npm | 22.x / 10.x |
+| App | `expo` (SDK **58**, latest stable on 2026-11-03) | 58.0.23 |
+| App | `react-native` / `react` | 0.88.1 / 19.3.0 |
+| App | `typescript` (strict) | 6.0.3 |
+| Routing | `expo-router` / `react-native-screens` / `react-native-safe-area-context` / `expo-linking` / `expo-constants` / `@expo/metro-runtime` | 58.0.30 / 4.30.1 / 5.11.1 / 58.0.16 / 58.0.15 / 58.0.17 |
+| Background tracking | `react-native-background-geolocation` (Transistorsoft **v5**) | 5.8.2 |
+| Operational outbox | `expo-sqlite` | 58.0.15 |
+| Key protection | `expo-secure-store` / `expo-crypto` / `@noble/ciphers` / `@noble/hashes` | 58.0.2 / 58.0.7 / 2.4.0 / 2.4.0 |
+| API client | `@supabase/supabase-js` | 2.118.0 |
+| State/query | `@tanstack/react-query` | 5.105.3 |
+| Runtime schemas | `zod` (mobile + Edge Functions via `npm:zod@4.6.7`) | 4.6.7 |
+| Forms | `react-hook-form` / `@hookform/resolvers` | 7.91.0 / 7.0.2 |
+| Maps | `react-native-maps` | 1.29.11 |
+| QR scanner | `expo-camera` | 58.0.14 |
+| QR display | `react-native-qrcode-svg` / `react-native-svg` | 6.3.52 / 15.16.0 |
+| Localization | `expo-localization` / `i18next` / `react-i18next` | 58.0.5 / 26.7.1 / 17.1.12 |
+| Monitoring | `@sentry/react-native` | 8.28.0 |
+| Push | `expo-notifications` | 58.1.8 |
+| Worker CSV share | `expo-sharing` (`expo-print` NOT installed: V1.1 only) | 58.0.22 |
+| Native dev builds | `expo-dev-client` / `expo-status-bar` / `expo-system-ui` | 58.0.18 / 58.0.4 / 58.0.7 |
+| Unit tests (shared/Edge) | `vitest` / `vite` | 5.1.0 / 8.3.5 |
+| Mobile tests | `jest` / `jest-expo` / `@react-native/jest-preset` / `@testing-library/react-native` / `test-renderer` / `babel-preset-expo` | 30.5.2 / 58.0.14 / 0.88.1 / 14.1.0 / 1.3.0 / 58.0.24 |
+| Lint/format | `eslint` / `eslint-config-expo` / `eslint-plugin-i18next` / `eslint-config-prettier` / `prettier` | 9.39.5 / 58.0.4 / 6.1.5 / 10.1.8 / 3.9.10 |
+| Types | `@types/react` / `@types/node` | 19.3.0 / 22.20.5 |
+| Database | Supabase CLI (`supabase/.cli-version`, decision #50) / local Postgres major | 2.122.1 / 17 |
+
+Notes:
+- `overrides.react-dom = 19.3.0` aligns an optional web-only peer (pulled in by `expo-router`) with Expo SDK 58's pinned React; the app is mobile-only and never renders with `react-dom`.
+- ESLint stays on 9.x because `eslint-config-expo` 58 depends on `eslint-plugin-react`/`eslint-plugin-import`, which do not support ESLint 10.
+- `npm audit --audit-level=high` passes; remaining advisories are moderate/low and limited to dev/build tooling (`glob`/`minimatch` via Jest, ESLint and Expo CLI).
+- Native compatibility audit (Milestone 01): `expo prebuild --no-install` with every planned native plugin (Transistorsoft v5, expo-camera, expo-notifications, react-native-maps, expo-secure-store, expo-sqlite, Sentry, expo-localization, expo-router) generated iOS and Android projects without errors. Compiling native binaries needs EAS/macOS and is tracked as NOT VERIFIED until an EAS development build runs.

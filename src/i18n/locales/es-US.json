@@ -1,0 +1,95 @@
+{
+  "app": {
+    "name": "SiteMuster"
+  },
+  "common": {
+    "loading": "Cargando…",
+    "notAvailableYet": "Todavía no está disponible en esta versión.",
+    "previewBanner": "Solo vista previa — sin datos reales. El inicio de sesión llegará en una versión posterior.",
+    "developmentWarning": "Versión de desarrollo"
+  },
+  "language": {
+    "title": "Elija su idioma",
+    "subtitle": "Puede cambiarlo cuando quiera en Perfil o Configuración.",
+    "english": "English",
+    "spanish": "Español",
+    "suggested": "Sugerido para este teléfono",
+    "currentValue": "Idioma actual: {{language}}",
+    "changeTitle": "Idioma",
+    "a11ySelect": "Usar {{language}}",
+    "suggestedValue": "Sugerido para este teléfono: {{language}}"
+  },
+  "signIn": {
+    "title": "Iniciar sesión",
+    "workerHeading": "Trabajadores",
+    "workerBody": "Inicie sesión con un código de 6 dígitos que le enviamos por mensaje de texto.",
+    "workerAction": "Iniciar sesión con teléfono",
+    "staffHeading": "Personal de obra",
+    "staffBody": "Dueños, gerentes de proyecto, superintendentes y gerentes de seguridad inician sesión con un correo verificado y una aplicación de autenticación.",
+    "staffAction": "Iniciar sesión con correo",
+    "noPhoneHeading": "¿No tiene teléfono?",
+    "noPhoneBody": "Pregunte a su capataz o al encargado del quiosco de la obra. Pueden registrar su entrada sin teléfono.",
+    "devPreviewHeading": "Vista previa para desarrolladores (solo versiones de desarrollo)",
+    "devPreviewWorker": "Ver pantallas de trabajador",
+    "devPreviewStaff": "Ver pantallas de personal"
+  },
+  "worker": {
+    "tabs": {
+      "home": "Inicio",
+      "projects": "Mis proyectos",
+      "history": "Historial de horas",
+      "profile": "Perfil"
+    },
+    "home": {
+      "title": "Hoy",
+      "body": "Aquí aparecerán el estado de su proyecto, su método de registro y el estado de sincronización."
+    },
+    "projects": {
+      "title": "Mis proyectos",
+      "body": "Proyectos a los que se unió en la orientación y si cada uno está aprobado."
+    },
+    "history": {
+      "title": "Historial de horas",
+      "body": "Sus horas estimadas en la obra por día y por semana. La presencia estimada en la obra no es nómina."
+    },
+    "profile": {
+      "title": "Perfil",
+      "body": "Su nombre, empleador, contacto de emergencia, idioma y configuración de privacidad."
+    }
+  },
+  "staff": {
+    "tabs": {
+      "home": "Inicio",
+      "projects": "Proyectos",
+      "workforce": "Personal",
+      "map": "Mapa",
+      "more": "Más"
+    },
+    "home": {
+      "title": "Proyecto seleccionado",
+      "body": "Conteos estimados en la obra, desconocidos, confirmados y de visitantes del proyecto seleccionado."
+    },
+    "projects": {
+      "title": "Proyectos",
+      "body": "Cree y administre proyectos, círculos de obra y horarios de trabajo."
+    },
+    "workforce": {
+      "title": "Personal",
+      "body": "Lista por empresa y oficio, aprobaciones pendientes y cierre del día."
+    },
+    "map": {
+      "title": "Mapa",
+      "body": "Círculo de la obra y posiciones estimadas recientes con hora y precisión. Los marcadores antiguos nunca se muestran como en vivo."
+    },
+    "more": {
+      "title": "Más",
+      "body": "Orientación, reportes, conteo de emergencia, cuenta y configuración."
+    }
+  },
+  "errors": {
+    "configTitle": "SiteMuster no puede iniciar",
+    "configBody": "A esta versión le falta configuración obligatoria, por eso no funcionará. Comuníquese con su administrador.",
+    "routeNotFound": "Esta pantalla no existe.",
+    "goHome": "Ir al inicio"
+  }
+}
