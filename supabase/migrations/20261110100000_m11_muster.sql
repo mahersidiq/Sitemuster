@@ -104,15 +104,18 @@ create table public.muster_amendments (
   received_at timestamptz not null default now(),
   note text check (note is null or length(btrim(note)) between 3 and 2000),
   event_uuid uuid not null,
+  -- Append order, assigned under the per-muster lock (review on PR #11): transaction start times
+  -- (received_at) can disagree with the order in which concurrent appends took the lock.
+  seq integer not null check (seq > 0),
   previous_digest text check (previous_digest is null or previous_digest ~ '^[0-9a-f]{64}$'),
   digest text not null check (digest ~ '^[0-9a-f]{64}$'),
   constraint muster_amendments_event_uq unique (event_uuid),
+  constraint muster_amendments_seq_uq unique (muster_id, seq),
   constraint muster_amendments_late_ck check (kind <> 'LATE_RESPONSE' or (snapshot_member_id is not null and action is not null)),
   constraint muster_amendments_correction_ck check (kind <> 'CORRECTION' or note is not null),
   -- A self report stays a self report, even late (never a physical verification).
   constraint muster_amendments_self_ck check (action is distinct from 'SELF_REPORT' or channel in ('APP', 'NOTIFICATION_ACTION'))
 );
-create index muster_amendments_muster_idx on public.muster_amendments (muster_id, received_at);
 create trigger muster_amendments_append_only before update or delete on public.muster_amendments
   for each row execute function app_private.forbid_mutation();
 alter table public.muster_amendments enable row level security;
@@ -129,6 +132,13 @@ begin
   if new.snapshot_member_id is not null and not exists (
        select 1 from public.muster_snapshot_members m where m.id = new.snapshot_member_id and m.muster_id = new.muster_id) then
     raise exception 'amendment member does not belong to this muster' using errcode = '23514';
+  end if;
+  -- One linear chain: amendment n extends amendment n-1, and the first extends the report.
+  if new.previous_digest is distinct from (
+       case when new.seq = 1 then (select r.digest from public.muster_reports r where r.muster_id = new.muster_id)
+            else (select a.digest from public.muster_amendments a where a.muster_id = new.muster_id and a.seq = new.seq - 1)
+       end) then
+    raise exception 'amendment does not extend the latest amendment' using errcode = '23514';
   end if;
   return new;
 end;
@@ -148,22 +158,26 @@ set timezone = 'UTC'
 as $$
 declare
   v_previous text;
+  v_seq integer;
   v_digest text;
   v_id uuid;
 begin
+  -- The chain tip is the highest sequence number, read under the lock: never a timestamp.
   perform pg_advisory_xact_lock(hashtextextended('muster-amendments|' || p_muster::text, 0));
-  select digest into v_previous from public.muster_amendments
-   where muster_id = p_muster order by received_at desc, id desc limit 1;
-  if v_previous is null then
+  select a.seq, a.digest into v_seq, v_previous from public.muster_amendments a
+   where a.muster_id = p_muster order by a.seq desc limit 1;
+  if v_seq is null then
+    v_seq := 0;
     select digest into v_previous from public.muster_reports where muster_id = p_muster;
   end if;
+  v_seq := v_seq + 1;
   v_digest := encode(sha256(convert_to(concat_ws('|', coalesce(v_previous, ''), p_muster, p_member, p_kind, p_action,
                                                     p_channel, p_actor, p_kiosk, p_observed_at, btrim(p_note), p_event_uuid),
                                        'UTF8')), 'hex');
   insert into public.muster_amendments (muster_id, snapshot_member_id, kind, action, channel, actor_id, kiosk_device_id,
-                                        observed_at, note, event_uuid, previous_digest, digest)
+                                        observed_at, note, event_uuid, seq, previous_digest, digest)
   values (p_muster, p_member, p_kind, p_action, p_channel, p_actor, p_kiosk, p_observed_at, nullif(btrim(p_note), ''),
-          p_event_uuid, v_previous, v_digest)
+          p_event_uuid, v_seq, v_previous, v_digest)
   returning id into v_id;
   return v_id;
 end;
@@ -760,14 +774,14 @@ begin
     'amendments', coalesce((
       select jsonb_agg(jsonb_build_object(
                'kind', a.kind, 'action', a.action, 'channel', a.channel, 'observed_at', a.observed_at,
-               'received_at', a.received_at, 'note', a.note, 'digest', a.digest,
+               'seq', a.seq, 'received_at', a.received_at, 'note', a.note, 'digest', a.digest,
                'member_name', (select coalesce(w.legal_name, v.name) from public.muster_snapshot_members m
                                  left join public.worker_profiles w on w.id = m.worker_id
                                  left join public.visitor_records v on v.id = m.visitor_id
                                 where m.id = a.snapshot_member_id),
                'actor', coalesce((select wp.legal_name from public.worker_profiles wp where wp.auth_user_id = a.actor_id),
                                  (select u.email from auth.users u where u.id = a.actor_id)))
-             order by a.received_at)
+             order by a.seq)
         from public.muster_amendments a where a.muster_id = p_muster_id), '[]'::jsonb));
 end;
 $$;

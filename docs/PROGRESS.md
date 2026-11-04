@@ -453,17 +453,21 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
   - the console follows the project's live channel; counts are always the server's (decision #122).
 
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
-- `supabase test db` on a fresh reset: **22 files, 752** pgTAP tests. `028_muster` has 71:
+- `supabase test db` on a fresh reset: **22 files, 755** pgTAP tests. `028_muster` has 74:
   - who may start/close: the designated role with MFA; refused for a superintendent and an organization owner without the designation, another organization's designated person, a foreman, the platform operator, no MFA, and an archived project;
   - the frozen roster and visitor rows, sources, employers, initial statuses and digest; a second start joins the active muster; idempotent retries; an explicit separate incident;
   - self-report vs physical verification, no downgrade, duplicates, own-company foreman only;
-  - late offline checks before/after the close, the immutable report, chained amendments, report rows carrying their list ids;
+  - late offline checks before/after the close, the immutable report, chained amendments numbered in append order (a later append with an earlier timestamp is still extended; a forked amendment is refused), report rows carrying their list ids;
   - push token rules and delivery records; reads scoped by role; one MUSTER_CHANGED message.
 - `npm run test:backend`: **127/127**, incl. `muster.test.ts` (5) on the real stack: the acceptance case (2 workers + 1 visitor: I'M SAFE, a foreman check and a visitor check stay in separate counters; self never becomes verified); an attended kiosk badge scan; two simultaneous starts give one muster and only the designated role starts; push records; close with acknowledgement and late offline checks as amendments.
 - Vitest: unit/integration/security/i18n/replay all green (muster core 8 tests, operations core 21 tests incl. 5 muster cases).
-- Jest mobile-unit **27** and mobile-integration **84**, incl. 13 new muster flows (start with confirmation; retry after a lost answer keeps one muster; superintendent read-only; the acceptance case; I'M SAFE offline then synced; Spanish and no downgrade; the alert's I'M SAFE button; alert setup, registration and "turned off"; foreman own company only; kiosk muster scan offline then counted once; close with note, acknowledgement, text share and an appended correction) and unit tests for the list/outbox/summary helpers and the push module.
+- Jest mobile-unit **29** and mobile-integration **85**, incl. 14 new muster flows (start with confirmation; retry after a lost answer keeps one muster; superintendent read-only; the acceptance case; I'M SAFE offline then synced; Spanish and no downgrade; the alert's I'M SAFE button; alert setup, registration and "turned off"; foreman own company only; kiosk muster scan offline then counted once; close with note, acknowledgement, text share and an appended correction) and unit tests for the list/outbox/summary helpers and the push module.
 - typecheck, ESLint + shellcheck, Prettier: pass.
 - Web-render screenshots `docs/screenshots/m11` (10, EN + ES) against the local stack, through the real `muster-start`, `ingest-operations` and `muster-close` functions.
+- GitHub Actions run 41837104252 green on the first head (`c5a53cf`): code-quality and database (pgTAP, backend 127/127).
+- Automated review (Codex), two P2 findings fixed, each with a regression test that fails on the old code:
+  - Concurrent amendments could fork the digest chain: the tip was chosen by `received_at` (transaction start), not by append order. Amendments now carry a sequence number assigned under the lock, and an insert trigger refuses anything that does not extend the latest one (pgTAP: a later append with an earlier timestamp is extended; a fork is refused).
+  - A worker who signed out and back in during the same app run got no alerts: sign-out revoked the token, but the in-memory "registered" set kept the user. The memory now lives with the revocation in `muster-alerts.ts` and is cleared at sign-out (unit tests and a Jest flow through the real sign-out button and phone sign-in).
 
 **NOT VERIFIED (Milestone 11)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): real push delivery to iPhone and Android, the lock-screen I'M SAFE button with unlock, notification permission prompts, the native share sheet for the report text, and the kiosk camera scan at an assembly point. Checklist: "Real-device muster drill" (needs EX: `EAS_PROJECT_ID` and APNs/FCM credentials).

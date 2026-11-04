@@ -130,14 +130,6 @@ function permissionUnreadable(error: unknown): MusterAlertPermission {
   return 'denied';
 }
 
-/** Registered once per signed-in person per app run (the server keeps one token per phone). */
-const registeredFor = new Set<string>();
-
-/** Test hook: forget registrations between tests. */
-export function resetMusterAlertRegistrations(): void {
-  registeredFor.clear();
-}
-
 /**
  * Asks for notification permission only after explaining why (muster alerts), then registers
  * this phone's push token for the signed-in worker. Without permission or without push set up in
@@ -156,9 +148,8 @@ export function MusterAlertsSetup() {
       const current = await musterAlertPermission().catch(permissionUnreadable);
       if (cancelled) return;
       setPermission(current);
-      if (current === 'granted' && api && userId && !registeredFor.has(userId)) {
-        const result = await registerMusterAlerts(api);
-        if (result === 'REGISTERED') registeredFor.add(userId);
+      if (current === 'granted' && api && userId) {
+        const result = await registerMusterAlerts(api, userId);
         if (!cancelled) setRegistration(result);
       }
     })();
@@ -171,9 +162,7 @@ export function MusterAlertsSetup() {
     const result = await requestMusterAlertPermission().catch(permissionUnreadable);
     setPermission(result);
     if (result === 'granted' && api && userId) {
-      const outcome = await registerMusterAlerts(api);
-      if (outcome === 'REGISTERED') registeredFor.add(userId);
-      setRegistration(outcome);
+      setRegistration(await registerMusterAlerts(api, userId));
     }
   };
 

@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { router } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Share } from 'react-native';
 
 import { base64UrlDecode, buildBadgePayload } from '@sitemuster/shared';
 
-import { resetMusterAlertRegistrations } from '../../src/muster/WorkerMuster';
+import { resetMusterAlertRegistrations } from '../../src/notifications/muster-alerts';
 import { resetHandledMusterResponses } from '../../src/notifications/MusterNotifications';
 import {
   FAKE_BADGE_SECRET,
@@ -13,7 +14,7 @@ import {
   FakeSiteMusterApi,
   FakeWorld,
 } from '../support/fake-api';
-import { access, fakeBackend } from '../support/fake-auth';
+import { access, FAKE_SMS_CODE, fakeBackend } from '../support/fake-auth';
 
 /**
  * Screen flows for Milestone 11 (Active Muster Mode) on the real `app/` routes: the designated
@@ -383,6 +384,39 @@ describe('muster alerts on the phone', () => {
       ]),
     );
     expect(screen.queryByTestId('muster-alerts-setup')).toBeNull();
+  });
+
+  it('signing out and back in during the same app run registers the phone again (review on PR #11)', async () => {
+    const { owner } = await site();
+    owner.pushTokens.length = 0;
+    (globalThis as Globals).__easProjectId = 'eas-project-test';
+    const notifications = (globalThis as Globals).__notifications;
+    if (notifications) notifications.permission = { granted: true, canAskAgain: true };
+    const world = workerWorld(owner);
+    signIn(world, false);
+    await chooseLanguage('en-US');
+    await renderRouter('./app', { initialUrl: '/worker/home' });
+    await waitFor(() => expect(owner.pushTokens).toHaveLength(1));
+
+    // Sign out: the server stops this person's alerts on this phone.
+    await act(() => router.push('/worker/profile'));
+    await fireEvent.press(await screen.findByTestId('sign-out'));
+    await waitFor(() => expect(owner.pushTokens).toHaveLength(0));
+    expect(world.calls).toContain('revokeMyPushTokens');
+
+    // Same person, same app run: signing in again turns the alerts back on.
+    await fireEvent.press(await screen.findByTestId('worker-sign-in'));
+    await fireEvent.changeText(await screen.findByTestId('phone-input'), '(555) 555-0123');
+    await fireEvent.press(screen.getByTestId('send-code'));
+    await fireEvent.changeText(await screen.findByTestId('code-input'), FAKE_SMS_CODE);
+    await fireEvent.press(screen.getByTestId('verify-code'));
+    expect(await screen.findByTestId('worker-home')).toBeTruthy();
+    await waitFor(() =>
+      expect(owner.pushTokens).toEqual([
+        { userId: WORKER_USER, token: 'ExponentPushToken[testtoken0001]' },
+      ]),
+    );
+    expect(world.calls.filter((call) => call === 'registerPushToken')).toHaveLength(2);
   });
 
   it('alerts turned off: says so and links to Settings', async () => {

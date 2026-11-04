@@ -413,7 +413,7 @@ Reason: spec 12 "Start transaction" step 2 and "Workers, visitors and failure mo
 - **Never blocking.** Alerts are sent only after the muster is committed. A push outage, a missing token or a database error reading targets never fails or blocks the muster; the board shows the failures.
 - **Metadata only.** Each person gets one delivery record (SENT / FAILED / NO_DEVICE). It is communication metadata, never presence.
 - **Payload.** Opaque ids only (`muster_id`, `project_id`, `member_id`), never names or places. The title and body are in the worker's primary language (EN/ES).
-- **Phone side.** The app asks for notification permission only after an explanation card. Without the EAS project id the build reports "not set up" and registers nothing. Sign-out revokes this person's token on this phone.
+- **Phone side.** The app asks for notification permission only after an explanation card. Without the EAS project id the build reports "not set up" and registers nothing. Sign-out revokes this person's token on this phone and forgets the local "registered" memory, so signing back in during the same app run registers again (review on PR #11).
 
 Reason: spec 12 step 3 and "Push may be late, blocked, denied or offline"; acceptance "missing push does not block"; spec 09 least data.
 
@@ -428,6 +428,7 @@ Reason: spec 12 "kiosk uses signed worker badge (dynamic or marked printed) + hu
 - **Late checks.** An offline check whose observed time is before the close is kept as a LATE_RESPONSE amendment. An observed time after the close is refused with `MUSTER_CLOSED`.
 - **Corrections.** After the close, the commander can add a CORRECTION amendment with a note (`amend_muster`, idempotent event id).
 - **Integrity.** Amendments are append-only and chained: each digest covers the previous one, starting from the report digest. The closed report itself (`muster_reports`) is immutable. Each report row carries its frozen-list `member_id`, so a correction can point at one person.
+- **Append order** (review on PR #11). Each amendment gets a sequence number under the per-muster lock (unique per muster), and the chain tip is the highest number, never the newest timestamp: concurrent appends can take the lock in another order than their transactions started. An insert trigger refuses any amendment that does not extend amendment n-1 (or the report, for the first), so the chain cannot fork.
 
 Reason: spec 12 "Prevent edits to closed event; corrections create signed append-only amendment"; "Offline muster scans synchronize once with event UUID and server receipt".
 

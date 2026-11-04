@@ -101,18 +101,37 @@ export function easProjectId(): string | null {
   return typeof id === 'string' && id.trim() !== '' ? id : null;
 }
 
-/** Registers this phone's Expo push token for the signed-in person (never throws). */
-export async function registerMusterAlerts(api: SiteMusterApi): Promise<MusterAlertRegistration> {
+/**
+ * People this app run already registered. Sign-out clears it together with the server-side
+ * revocation (review on PR #11), so signing back in registers the phone again.
+ */
+const registeredThisRun = new Set<string>();
+
+/** Test hook. */
+export function resetMusterAlertRegistrations(): void {
+  registeredThisRun.clear();
+}
+
+/**
+ * Registers this phone's Expo push token for the signed-in person, once per sign-in (never
+ * throws).
+ */
+export async function registerMusterAlerts(
+  api: SiteMusterApi,
+  userId: string,
+): Promise<MusterAlertRegistration> {
   try {
     if ((await musterAlertPermission()) !== 'granted') return 'DENIED';
     const projectId = easProjectId();
     if (!projectId) return 'NOT_CONFIGURED';
+    if (registeredThisRun.has(userId)) return 'REGISTERED';
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     await api.registerPushToken({
       installationId: await installationHash(),
       token: token.data,
       platform: Platform.OS === 'ios' ? 'IOS' : 'ANDROID',
     });
+    registeredThisRun.add(userId);
     return 'REGISTERED';
   } catch (error) {
     console.warn(
@@ -121,6 +140,15 @@ export async function registerMusterAlerts(api: SiteMusterApi): Promise<MusterAl
     );
     return 'FAILED';
   }
+}
+
+/**
+ * Sign-out: this person's alerts stop on this phone (server-side revocation), and the next
+ * sign-in registers again. The local memory is cleared first, even when the phone is offline.
+ */
+export async function revokeMusterAlerts(api: SiteMusterApi): Promise<void> {
+  registeredThisRun.clear();
+  await api.revokeMyPushTokens(await installationHash());
 }
 
 /** What a tapped muster notification asks for; null for anything that is not a muster alert. */

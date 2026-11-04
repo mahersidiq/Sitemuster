@@ -31,9 +31,16 @@ export function easProjectId(): string | null {
   return null;
 }
 
-export async function registerMusterAlerts(_api: SiteMusterApi): Promise<MusterAlertRegistration> {
+export function resetMusterAlertRegistrations(): void {}
+
+export async function registerMusterAlerts(
+  _api: SiteMusterApi,
+  _userId: string,
+): Promise<MusterAlertRegistration> {
   return 'NOT_CONFIGURED';
 }
+
+export async function revokeMusterAlerts(_api: SiteMusterApi): Promise<void> {}
 
 export function musterActionFromResponse(_response: unknown): MusterNotificationAction | null {
   return null;

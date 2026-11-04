@@ -6,7 +6,7 @@
 -- are signed append-only amendments; push delivery is metadata only; GC B, the operator, workers
 -- and foremen of other companies are refused.
 begin;
-select plan(71);
+select plan(74);
 select tests.seed_world();
 
 select set_config('t.p', tests.id('p_a1')::text, false), set_config('t.seed', tests.id('m_a')::text, false);
@@ -243,16 +243,37 @@ select throws_ok($$select public.amend_muster(current_setting('t.m')::uuid, null
   'a correction needs a note');
 select is(public.amend_muster(current_setting('t.m')::uuid, null, 'Fernando called in: off site all day', 'b0000000-0000-4000-8000-000000000008') ->> 'duplicate',
   'false', 'the commander adds a signed correction');
-select is((select array_agg(kind order by received_at) from public.muster_amendments where muster_id = current_setting('t.m')::uuid),
-  array['LATE_RESPONSE', 'CORRECTION'], 'amendments are appended in order');
+select is((select array_agg(kind || ':' || seq order by seq) from public.muster_amendments where muster_id = current_setting('t.m')::uuid),
+  array['LATE_RESPONSE:1', 'CORRECTION:2'], 'amendments are numbered in append order');
+-- Review on PR #11: concurrent appends can take the lock in another order than their transactions
+-- started, so a later append can carry an EARLIER received_at. The chain must follow append order.
 select tests.as_postgres();
+insert into public.muster_amendments (muster_id, kind, actor_id, observed_at, received_at, note, event_uuid, seq, previous_digest, digest)
+select current_setting('t.m')::uuid, 'CORRECTION', tests.id('u_a_safety'), now(), now() - interval '1 hour',
+       'Appended third, but its transaction started first', 'b0000000-0000-4000-8000-000000000009', 3, a.digest,
+       encode(sha256(convert_to('concurrent append', 'UTF8')), 'hex')
+  from public.muster_amendments a where a.muster_id = current_setting('t.m')::uuid and a.seq = 2;
+select tests.authenticate_as(tests.id('u_a_safety'));
+select is(public.amend_muster(current_setting('t.m')::uuid, null, 'Gate log checked', 'b0000000-0000-4000-8000-000000000010') ->> 'duplicate',
+  'false', 'the commander adds another correction');
+select is((select jsonb_build_object('seq', a.seq, 'extends_latest', a.previous_digest = (select b.digest from public.muster_amendments b
+                                                                                       where b.event_uuid = 'b0000000-0000-4000-8000-000000000009'))
+             from public.muster_amendments a where a.event_uuid = 'b0000000-0000-4000-8000-000000000010'),
+  '{"seq": 4, "extends_latest": true}'::jsonb,
+  'a new amendment extends the latest append, even when that one carries an earlier timestamp (no fork)');
+select tests.as_postgres();
+select throws_ok($$insert into public.muster_amendments (muster_id, kind, actor_id, observed_at, note, event_uuid, seq, previous_digest, digest)
+                   select current_setting('t.m')::uuid, 'CORRECTION', tests.id('u_a_safety'), now(), 'Branching off an old amendment',
+                          gen_random_uuid(), 5, a.digest, encode(sha256(convert_to('fork', 'UTF8')), 'hex')
+                     from public.muster_amendments a where a.muster_id = current_setting('t.m')::uuid and a.seq = 2$$,
+  '23514', null, 'an amendment that does not extend the latest one is refused');
 select throws_ok($$update public.muster_amendments set note = 'edited' where muster_id = current_setting('t.m')::uuid$$, null, null,
   'amendments are append-only');
 select tests.authenticate_as(tests.id('u_a_super'));
 select throws_ok($$select public.amend_muster(current_setting('t.m')::uuid, null, 'Not mine to amend', gen_random_uuid())$$, '42501', 'FORBIDDEN',
   'only the designated role amends');
-select is(jsonb_array_length(public.muster_report(current_setting('t.m')::uuid) -> 'amendments'), 2,
-  'staff read the report with its amendments');
+select is((select jsonb_agg(a -> 'seq') from jsonb_array_elements(public.muster_report(current_setting('t.m')::uuid) -> 'amendments') a),
+  '[1, 2, 3, 4]'::jsonb, 'staff read the report with its amendments in append order');
 select tests.authenticate_as(tests.id('u_b_super'));
 select throws_ok($$select public.muster_report(current_setting('t.m')::uuid)$$, '42501', 'FORBIDDEN', 'GC B cannot read the report');
 

@@ -16,7 +16,8 @@ import { AccessSchema, type Access } from '../auth/access';
 import { createAuthBackend, type AuthBackend } from '../auth/create-gateway';
 import type { AuthGateway } from '../auth/gateway';
 import { deriveAuthState, type AuthState } from '../auth/routing';
-import { installationHash, wipeDeviceCredentials } from '../device/device-store';
+import { wipeDeviceCredentials } from '../device/device-store';
+import { revokeMusterAlerts } from '../notifications/muster-alerts';
 import type { RuntimeEnv } from '../config/runtime-env';
 import { useLanguage } from './language';
 
@@ -164,17 +165,15 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
         error instanceof Error ? error.message : 'unknown',
       );
     });
-    // Muster alerts belong to the person, not the phone: stop them for this person here.
+    // Muster alerts belong to the person, not the phone: stop them for this person here; the
+    // next sign-in registers the phone again.
     if (backend.api) {
-      const api = backend.api;
-      await installationHash()
-        .then((installationId) => api.revokeMyPushTokens(installationId))
-        .catch((error: unknown) => {
-          console.warn(
-            'auth: muster alerts not stopped on the server yet',
-            error instanceof Error ? error.message : 'unknown',
-          );
-        });
+      await revokeMusterAlerts(backend.api).catch((error: unknown) => {
+        console.warn(
+          'auth: muster alerts not stopped on the server yet',
+          error instanceof Error ? error.message : 'unknown',
+        );
+      });
     }
     await backend.gateway.signOut();
     await backend.storage.wipe();
