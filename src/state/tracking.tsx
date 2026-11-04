@@ -109,14 +109,13 @@ export function TrackingProvider({
     if (service) await action(service);
   }, []);
 
+  // Stable identities: screens may refresh on mount without re-running on every status change.
+  const refresh = useCallback(() => run((service) => service.refresh()), [run]);
+  const requestPermission = useCallback(() => run((service) => service.requestPermission()), [run]);
+  const syncNow = useCallback(() => run((service) => service.syncNow()), [run]);
   const value = useMemo<TrackingContextValue>(
-    () => ({
-      status,
-      refresh: () => run((service) => service.refresh()),
-      requestPermission: () => run((service) => service.requestPermission()),
-      syncNow: () => run((service) => service.syncNow()),
-    }),
-    [status, run],
+    () => ({ status, refresh, requestPermission, syncNow }),
+    [status, refresh, requestPermission, syncNow],
   );
   return <TrackingContext.Provider value={value}>{children}</TrackingContext.Provider>;
 }

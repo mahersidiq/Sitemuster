@@ -29,7 +29,7 @@ export function TrackingStatusCard() {
     <Card
       testID="tracking-card"
       accessibilityLabel={t('tracking.openDetails')}
-      onPress={() => router.push('/worker/tracking')}
+      onPress={() => router.push('/tracking')}
     >
       <Title>{t('tracking.title')}</Title>
       <Banner

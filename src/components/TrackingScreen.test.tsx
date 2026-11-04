@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import * as SecureStore from 'expo-secure-store';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import TrackingScreen from '../../app/worker/tracking';
+import { TrackingScreen } from '../../app/tracking';
 import { LanguageProvider } from '../state/language';
 import type { TrackingStatus } from '../tracking/service';
 

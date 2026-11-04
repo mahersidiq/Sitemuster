@@ -16,6 +16,7 @@ import { Body, Title } from '../../src/components/Typography';
 import { useNow } from '../../src/components/useNow';
 import { activateThisDevice, loadDevice, type StoredDevice } from '../../src/device/device-store';
 import { useAuth } from '../../src/state/auth';
+import { useTracking } from '../../src/state/tracking';
 import { colors } from '../../src/theme';
 
 /**
@@ -34,6 +35,7 @@ export default function BadgeScreen() {
 function Badge({ userId }: { userId: string }) {
   const { t } = useTranslation();
   const { api } = useAuth();
+  const tracking = useTracking();
   const { projectId, name } = useLocalSearchParams<{ projectId: string; name?: string }>();
   const [device, setDevice] = useState<StoredDevice | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +52,8 @@ function Badge({ userId }: { userId: string }) {
     setError(null);
     try {
       setDevice(await activateThisDevice(api, userId, Constants.expoConfig?.version ?? '0.0.0'));
+      // The phone now has its upload secret: arm automatic attendance right away.
+      await tracking.refresh();
     } catch (caught) {
       setError(t(errorMessageKey(caught)));
     } finally {
