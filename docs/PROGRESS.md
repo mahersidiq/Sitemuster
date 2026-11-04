@@ -7,7 +7,7 @@
 | # | Milestone | Status | PR | Notes |
 |---|---|---|---|---|
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
-| 02 | Database, RLS and role matrix | not started | | |
+| 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
 | 03 | Authentication, MFA and English/Spanish | not started | | |
 | 04 | GC organizations, projects, shifts and circles | not started | | |
 | 05 | Orientation sessions, badges, approval | not started | | |
@@ -48,7 +48,29 @@
 
 **Decisions added:** #48 (owner, autonomy mode), #49 staging bundle ID, #50 Supabase CLI 2.122.1, #51 build+runtime fail-closed config, #52 labelled web-render screenshots.
 
-**Next step:** after Milestone 01 merges, start Milestone 02 (database, RLS, role matrix) on `milestone-02-database-rls`.
+**Next step:** done — Milestone 02 started.
+
+## Milestone 02 — Database, RLS and role matrix
+
+**What was built**
+- 8 migrations: PostGIS; private `app_private` schema; deny-by-default privileges; 40 enums (mirrored 1:1 in `packages/shared`, parity-tested); 35 client-readable tables + 12 server-only tables covering organizations, projects, immutable config versions/work windows/circular geofences, staff, invitations, workers, emergency contacts, companies/membership, foreman grants, legal notice versions, orientation, enrollments, consents, devices/bindings, hashed upload credentials, badge secrets, nonce redemptions, push tokens, kiosks, badges, coordinate-free location receipts, quarantine, 24 h raw-fix partitions, latest positions, attendance events/sessions/presence/corrections, outbox receipts, visitors, daily reports/confirmations, muster events/snapshot/responses, operator actions, audit log.
+- RLS: SELECT-only policies (35) built on SECURITY DEFINER helpers that derive identity from the JWT; staff access requires MFA (`aal2`); column grants hide phones/emails/auth links/hashes; no client writes, no `anon` or `service_role` table access.
+- Integrity triggers: immutable config versions/geofences/windows/events/confirmations/responses/receipts/audit (retention purge path only), last-owner protection, server-computed config/notice digests, timezone validation, binding/consent/muster consistency, approval-requires-orientation.
+- Realtime: private `project:{uuid}` receive policy on `realtime.messages`; helper predicates for staff and verified foremen.
+- Privileged functions: `create_organization` (MFA + verified email, idempotent, audited), `resolve_upload_credential` (revocation/expiry/overlap), raw-fix partition maintenance and purge, audit writer.
+
+**Test results (local)**
+- `supabase db reset` + `supabase test db` (CLI 2.122.1, Docker): **12 files, 203 pgTAP tests pass** — two-tenant isolation, PM/SUPER/SAFETY/ATTENDANT/ADMIN/OWNER matrix, MFA enforcement, foreman and worker boundaries, platform operator denial, device credentials, uniqueness/immutability/privacy constraints, realtime authorization, org creation, raw-fix retention. Sanity run confirmed assertions fail when wrong.
+- npm checks: typecheck, lint, format pass; unit 92 + 7, integration 51 + 8 (adds DB↔TS enum parity), security 64 (adds migration static scan), i18n 10, replay contract 3.
+- GitHub Actions run 41748240221: `code-quality` success; `database` success (`supabase test db`: Files=12, Tests=203, PASS).
+
+**NOT VERIFIED (Milestone 02)**
+- Migrations not applied to real Supabase staging/production (no accounts — HUMAN_CHECKLIST §3). Data API/Realtime dashboard settings in §3 are manual owner steps.
+- Realtime end-to-end delivery through the Realtime server (policy and predicates tested in SQL; live channel test arrives with Milestone 09).
+
+**Decisions added:** #53 org OWNER vs ADMIN access, #54 single push-token store, #55 raw fixes ≤24 h after receipt, #56 approval requires orientation / attendance requires approval + employer verification, #57 no client writes + `app_private` + no service-role table access, #58 settings only in versions; emergency contacts protected by RLS + platform encryption.
+
+**Next step:** after Milestone 02 merges, start Milestone 03 (auth, MFA, EN/ES) on `milestone-03-auth-mfa`.
 
 ## Environment notes for future sessions (Linux build agent)
 
