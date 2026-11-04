@@ -6,8 +6,10 @@ import {
   BulkApproveResultSchema,
   DeviceActivateResponseSchema,
   DeviceRenewResponseSchema,
+  IngestOperationsResponseSchema,
   OrientationSessionSchema,
   type DeviceActivateRequest,
+  type IngestOperationsRequest,
   type Locale,
   type ProjectStatus,
 } from '@sitemuster/shared';
@@ -17,6 +19,11 @@ import { TrackingPlanSchema } from '../tracking/plan';
 import {
   ApiError,
   type BulkResult,
+  type CorrectableSession,
+  type CrewMember,
+  type ForemanProject,
+  type KioskRegistration,
+  type OpenVisit,
   type CreateProjectInput,
   type EmergencyContact,
   type JoinInput,
@@ -416,5 +423,38 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
     return DeviceRenewResponseSchema.parse(
       await this.invoke('device-renew', { app_version: appVersion }),
     );
+  }
+
+  async registerKiosk(projectId: string, devicePublicId: string) {
+    return this.rpc<KioskRegistration>('register_kiosk', {
+      p_project_id: projectId,
+      p_device_public_id: devicePublicId,
+    });
+  }
+
+  async ingestOperations(request: IngestOperationsRequest) {
+    return IngestOperationsResponseSchema.parse(await this.invoke('ingest-operations', request));
+  }
+
+  async myForemanProjects() {
+    return this.rpc<ForemanProject[]>('my_foreman_projects');
+  }
+
+  async foremanCrew(projectId: string, companyId: string) {
+    return this.rpc<CrewMember[]>('foreman_crew', {
+      p_project_id: projectId,
+      p_company_id: companyId,
+    });
+  }
+
+  async openVisitorVisits(projectId: string) {
+    return this.rpc<OpenVisit[]>('open_visitor_visits', { p_project_id: projectId });
+  }
+
+  async workerAttendanceSessions(projectId: string, workerId: string) {
+    return this.rpc<CorrectableSession[]>('worker_attendance_sessions', {
+      p_project_id: projectId,
+      p_worker_id: workerId,
+    });
   }
 }

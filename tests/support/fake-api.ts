@@ -6,7 +6,11 @@ import {
   type DeviceActivateRequest,
   type DeviceActivateResponse,
   type DeviceRenewResponse,
+  type IngestOperationsRequest,
+  type IngestOperationsResponse,
   type Locale,
+  type OperationChildResult,
+  type OperationResult,
   type ProjectStaffRole,
   type ProjectStatus,
   type WorkWindow,
@@ -16,7 +20,12 @@ import type { Access } from '../../src/auth/access';
 import {
   ApiError,
   type BulkResult,
+  type CorrectableSession,
+  type CrewMember,
   type EmergencyContact,
+  type ForemanProject,
+  type KioskRegistration,
+  type OpenVisit,
   type EnrollmentStatus,
   type EmployerStatus,
   type JoinInput,
@@ -166,6 +175,18 @@ export class FakeWorld {
   readonly calls: string[] = [];
   device: DeviceActivateResponse | null = null;
   trackingPlan: TrackingPlan | null = null;
+  // Milestone 08 fake server state.
+  readonly kiosks: KioskRegistration[] = [];
+  foremanProjects: ForemanProject[] = [];
+  readonly crews = new Map<string, CrewMember[]>();
+  readonly visits: OpenVisit[] = [];
+  readonly correctable = new Map<string, CorrectableSession[]>();
+  /** Badge payloads the fake server resolves to a worker on sync (each accepted once). */
+  readonly badgeWorkers = new Map<string, string>();
+  readonly operationReceipts = new Map<string, OperationResult>();
+  readonly redeemedBadges = new Set<string>();
+  /** Airplane mode for the outbox: ingestOperations fails with NETWORK. */
+  operationsOffline = false;
 
   constructor(
     public access: Access,
@@ -1142,6 +1163,128 @@ export class FakeSiteMusterApi implements SiteMusterApi {
   async revokeMyDevice(): Promise<void> {
     this.before('revokeMyDevice');
     this.world.device = null;
+  }
+
+  // ---------------------------------------------------------------- Milestone 08
+
+  async registerKiosk(projectId: string, devicePublicId: string): Promise<KioskRegistration> {
+    this.before('registerKiosk');
+    if (this.projectRole(projectId) !== 'ATTENDANT') throw new ApiError('FORBIDDEN');
+    const existing = this.world.kiosks.find((k) => k.project_id === projectId);
+    if (existing) return existing;
+    const kiosk: KioskRegistration = {
+      kiosk_device_id: randomUUID(),
+      project_id: projectId,
+      status: 'ACTIVE',
+    };
+    void devicePublicId;
+    this.world.kiosks.push(kiosk);
+    return kiosk;
+  }
+
+  async ingestOperations(request: IngestOperationsRequest): Promise<IngestOperationsResponse> {
+    this.before('ingestOperations');
+    if (this.world.operationsOffline) throw new ApiError('NETWORK');
+    const results: OperationResult[] = request.events.map((event) => {
+      const previous = this.world.operationReceipts.get(event.event_uuid);
+      if (previous) {
+        return {
+          ...previous,
+          status: 'duplicate',
+          ...(previous.status === 'duplicate' ? {} : { original_status: previous.status }),
+        };
+      }
+      const result = this.fakeOperation(event);
+      this.world.operationReceipts.set(event.event_uuid, result);
+      return result;
+    });
+    return { schema_version: 1, request_id: randomUUID(), results };
+  }
+
+  private fakeOperation(event: IngestOperationsRequest['events'][number]): OperationResult {
+    const base = { event_uuid: event.event_uuid };
+    switch (event.operation_type) {
+      case 'KIOSK_ENTRY':
+      case 'KIOSK_EXIT': {
+        const workerId = this.world.badgeWorkers.get(event.payload.badge_payload);
+        if (!workerId) return { ...base, status: 'rejected', reason: 'BADGE_INVALID' };
+        if (this.world.redeemedBadges.has(event.payload.badge_payload)) {
+          return { ...base, status: 'rejected', reason: 'BADGE_REPLAY' };
+        }
+        this.world.redeemedBadges.add(event.payload.badge_payload);
+        return { ...base, status: 'accepted', reason: null, worker_id: workerId };
+      }
+      case 'FOREMAN_BULK_ENTRY':
+      case 'FOREMAN_BULK_EXIT': {
+        const crew = this.world.crews.get(`${event.project_id}|${event.payload.subcontractor_id}`);
+        if (!crew) return { ...base, status: 'rejected', reason: 'COMPANY_NOT_AUTHORIZED' };
+        const children: OperationChildResult[] = event.payload.worker_ids.map((workerId) => ({
+          worker_id: workerId,
+          child_event_uuid: randomUUID(),
+          status: crew.some((m) => m.worker_id === workerId) ? 'accepted' : 'rejected',
+          reason: crew.some((m) => m.worker_id === workerId) ? null : 'WORKER_NOT_IN_COMPANY',
+        }));
+        const rejected = children.filter((c) => c.status === 'rejected').length;
+        return {
+          ...base,
+          status: rejected === children.length ? 'rejected' : 'accepted',
+          reason: rejected === 0 ? null : 'SOME_WORKERS_REJECTED',
+          children,
+        };
+      }
+      case 'MANUAL_ATTENDANCE_CORRECTION':
+        return this.canCorrectAttendance(event.project_id)
+          ? { ...base, status: 'accepted', reason: null }
+          : { ...base, status: 'rejected', reason: 'FORBIDDEN' };
+      case 'VISITOR_ENTRY': {
+        this.world.visits.push({
+          visit_id: event.event_uuid,
+          visitor_id: event.payload.visitor_id ?? event.event_uuid,
+          name: event.payload.name ?? '',
+          organization: event.payload.organization ?? null,
+          host_user_id: event.payload.host_user_id,
+          purpose: event.payload.purpose,
+          checked_in_at: event.observed_at,
+          status: 'OPEN',
+        });
+        return { ...base, status: 'accepted', reason: null };
+      }
+      case 'VISITOR_EXIT': {
+        const index = this.world.visits.findIndex((v) => v.visitor_id === event.payload.visitor_id);
+        if (index < 0) return { ...base, status: 'rejected', reason: 'VISIT_NOT_FOUND' };
+        this.world.visits.splice(index, 1);
+        return { ...base, status: 'accepted', reason: null };
+      }
+      default:
+        return { ...base, status: 'rejected', reason: 'OPERATION_NOT_SUPPORTED' };
+    }
+  }
+
+  async myForemanProjects(): Promise<ForemanProject[]> {
+    this.before('myForemanProjects');
+    return this.world.foremanProjects;
+  }
+
+  async foremanCrew(projectId: string, companyId: string): Promise<CrewMember[]> {
+    this.before('foremanCrew');
+    const crew = this.world.crews.get(`${projectId}|${companyId}`);
+    if (!crew) throw new ApiError('FORBIDDEN');
+    return crew;
+  }
+
+  async openVisitorVisits(projectId: string): Promise<OpenVisit[]> {
+    this.before('openVisitorVisits');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    return this.world.visits;
+  }
+
+  async workerAttendanceSessions(
+    projectId: string,
+    workerId: string,
+  ): Promise<CorrectableSession[]> {
+    this.before('workerAttendanceSessions');
+    if (!this.canCorrectAttendance(projectId)) throw new ApiError('FORBIDDEN');
+    return this.world.correctable.get(`${projectId}|${workerId}`) ?? [];
   }
 
   async renewDeviceWithSession(_appVersion: string): Promise<DeviceRenewResponse> {

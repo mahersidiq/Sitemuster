@@ -2,6 +2,8 @@ import type {
   DeviceActivateRequest,
   DeviceActivateResponse,
   DeviceRenewResponse,
+  IngestOperationsRequest,
+  IngestOperationsResponse,
   Locale,
   ProjectStaffRole,
   ProjectStatus,
@@ -349,6 +351,57 @@ export interface SiteMusterApi {
   revokeMyDevice(): Promise<void>;
   /** Foreground renewal with the signed-in session (also after expiry; decision #44). */
   renewDeviceWithSession(appVersion: string): Promise<DeviceRenewResponse>;
+  // Milestone 08: kiosk, foreman, manual and visitor fallbacks (the server re-checks each one).
+  /** This phone as an attended kiosk of the project (attendant with MFA, or foreman grant). */
+  registerKiosk(projectId: string, devicePublicId: string): Promise<KioskRegistration>;
+  /** The operational outbox upload; throws ApiError (NETWORK, UNAUTHENTICATED, RATE_LIMITED…). */
+  ingestOperations(request: IngestOperationsRequest): Promise<IngestOperationsResponse>;
+  myForemanProjects(): Promise<ForemanProject[]>;
+  foremanCrew(projectId: string, companyId: string): Promise<CrewMember[]>;
+  openVisitorVisits(projectId: string): Promise<OpenVisit[]>;
+  workerAttendanceSessions(projectId: string, workerId: string): Promise<CorrectableSession[]>;
+}
+
+export interface KioskRegistration {
+  kiosk_device_id: string;
+  project_id: string;
+  status: 'ACTIVE' | 'REVOKED';
+}
+
+export interface ForemanProject {
+  project_id: string;
+  project_name: string;
+  project_status: ProjectStatus;
+  company_id: string;
+  company_name: string;
+  kiosk_grant: boolean;
+}
+
+export interface CrewMember {
+  worker_id: string;
+  name: string;
+  trade: string | null;
+  employer_status: string;
+}
+
+export interface OpenVisit {
+  visit_id: string;
+  visitor_id: string;
+  name: string;
+  organization: string | null;
+  host_user_id: string | null;
+  purpose: string;
+  checked_in_at: string;
+  status: 'OPEN' | 'UNRESOLVED';
+}
+
+export interface CorrectableSession {
+  session_id: string;
+  start_at: string;
+  end_at: string | null;
+  status: string;
+  start_source: string;
+  end_source: string | null;
 }
 
 /** Machine error code from the server (raise exception 'CODE[: detail]') or transport. */

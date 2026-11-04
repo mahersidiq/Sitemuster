@@ -7,11 +7,12 @@ import { useSession } from '../state/session';
 import { spacing } from '../theme';
 import { AppButton } from './AppButton';
 import { Banner } from './Banner';
+import { SignOutButton } from './SignOutButton';
 
 /** Account actions for Profile (worker) and More (staff): stale-access notice and sign out. */
 export function AccountSection() {
   const { t } = useTranslation();
-  const { state, signOut, refresh } = useAuth();
+  const { state, refresh } = useAuth();
   const { previewRole, exitPreview } = useSession();
   if (previewRole) {
     return (
@@ -40,12 +41,7 @@ export function AccountSection() {
           />
         </>
       ) : null}
-      <AppButton
-        variant="secondary"
-        label={t('access.signOut')}
-        onPress={() => void signOut().then(() => router.replace('/'))}
-        testID="sign-out"
-      />
+      <SignOutButton />
     </View>
   );
 }

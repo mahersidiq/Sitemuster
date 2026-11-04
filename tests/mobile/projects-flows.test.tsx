@@ -323,7 +323,9 @@ describe('route guards', () => {
     const app = await renderRouter('./app', { initialUrl: '/project/new' });
     expect(await screen.findByTestId('worker-home')).toBeTruthy();
     expect(app.getPathname()).toBe('/worker/home');
-    // Only the worker's own enrollment list was requested — no staff/project API call.
-    expect(world.calls.filter((call) => call !== 'myEnrollments')).toEqual([]);
+    // Only the worker's own data was requested (enrollments, own foreman crews) — no staff/project API call.
+    expect(
+      world.calls.filter((call) => call !== 'myEnrollments' && call !== 'myForemanProjects'),
+    ).toEqual([]);
   });
 });
