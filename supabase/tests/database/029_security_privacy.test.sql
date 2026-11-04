@@ -2,7 +2,7 @@
 -- privacy maintenance, rate limits and the platform operator RPCs (docs/spec/09, 02, 05, 08;
 -- decisions #123–#131).
 begin;
-select plan(73);
+select plan(81);
 select tests.seed_world();
 
 select set_config('t.muster_en', (select id::text from public.legal_notice_versions where document_id = 'MUSTER_SAFETY_LIMITATIONS_EN_V1'), true);
@@ -70,6 +70,8 @@ select throws_ok(format($$update public.legal_notice_versions set review_status 
 insert into app_private.settings (key, value) values ('environment', 'development');
 
 -- A material change asks for consent again; a minor one does not.
+select is((select count(*)::int from public.latest_onsite_positions where project_id = tests.id('p_a1') and worker_id = tests.id('w_a1')), 1,
+  'the worker is on the map before the notice changes');
 insert into public.legal_notice_versions (id, document_id, locale, document_type, version, content, material_change) values
   ('aa000000-0000-4000-8000-0000000000e2', 'TEST_WORKER_NOTICE_EN_V2', 'en-US', 'WORKER_LOCATION_DISCLOSURE', 2, 'Synthetic test notice v2 (material change).', true);
 select tests.authenticate_as(tests.id('u_operator'));
@@ -80,6 +82,8 @@ select is((public.operator_approve_legal_notice('aa000000-0000-4000-8000-0000000
 select tests.as_postgres();
 select is((select count(*)::int from public.device_project_bindings where device_id = tests.id('d_a1') and revoked_at is null), 0,
   'location stops until the worker accepts the new notice');
+select is((select count(*)::int from public.latest_onsite_positions where project_id = tests.id('p_a1') and worker_id = tests.id('w_a1')), 0,
+  'and their last position leaves the map at once');
 select tests.authenticate_as(tests.id('u_worker_a1'), 'aal1');
 select is((select r ->> 'reason' from jsonb_array_elements(public.my_tracking_plan() -> 'not_monitored') r
             where r ->> 'project_id' = tests.id('p_a1')::text), 'CONSENT_RENEWAL_REQUIRED', 'the phone is told why');
@@ -105,11 +109,17 @@ select is((public.operator_approve_legal_notice('aa000000-0000-4000-8000-0000000
 -- ---------------------------------------------------------------------------------------------
 -- Location off/on per project: kiosk and foreman stay available
 -- ---------------------------------------------------------------------------------------------
+select tests.as_postgres();
+insert into public.latest_onsite_positions (project_id, worker_id, position, horizontal_accuracy_m, observed_at, expiry_at)
+values (tests.id('p_a1'), tests.id('w_a1'), extensions.st_setsrid(extensions.st_makepoint(-95.3697, 29.7605), 4326)::extensions.geography,
+        12, now(), now() + interval '10 minutes');
 select tests.authenticate_as(tests.id('u_worker_a1'), 'aal1');
 select is(public.set_my_location_consent(tests.id('p_a1'), false) ->> 'location_enabled', 'false', 'the worker switches location off');
 select tests.as_postgres();
 select is((select count(*)::int from public.device_project_bindings where device_id = tests.id('d_a1') and revoked_at is null), 0,
   'the phone stops uploading for that project at once');
+select is((select count(*)::int from public.latest_onsite_positions where project_id = tests.id('p_a1') and worker_id = tests.id('w_a1')), 0,
+  'switching location off removes the last position from the map at once');
 select is((select (w ->> 'eligible')::boolean from jsonb_array_elements(public.edge_operation_workers(tests.id('p_a1'), array[tests.id('w_a1')])) w),
   true, 'kiosk and foreman attendance stay available (spec 09)');
 select tests.authenticate_as(tests.id('u_worker_a1'), 'aal1');
@@ -141,6 +151,27 @@ insert into public.attendance_sessions (id, project_id, worker_id, employer_snap
 values ('6a000000-0000-4000-8000-0000000000a2', tests.id('p_a1'), tests.id('w_a2'), tests.id('c_a'), now() - interval '2 days',
         now() - interval '2 days' + interval '8 hours', 'FOREMAN', 'FOREMAN', tests.id('cv_a1'), 'CLOSED', 'America/Chicago');
 
+insert into public.daily_company_reports (id, project_id, subcontractor_id, local_date, summary, due_at)
+values ('ad000000-0000-4000-8000-0000000000b1', tests.id('p_a1'), tests.id('c_a'), '2026-10-30',
+        jsonb_build_object('schema_version', 1, 'company_id', tests.id('c_a'), 'local_date', '2026-10-30', 'time_zone', 'America/Chicago',
+          'workers', jsonb_build_array(
+            jsonb_build_object('worker_id', tests.id('w_a2'), 'definite_seconds', 28800, 'uncertain_seconds', 0,
+                               'pending_approval_seconds', 0, 'needs_review', true,
+                               'sessions', jsonb_build_array(jsonb_build_object('session_id', '6a000000-0000-4000-8000-0000000000a2',
+                                                                                'needs_review', true))),
+            jsonb_build_object('worker_id', tests.id('w_a1'), 'definite_seconds', 3600, 'uncertain_seconds', 600,
+                               'pending_approval_seconds', 0, 'needs_review', false, 'sessions', '[]'::jsonb)),
+          'totals', jsonb_build_object('workers', 2, 'definite_seconds', 32400, 'uncertain_seconds', 600, 'pending_approval_seconds', 0,
+                                       'sessions_needing_review', 1, 'peak_estimated_count', 2)),
+        now() - interval '1 day');
+insert into public.report_confirmations (report_id, version, foreman_user_id, action, comment, proposed_correction, event_uuid)
+values ('ad000000-0000-4000-8000-0000000000b1', 1, tests.id('u_foreman_a'), 'SUBMIT_CORRECTION', 'Two corrections',
+        jsonb_build_array(jsonb_build_object('worker_id', tests.id('w_a2'), 'session_id', '6a000000-0000-4000-8000-0000000000a2',
+                                             'proposed_end_at', '2026-10-30T21:00:00Z'),
+                          jsonb_build_object('worker_id', tests.id('w_a1'), 'session_id', null,
+                                             'proposed_start_at', '2026-10-30T13:00:00Z')),
+        gen_random_uuid());
+
 select is(public.edge_request_account_deletion(tests.id('u_worker_a2'), 'aal1') ->> 'status', 'REQUESTED', 'a worker asks to delete their account');
 select is((select count(*)::int from app_private.device_upload_credentials
             where device_id = '5d000000-0000-4000-8000-0000000000a2' and revoked_at is null), 0, 'the upload credential is revoked at once');
@@ -163,6 +194,19 @@ select is((select legal_name ~ '^Deleted worker #[0-9a-f]{8}$' and phone is null
 select is((select count(*)::int from auth.users where id = tests.id('u_worker_a2')), 0, 'the sign-in account is gone');
 select is((select count(*)::int from public.attendance_sessions where worker_id = tests.id('w_a2')), 0,
   'without a documented retention basis the attendance is deleted');
+select is((select array_agg(w ->> 'worker_id') from public.daily_company_reports r, jsonb_array_elements(r.summary -> 'workers') w
+            where r.id = 'ad000000-0000-4000-8000-0000000000b1'), array[tests.id('w_a1')::text],
+  'and their line leaves every stored daily report');
+select is((select (summary -> 'totals') || jsonb_build_object('redacted_workers', summary -> 'redacted_workers')
+             from public.daily_company_reports where id = 'ad000000-0000-4000-8000-0000000000b1'),
+          jsonb_build_object('workers', 1, 'definite_seconds', 3600, 'uncertain_seconds', 600, 'pending_approval_seconds', 0,
+                             'sessions_needing_review', 0, 'peak_estimated_count', 2, 'redacted_workers', 1),
+  'the report totals drop their hours (the peak headcount stays) and record the redaction');
+select is((select array_agg(x ->> 'worker_id') from public.report_confirmations c, jsonb_array_elements(c.proposed_correction) x
+            where c.report_id = 'ad000000-0000-4000-8000-0000000000b1'), array[tests.id('w_a1')::text],
+  'a foreman''s proposed correction for them is dropped too');
+select throws_ok($$update public.report_confirmations set comment = 'edited' where report_id = 'ad000000-0000-4000-8000-0000000000b1'$$,
+  '42501', null, 'outside the deletion purge a foreman''s answer still cannot change');
 
 -- A documented retention basis keeps attendance under the pseudonym; a legal hold postpones.
 select tests.authenticate_as(tests.id('u_operator'));
@@ -181,6 +225,9 @@ select tests.as_postgres();
 select is(app_private.process_account_deletions(now() + interval '25 hours'), 1, 'then the identity is removed');
 select is((select count(*)::int from public.attendance_sessions where worker_id = tests.id('w_a1')), 1,
   'attendance is kept under the contract basis');
+select is((select count(*)::int from public.daily_company_reports r, jsonb_array_elements(r.summary -> 'workers') w
+            where r.id = 'ad000000-0000-4000-8000-0000000000b1' and w ->> 'worker_id' = tests.id('w_a1')::text), 1,
+  'so is their line in the stored report, under the pseudonym');
 select is((select legal_name ~ '^Deleted worker #' from public.worker_profiles where id = tests.id('w_a1')), true,
   'and points only at the pseudonym');
 select is((select count(*)::int from public.emergency_contacts where worker_profile_id = tests.id('w_a1')), 0, 'the emergency contact is removed');

@@ -265,6 +265,29 @@ create trigger consent_location_binding_sync
   after update of location_withdrawn_at, renewal_required_at on public.tracking_consents
   for each row execute function app_private.sync_bindings_for_row();
 
+-- Location switched off, a renewal now required, or the acknowledgement withdrawn: the latest
+-- position leaves the map in the same transaction, not when it would have expired (review on
+-- PR #12; the same rule as an enrollment ending, Milestone 09).
+create function app_private.clear_position_on_location_off()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.latest_onsite_positions
+   where project_id = new.project_id and worker_id = new.worker_id;
+  return null;
+end;
+$$;
+create trigger consent_off_clears_position
+  after update of location_withdrawn_at, renewal_required_at, withdrawn_at on public.tracking_consents
+  for each row
+  when ((old.location_withdrawn_at is null and new.location_withdrawn_at is not null)
+        or (old.renewal_required_at is null and new.renewal_required_at is not null)
+        or (old.withdrawn_at is null and new.withdrawn_at is not null))
+  execute function app_private.clear_position_on_location_off();
+
 -- The phone's tracking plan (replaces the Milestone 07 version): two new "not monitored" reasons.
 create or replace function public.my_tracking_plan(p_app_version text default null)
 returns jsonb
@@ -607,6 +630,116 @@ $$;
 -- worker's projects or organizations postpones it. Attendance is deleted unless a
 -- CONTRACT_RETENTION basis covers that project; kept attendance points at the pseudonymized
 -- profile ("Deleted worker #xxxxxxxx"). Muster records stay as safety records.
+-- Stored daily reports embed each worker's sessions and hours, and a foreman's proposed
+-- corrections name workers and times. When a deleted person's attendance is deleted (no contract
+-- basis), their line leaves every stored version and their proposed corrections are dropped
+-- (decision #139). Totals lose their seconds and review count; the peak headcount, an aggregate,
+-- stays; `redacted_workers` says how many lines were removed. Free-text comments are not parsed.
+create function app_private.redact_worker_from_reports(p_worker uuid, p_project uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_report public.daily_company_reports;
+  v_line jsonb;
+  v_count integer := 0;
+begin
+  for v_report in
+    select * from public.daily_company_reports r
+     where r.project_id = p_project
+       and jsonb_typeof(r.summary -> 'workers') = 'array'
+       and exists (select 1 from jsonb_array_elements(r.summary -> 'workers') w where w ->> 'worker_id' = p_worker::text)
+     order by r.local_date, r.report_version
+     for update
+  loop
+    select w into v_line from jsonb_array_elements(v_report.summary -> 'workers') w
+     where w ->> 'worker_id' = p_worker::text limit 1;
+    update public.daily_company_reports
+       set summary = v_report.summary
+             || jsonb_build_object(
+                  'workers', coalesce((select jsonb_agg(w) from jsonb_array_elements(v_report.summary -> 'workers') w
+                                        where w ->> 'worker_id' <> p_worker::text), '[]'::jsonb),
+                  'totals', coalesce(v_report.summary -> 'totals', '{}'::jsonb) || jsonb_build_object(
+                     'workers', greatest(0, coalesce((v_report.summary #>> '{totals,workers}')::integer, 1) - 1),
+                     'definite_seconds', greatest(0, coalesce((v_report.summary #>> '{totals,definite_seconds}')::numeric, 0)
+                                                     - coalesce((v_line ->> 'definite_seconds')::numeric, 0)),
+                     'uncertain_seconds', greatest(0, coalesce((v_report.summary #>> '{totals,uncertain_seconds}')::numeric, 0)
+                                                      - coalesce((v_line ->> 'uncertain_seconds')::numeric, 0)),
+                     'pending_approval_seconds', greatest(0, coalesce((v_report.summary #>> '{totals,pending_approval_seconds}')::numeric, 0)
+                                                             - coalesce((v_line ->> 'pending_approval_seconds')::numeric, 0)),
+                     'sessions_needing_review', greatest(0, coalesce((v_report.summary #>> '{totals,sessions_needing_review}')::integer, 0)
+                        - (select count(*)::integer from jsonb_array_elements(coalesce(v_line -> 'sessions', '[]'::jsonb)) x
+                            where coalesce((x ->> 'needs_review')::boolean, false)))),
+                  'redacted_workers', coalesce((v_report.summary ->> 'redacted_workers')::integer, 0) + 1)
+     where id = v_report.id;
+    perform app_private.write_audit('SYSTEM', null, 'report.redacted_for_deletion', app_private.project_organization(p_project),
+                                    p_project, 'daily_company_report', v_report.id, null,
+                                    jsonb_build_object('version', v_report.report_version));
+    v_count := v_count + 1;
+  end loop;
+  update public.report_confirmations c
+     set proposed_correction = (select coalesce(jsonb_agg(x), '[]'::jsonb) from jsonb_array_elements(c.proposed_correction) x
+                                 where x ->> 'worker_id' is distinct from p_worker::text)
+   where jsonb_typeof(c.proposed_correction) = 'array'
+     and c.report_id in (select r.id from public.daily_company_reports r where r.project_id = p_project)
+     and exists (select 1 from jsonb_array_elements(c.proposed_correction) x where x ->> 'worker_id' = p_worker::text);
+  return v_count;
+end;
+$$;
+
+-- Report versions stay immutable, except that the deletion purge above may rewrite a summary.
+create or replace function app_private.report_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (new.summary is distinct from old.summary and coalesce(current_setting('app.retention_purge', true), '') <> 'on')
+     or new.project_id is distinct from old.project_id
+     or new.subcontractor_id is distinct from old.subcontractor_id
+     or new.local_date is distinct from old.local_date
+     or new.report_version is distinct from old.report_version
+     or new.supersedes_id is distinct from old.supersedes_id
+     or new.generated_at is distinct from old.generated_at
+     or new.due_at is distinct from old.due_at then
+    raise exception 'report versions are immutable; issue a new version' using errcode = '42501';
+  end if;
+  if new.status is distinct from old.status and not (
+       (old.status = 'PENDING_CONFIRMATION'
+         and new.status in ('CONFIRMED', 'DISPUTED', 'CORRECTION_REQUESTED', 'NOT_CONFIRMED', 'SUPERSEDED'))
+       or (old.status in ('CONFIRMED', 'DISPUTED', 'CORRECTION_REQUESTED', 'NOT_CONFIRMED')
+           and new.status = 'SUPERSEDED')) then
+    raise exception 'report status cannot move from % to %', old.status, new.status using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+-- Foremen's answers stay append-only, except that the deletion purge may drop a deleted person's
+-- entries from a proposed correction (nothing else in the row can change).
+create function app_private.report_confirmation_guard()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if coalesce(current_setting('app.retention_purge', true), '') = 'on'
+     and (tg_op = 'DELETE'
+          or (new.id = old.id and new.report_id = old.report_id and new.version = old.version
+              and new.foreman_user_id = old.foreman_user_id and new.action = old.action
+              and new.comment is not distinct from old.comment and new.event_uuid = old.event_uuid
+              and new.created_at = old.created_at)) then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+  raise exception '% rows are immutable (append-only)', tg_table_name using errcode = '42501';
+end;
+$$;
+drop trigger forbid_mutation on public.report_confirmations;
+create trigger report_confirmation_guard before update or delete on public.report_confirmations
+  for each row execute function app_private.report_confirmation_guard();
+
 create function app_private.process_account_deletions(p_now timestamptz default now())
 returns integer
 language plpgsql
@@ -650,6 +783,7 @@ begin
           delete from public.attendance_corrections where worker_id = r.worker_profile_id and project_id = p.project_id;
           delete from public.attendance_sessions where worker_id = r.worker_profile_id and project_id = p.project_id;
           delete from app_private.location_event_receipts where worker_id = r.worker_profile_id and project_id = p.project_id;
+          perform app_private.redact_worker_from_reports(r.worker_profile_id, p.project_id);
         end if;
       end loop;
       perform set_config('app.retention_purge', 'off', true);
@@ -1130,6 +1264,8 @@ revoke all on function
   app_private.legal_notice_review_guard(), app_private.current_legal_document(public.legal_document_type, uuid, public.locale_code),
   app_private.legal_pair_approved(public.legal_document_type, uuid), app_private.muster_legal_gate(),
   app_private.process_account_deletions(timestamptz), app_private.privacy_maintenance(timestamptz),
+  app_private.clear_position_on_location_off(), app_private.redact_worker_from_reports(uuid, uuid),
+  app_private.report_guard(), app_private.report_confirmation_guard(),
   app_private.rate_limit_insert(), app_private.assert_operator(text),
   app_private.record_operator_action(public.platform_operator_action, uuid, text, text)
   from public, anon, authenticated, service_role;

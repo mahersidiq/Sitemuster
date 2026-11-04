@@ -42,7 +42,7 @@ type Step = 'explain' | 'verify' | 'mfa' | 'confirm' | 'done';
 function DeleteAccount() {
   const { t } = useTranslation();
   const { activeLocale } = useLanguage();
-  const { gateway, signOut } = useAuth();
+  const { state, gateway, signOut } = useAuth();
   const api = useApi();
   const notice = useLegalDocument('ACCOUNT_DELETION_RETENTION', activeLocale);
   const [step, setStep] = useState<Step>('explain');
@@ -119,6 +119,10 @@ function DeleteAccount() {
     try {
       await api.deleteAccount();
       setStep('done');
+      // The server already signed this person out everywhere and revoked the phone. End the
+      // session on this phone too, right now: tracking stops and its queue is dropped even if
+      // the app goes to the background before "Done" is pressed (review on PR #12).
+      await signOut();
     } catch (caught) {
       const kind = errorCode(caught);
       if (kind === 'REAUTHENTICATION_REQUIRED') setStep('explain');
@@ -130,7 +134,7 @@ function DeleteAccount() {
   };
 
   const finish = async () => {
-    await signOut();
+    if (state.status === 'signed_in') await signOut();
     router.replace('/');
   };
 

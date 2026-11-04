@@ -592,3 +592,15 @@ Reason: spec 09 "Cross-project leakage … are no-go"; acceptance "Security/RLS/
 - **Before any single site exceeds about 2,000 workers with full on-site tracking**, the counts in the message must be coalesced (at most one count per site per second, or none). The app already refetches on every message and never shows message counts, which can be slightly stale under concurrency, as the load test showed.
 
 Reason: spec 10 performance reporting; no guarantee beyond what was run.
+
+**139.** Findings from the automated review of PR #12, fixed before merging, each with a regression test that fails on the old code:
+1. **Tracking stops the moment deletion succeeds.** The phone signs out locally right after the server confirms the deletion, which stops tracking and drops the native queue. Before, local sign-out waited for the Done button, so an app sent to the background could keep collecting GPS with a revoked credential.
+2. **Stored daily reports no longer keep a deleted person's attendance** when no contract-retention basis applies.
+   - Their line leaves every stored version: sessions, hours and review flags.
+   - Totals lose their hours. The peak headcount, an aggregate, stays. `redacted_workers` records how many lines were removed, and an audit row records each redacted version.
+   - Their entries leave foremen's proposed corrections.
+   - Both tables stay immutable, apart from this purge-only path (`app.retention_purge`). Free-text answer comments are not parsed.
+   - With a contract basis, the line stays under the pseudonym.
+3. **The last on-site position leaves the map at once** when location is switched off, a renewal becomes required, or the acknowledgement is withdrawn. Before, it stayed until it expired; this is the same rule as an enrollment ending (Milestone 09).
+
+Reason: spec 09 "If consent revoked, no continued GPS uploads", "Attendance retained and pseudonymized only with legal/contract basis; otherwise delete", "No persistent … movement trail".

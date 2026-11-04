@@ -526,8 +526,8 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 - **Load tests** (`docs/perf/load-report.md`, decision #138): 100 / 1,000 / 10,000 simulated workers (plus 10,000 over 20 sites) through the real ingest function, with the production live sync watching. CI runs the 100-worker case on every PR.
 
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
-- `supabase test db` on a fresh reset: **25 files, 892** pgTAP tests.
-  - New `029_security_privacy` (73): operator MFA, reason, audit and no PII; bilingual approval gate; material vs minor renewal; location off/on; deletion flows; holds; maintenance; rate limits.
+- `supabase test db` on a fresh reset: **25 files, 900** pgTAP tests.
+  - New `029_security_privacy` (81): operator MFA, reason, audit and no PII; bilingual approval gate; material vs minor renewal; location off/on; deletion flows; holds; maintenance; rate limits.
   - New `030_secrets_rate_limits` (44): secrets inventory and privileges; flags, never erased; export, report and activation limits; deletion-pending access; secrets purge; operator flag review.
   - New `031_cross_tenant_pen` (19): about 85 RPCs × 6 attackers, every table and view, controls.
   - Updated: `001` allowlist and `021` approval needing a reviewer.
@@ -557,7 +557,12 @@ Supplemental emergency headcount, **not** a certified life-safety or evacuation 
 - **Twilio (TW):** SMS Pumping Protection, geo permissions and usage alerts (§4).
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the "Real-device privacy and account deletion check" in HUMAN_CHECKLIST.
 
-**Decisions added:** #123–#138.
+- Automated review (Codex) of PR #12: three findings fixed, each with a regression test that fails on the old code (decision #139):
+  - the phone now signs out locally the moment deletion succeeds, so tracking stops without waiting for "Done";
+  - a deleted person's lines leave stored daily reports and foremen's proposed corrections when no contract basis applies;
+  - switching location off, or a required renewal, removes the last on-site position at once.
+
+**Decisions added:** #123–#139.
 
 **Next step:** open the Milestone 12 PR, watch CI, address the automated review, merge, then start Milestone 13 (native release preparation, review demo and field pilot) on `milestone-13-release`.
 

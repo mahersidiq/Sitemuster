@@ -151,8 +151,10 @@ describe('account deletion', () => {
     await fireEvent.press(screen.getByTestId('delete-now'));
     expect(await screen.findByTestId('delete-done')).toBeTruthy();
     expect(world.deletionRequests.map((r) => r.userId)).toEqual([ids.user]);
-    await fireEvent.press(screen.getByTestId('delete-finish'));
+    // Signed out on this phone at once (tracking stops with the session), before "Done".
     await waitFor(() => expect(backend.gateway.session).toBeNull());
+    expect(screen.getByTestId('delete-done')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('delete-finish'));
     await waitFor(() => expect(app.getPathname()).not.toContain('/account/delete'));
   });
 
