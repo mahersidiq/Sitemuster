@@ -85,7 +85,7 @@ export default [
   },
   {
     // UI-preview shims are copied into the app tree only inside the throw-away preview copy.
-    files: ['tools/ui-preview/shims/**/*.ts'],
+    files: ['tools/ui-preview/shims/**/*.{ts,tsx}'],
     rules: { 'import/no-unresolved': 'off' },
   },
   prettierConfig,

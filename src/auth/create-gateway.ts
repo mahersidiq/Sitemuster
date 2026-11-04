@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
+import { SupabaseSiteMusterApi } from '../api/supabase-api';
+import type { SiteMusterApi } from '../api/types';
 import type { RuntimeEnv } from '../config/runtime-env';
 import type { EncryptedSessionStorage } from './encrypted-storage';
 import { SupabaseAuthGateway, type AuthGateway } from './gateway';
@@ -9,6 +11,7 @@ import { createNativeSessionStorage } from './native-storage';
 export interface AuthBackend {
   gateway: AuthGateway;
   storage: EncryptedSessionStorage;
+  api: SiteMusterApi;
 }
 
 /**
@@ -33,5 +36,9 @@ export function createAuthBackend(env: RuntimeEnv): AuthBackend | null {
     if (state === 'active') void client.auth.startAutoRefresh();
     else void client.auth.stopAutoRefresh();
   });
-  return { gateway: new SupabaseAuthGateway(client), storage };
+  return {
+    gateway: new SupabaseAuthGateway(client),
+    storage,
+    api: new SupabaseSiteMusterApi(client),
+  };
 }

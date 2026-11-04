@@ -69,19 +69,21 @@ jobs:
           version: ${{ steps.sbver.outputs.version }}
       - name: Verify Docker is available
         run: docker info
+      - name: Node (Edge Function imports and backend end-to-end tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      # Edge Functions import lockfile-pinned modules from node_modules (decision #63), so the
+      # pinned dependencies must exist before `supabase start` bundles the functions.
+      - name: Install pinned dependencies (Edge Function imports, backend tests)
+        run: npm ci
       - name: Start local Supabase service
         run: supabase start
       - name: Apply local migrations
         run: supabase db reset --local
       - name: Run pgTAP, RLS and SQL database tests
         run: supabase test db
-      - name: Node (backend end-to-end tests)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Install pinned dependencies (backend tests)
-        run: npm ci
       - name: Backend end-to-end tests against local Supabase (Auth, RPC, Edge Functions)
         run: |
           eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|DB_URL|MAILPIT_URL|FUNCTIONS_URL)=' | sed 's/^/export /')"

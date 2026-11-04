@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import type { SiteMusterApi } from '../api/types';
 import { AccessSchema, type Access } from '../auth/access';
 import { createAuthBackend, type AuthBackend } from '../auth/create-gateway';
 import type { AuthGateway } from '../auth/gateway';
@@ -28,6 +29,7 @@ const ACCESS_CACHE_KEY = 'sitemuster-access-cache';
 interface AuthContextValue {
   state: AuthState;
   gateway: AuthGateway | null;
+  api: SiteMusterApi | null;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -117,7 +119,13 @@ export function AuthProvider({ env, children }: { env: RuntimeEnv; children: Rea
   }, [backend, queryClient]);
 
   const value = useMemo(
-    () => ({ state, gateway: backend?.gateway ?? null, refresh, signOut }),
+    () => ({
+      state,
+      gateway: backend?.gateway ?? null,
+      api: backend?.api ?? null,
+      refresh,
+      signOut,
+    }),
     [state, backend, refresh, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -127,4 +135,11 @@ export function useAuth(): AuthContextValue {
   const value = useContext(AuthContext);
   if (!value) throw new Error('useAuth must be used inside AuthProvider');
   return value;
+}
+
+/** The typed data API (throws when used without a configured backend — callers sit behind guards). */
+export function useApi(): SiteMusterApi {
+  const { api } = useAuth();
+  if (!api) throw new Error('SiteMuster API unavailable (no backend configured)');
+  return api;
 }

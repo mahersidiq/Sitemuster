@@ -28,6 +28,16 @@ export const PRODUCTION_REQUIRED_PUBLIC_ENV = [
   'EXPO_PUBLIC_SENTRY_DSN',
 ] as const;
 
+/**
+ * Build-time (not EXPO_PUBLIC_) values a production build cannot ship without. The Android Maps
+ * SDK key is an app-restricted CLIENT key written into AndroidManifest by react-native-maps; it is
+ * never one of the Google server keys used only by Edge Functions (Places/Geocoding).
+ */
+export const PRODUCTION_REQUIRED_BUILD_ENV = ['GOOGLE_MAPS_ANDROID_API_KEY'] as const;
+
+/** Server-only Google keys (Edge Function secrets). They must never reach the app build. */
+const GOOGLE_SERVER_KEY_NAMES = ['GOOGLE_PLACES_SERVER_KEY', 'GOOGLE_GEOCODING_SERVER_KEY'];
+
 /** Variable-name fragments that must never be exposed to the app bundle via EXPO_PUBLIC_. */
 const SECRET_NAME_FRAGMENTS = [
   'SERVICE_ROLE',
@@ -66,8 +76,16 @@ export function assertPublicEnvSafe(
       `Refusing to build: secret-looking variables are exposed to the app bundle: ${leaked.join(', ')}`,
     );
   }
+  const mapsKey = env.GOOGLE_MAPS_ANDROID_API_KEY?.trim();
+  if (mapsKey && GOOGLE_SERVER_KEY_NAMES.some((name) => env[name]?.trim() === mapsKey)) {
+    throw new Error(
+      'Refusing to build: GOOGLE_MAPS_ANDROID_API_KEY must be a separate app-restricted key, not a server key.',
+    );
+  }
   if (appEnv !== 'production') return;
-  const missing = PRODUCTION_REQUIRED_PUBLIC_ENV.filter((name) => !env[name]?.trim());
+  const missing = [...PRODUCTION_REQUIRED_PUBLIC_ENV, ...PRODUCTION_REQUIRED_BUILD_ENV].filter(
+    (name) => !env[name]?.trim(),
+  );
   if (missing.length > 0) {
     throw new Error(
       `Production build configuration is incomplete (fail closed). Missing: ${missing.join(', ')}`,
@@ -114,6 +132,13 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
             android: ['en-US', 'es-US'],
           },
         },
+      ],
+      // Apple Maps on iOS (no iOS Google key, by design); Google Maps on Android.
+      [
+        'react-native-maps',
+        process.env.GOOGLE_MAPS_ANDROID_API_KEY
+          ? { androidGoogleMapsApiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY }
+          : {},
       ],
       [
         '@sentry/react-native/expo',

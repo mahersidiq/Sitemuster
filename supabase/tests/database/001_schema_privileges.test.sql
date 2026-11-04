@@ -103,7 +103,10 @@ select is(
   (select array_agg(p.proname::text order by p.proname)
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  array['create_organization', 'get_my_access', 'get_my_profile', 'set_my_language'],
+  array['accept_invitation', 'address_lookup_allowed', 'check_project_site', 'create_organization',
+        'create_project', 'get_my_access', 'get_my_profile', 'get_project_detail', 'invite_org_admin',
+        'invite_project_staff', 'list_my_invitations', 'list_my_projects', 'remove_project_staff',
+        'revoke_invitation', 'set_my_language', 'set_project_status', 'update_project_config'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
 );
 
@@ -120,7 +123,8 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'app_private' and has_function_privilege('authenticated', p.oid, 'EXECUTE')
       and p.proname in ('write_audit', 'resolve_upload_credential', 'ensure_raw_fix_partitions',
-                        'purge_expired_raw_fixes', 'forbid_mutation', 'protect_last_owner')),
+                        'purge_expired_raw_fixes', 'forbid_mutation', 'protect_last_owner',
+                        'consume_rate_limit', 'build_settings', 'normalize_work_windows', 'tracking_defaults')),
   0, 'privileged internal functions are not executable by clients'
 );
 

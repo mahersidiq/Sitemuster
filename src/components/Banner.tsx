@@ -8,16 +8,16 @@ export function Banner({
   testID,
 }: {
   text: string;
-  tone?: 'warning' | 'danger';
+  tone?: 'warning' | 'danger' | 'info' | 'success';
   testID?: string;
 }) {
   return (
     <View
-      accessibilityRole="alert"
-      style={[styles.base, tone === 'danger' ? styles.danger : styles.warning]}
+      accessibilityRole={tone === 'info' || tone === 'success' ? 'text' : 'alert'}
+      style={[styles.base, styles[tone]]}
       testID={testID}
     >
-      <Text style={tone === 'danger' ? styles.dangerText : styles.warningText}>{text}</Text>
+      <Text style={styles[`${tone}Text`]}>{text}</Text>
     </View>
   );
 }
@@ -28,4 +28,8 @@ const styles = StyleSheet.create({
   danger: { backgroundColor: colors.dangerBackground },
   warningText: { color: colors.warningText, fontSize: 15 },
   dangerText: { color: colors.dangerText, fontSize: 15 },
+  info: { backgroundColor: colors.infoBackground },
+  infoText: { color: colors.infoText, fontSize: 15 },
+  success: { backgroundColor: colors.successBackground },
+  successText: { color: colors.successText, fontSize: 15 },
 });

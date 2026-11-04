@@ -9,7 +9,7 @@
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
 | 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
 | 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
-| 04 | GC organizations, projects, shifts and circles | not started | | |
+| 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
 | 05 | Orientation sessions, badges, approval | not started | | |
 | 06 | Attendance state machine and deterministic replay | not started | | |
 | 07 | Native tracking and custom device ingestion | not started | | |
@@ -99,7 +99,36 @@
 
 **Decisions added:** #59 local SMS capture hook (seed-only) + placeholder provider slot, #60 passwordless staff email code + TOTP (≤2 factors, supervised reset), #61 encrypted offline access cache, #62 language persistence + bilingual SMS template.
 
-**Next step:** after Milestone 03 merges, start Milestone 04 (organizations, projects, shifts, circles) on `milestone-04-projects`.
+**Next step:** done — Milestone 04 started.
+
+## Milestone 04 — GC organizations, projects, shifts and circles
+
+**What was built**
+- Database (migration `20261104120000_m04_projects_config.sql`): `create_project` (idempotent, DRAFT, version 1 with circle + work windows, creator assigned PM with delegation, audited), `update_project_config` (new immutable version N+1 under a row lock; open sessions keep their version; sensitive changes need confirmation + reason), `set_project_status` lifecycle with reasons, `check_project_site` overlap/similar-name warnings (own organization only), staff invitations (`invite_project_staff`, `invite_org_admin`, `list_my_invitations`, `accept_invitation` bound to the verified e-mail + MFA, `revoke_invitation`, `remove_project_staff`), `list_my_projects`, `get_project_detail` (pending invitation e-mails only for staff managers), `address_lookup_allowed` (MFA staff with configuration rights, 30/min + 300/h), server-side bounds (radius 150–2,000 m, dwell 300–3,600 s, accuracy 20–100 m, ≤ 42 non-overlapping windows incl. overnight), explicit codes (`NAME_REQUIRED`, `INVALID_TIMEZONE`, `INVALID_COORDINATES`, …).
+- Edge Functions `address-search` / `address-resolve` (Google Places (New) autocomplete + Geocoding, JWT verified, rate-limited through the database, Zod-validated). Without keys: labelled development adapter only when `SITEMUSTER_ENV=development`; any hosted value fails closed (503).
+- App: typed API layer (`src/api`), organization creation, Projects tab, 4-step new-project wizard (name → address + native map circle with draggable pin + radius stepper → explicit site time zone + shifts incl. overnight / 24-7 → review with advisory overlap/similar-name warnings), project page (site, schedule, settings history, lifecycle, staff + pending invitations), settings editor (new version, sensitive-change confirmation, reason), staff/admin invitation screens, invitations inbox. Retrying a create after a lost response never duplicates (idempotency keys).
+- `app.config.ts`: `react-native-maps` plugin (Apple Maps on iOS, Google Maps on Android); production build is refused without `GOOGLE_MAPS_ANDROID_API_KEY` and refuses a server key reused as the map key.
+- EN/ES strings for every new screen; dynamic-key coverage test.
+
+**Test results (local, Linux container)**
+- `supabase test db`: 14 files, **281** pgTAP tests pass (020_projects_config: 65 — creation, idempotency, v1/v2 immutability with an open session keeping v1, bounds, sensitive confirmations, lifecycle, overlap/similar names within one tenant, invitations, delegation limits, list/detail isolation incl. GC B and workers, address-lookup authorization).
+- `npm run test:backend` against the local Supabase stack: **16/16** — adds the app's real API class end-to-end (GC activation, v2, lifecycle, invitation only for the invited verified e-mail, worker gets nothing), Edge Functions in the real Deno runtime, DB↔shared defaults parity.
+- Vitest unit **170**, integration **51**, security **75** (adds a real iOS + Android bundle build with planted canary secrets: no server key and no direct Google endpoint in the bundles), i18n **12**, replay contract **3**; Jest mobile-unit **7**, mobile-integration **27** (10 new project/organization/invitation flows incl. Spanish and a lost-response retry).
+- typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
+- Web-render screenshots (`docs/screenshots/m04`, 22 images, EN + ES) captured against the local stack, including the local Edge Function address adapter.
+- GitHub Actions run 41759095284 (head `c53264a`): `code-quality` success (unit 170 + 7, integration 51 + 27, security 75 incl. the iOS/Android bundle canary scan, i18n 12, replay 3, expo config, audit: 0 high/critical); `database` success (pgTAP Files=14, Tests=281, PASS; `npm run test:backend` 16/16 incl. Edge Functions in the CI Supabase stack). The first run failed because `supabase start` bundles the Edge Functions before `npm ci` had installed their pinned imports; the database job now installs dependencies first (no test or step removed).
+
+**NOT VERIFIED (Milestone 04)**
+- Real Google Places/Geocoding results — no Google Cloud project or keys yet (HUMAN_CHECKLIST §5). Local/CI use the labelled development adapter through the real Edge runtime.
+- Native map rendering (Apple Maps / Google Maps), pin dragging and Android Maps key restrictions on real phones (`NOT_EXECUTED_PHYSICAL_DEVICE`); screenshots show a labelled schematic map (web render).
+- Hosted deployment of the migration and Edge Functions (no hosted Supabase projects yet; checklist §3 lists the deploy steps).
+- Time-zone formatting under Hermes on devices (verified with Node's ICU only).
+- Spanish UI copy is AI-drafted UI text; the manual Spanish comprehension test is still required before pilot.
+- No invitation e-mail is sent (by design, decision #66); invitees accept in the app.
+
+**Decisions added:** #63 Edge import maps + `SITEMUSTER_ENV` fail-closed + address rate limits, #64 override keys/bounds and sensitive changes (incl. moving the circle), #65 creator-as-PM, DRAFT start, delegation limits and lifecycle, #66 in-app invitations bound to the verified e-mail, #67 explicit site time zone, #68 tenant-scoped advisory overlap/similar-name warnings.
+
+**Next step:** after Milestone 04 merges, start Milestone 05 (orientation sessions, badges, approval) on `milestone-05-orientation`.
 
 ## Environment notes for future sessions (Linux build agent)
 
@@ -111,3 +140,4 @@
 - shellcheck: `pip install shellcheck-py` (CI runners have it preinstalled).
 - Backend E2E: `eval "$(supabase status -o env | grep -E '^(API_URL|ANON_KEY|DB_URL|MAILPIT_URL|FUNCTIONS_URL)=' | sed 's/^/export /')" && npm run test:backend` (local stack only; refuses remote URLs).
 - Screenshots that sign in: export the same variables, then `bash tools/ui-preview/capture.sh mNN docs/screenshots/mNN <scratch-dir>`.
+- After a container restart, Docker containers come back but the Edge runtime may exit: run `supabase stop && supabase start` (same registry variable) before backend tests.

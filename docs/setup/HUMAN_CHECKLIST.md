@@ -30,6 +30,8 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Create `SUPABASE_ACCESS_TOKEN` in protected GitHub Actions **secret** for migration deploy jobs, restricted to required projects; include appropriate deployment approval before touching prod.
 - [ ] Store `SUPABASE_DB_PASSWORD_STAGING` / `SUPABASE_DB_PASSWORD_PRODUCTION` ONLY in protected CI/environment secret store if automation absolutely requires a DB password; never in mobile.
 - [ ] Supabase Edge Functions private environment secrets: `SUPABASE_SERVICE_ROLE_KEY` (backend only), `DEVICE_CREDENTIAL_PEPPER` (if implementation uses keyed hash enhancement), `BADGE_SECRET_ENCRYPTION_KEY` (32-byte random key used to encrypt per-device badge secrets at rest), `GOOGLE_PLACES_SERVER_KEY` (created Step 5), `GOOGLE_GEOCODING_SERVER_KEY` (Step 5). Supabase supplies project-specific URLs/keys; do not mix staging/prod secrets.
+- [ ] Edge Function secret `SITEMUSTER_ENV`: set `staging` on the staging project and `production` on the production project (`supabase secrets set SITEMUSTER_ENV=staging --project-ref <staging-ref>`). **Never** set `development` on a hosted project — that value alone switches address search to the labelled fake adapter (decision #63). Without the Google secrets below, hosted address search answers "not set up" instead of using fake data.
+- [ ] Deploy the Edge Functions from a clean checkout after `npm ci` (their import maps point at the locked `node_modules`): `supabase functions deploy address-search address-resolve --project-ref <ref>`; JWT verification stays **on** for both (see `supabase/config.toml`).
 - [ ] Configure database scheduled jobs for cleanup of raw fixes and expired tokens and review audit permissions.
 - [ ] In **both** projects keep *API → Data API → Exposed schemas* to `public` and `graphql_public` only (never add `app_private`), and leave "automatically expose new tables" **off** (decision #57). Apply schema changes only through the repository migrations.
 - [ ] In **both** projects open *Realtime → Settings* and turn **off** "Allow public access" so only private, policy-checked channels work (decision #19).
@@ -58,6 +60,9 @@ This is for the non-developer owner. **Claude Code must never claim it created a
 - [ ] Create Android Maps API key `GOOGLE_MAPS_ANDROID_API_KEY` restricted to Android app package ID and SHA-1/SHA-256 signing certificate fingerprints for each build type. Store in EAS environment config; the Android key can be embedded only with platform/API restrictions.
 - [ ] iOS map provider is Apple Maps through `react-native-maps`; no Google iOS map dependency in V1.
 - [ ] Set billing quotas, allowed APIs, audit provider attribution and Google Places autocomplete session token behavior. Use development-only geocoder adapter until keys available.
+- [ ] Restrict each server key by **API** (Places API (New) only / Geocoding API only) and set daily quotas; use separate keys for staging and production. Store them with `supabase secrets set GOOGLE_PLACES_SERVER_KEY=… GOOGLE_GEOCODING_SERVER_KEY=… --project-ref <ref>` (never in EAS, GitHub variables or the app).
+- [ ] Add `GOOGLE_MAPS_ANDROID_API_KEY` as an EAS environment variable (visibility "sensitive") for the `preview` and `production` environments. A production build is refused without it, and any build is refused if it equals a server key (`app.config.ts`).
+- [ ] After the keys exist, run the Milestone 04 phone test on staging: the address search shows "Address results by Google" and no "Development address data" banner.
 
 ## 6. Sentry (`SE`)
 

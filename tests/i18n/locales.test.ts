@@ -11,6 +11,13 @@ const SAME_IN_BOTH = new Set([
   'language.spanish',
   // Number-format example, language neutral.
   'auth.phonePlaceholder',
+  // Unit/format patterns that are written the same way in US Spanish (symbols + placeholders).
+  'schedule.shiftLine',
+  'site.radiusDecrease',
+  'site.radiusIncrease',
+  'site.meters',
+  'edit.minutes',
+  'invitations.summary',
 ]);
 
 describe('EN/ES UI dictionaries', () => {

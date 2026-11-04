@@ -11,6 +11,13 @@ export const colors = {
   dangerBackground: '#FDE7E9',
   dangerText: '#8A1C24',
   border: '#D5DBE1',
+  infoBackground: '#E6F0FA',
+  infoText: '#0B3D66',
+  successBackground: '#E3F4E8',
+  successText: '#185C2E',
+  siteFill: 'rgba(11, 95, 165, 0.18)',
+  siteStroke: '#0B5FA5',
+  boundaryStroke: '#6B4E00',
 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 } as const;
