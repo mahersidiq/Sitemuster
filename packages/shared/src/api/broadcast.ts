@@ -33,3 +33,17 @@ export type BroadcastMessage = z.infer<typeof BroadcastSchema>;
 export function projectTopic(projectId: string): string {
   return `project:${UuidSchema.parse(projectId)}`;
 }
+
+/**
+ * A received Broadcast payload → the contract message, or null when it is not one. Supabase's
+ * `realtime.send` adds its own `id` key to every payload (a transport message id); only that key
+ * is removed, everything else must match the strict schema, so a payload carrying names,
+ * contacts or coordinates is dropped, never shown.
+ */
+export function parseBroadcastPayload(payload: unknown): BroadcastMessage | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const { id: transportId, ...message } = payload as Record<string, unknown>;
+  if (transportId !== undefined && typeof transportId !== 'string') return null;
+  const parsed = BroadcastSchema.safeParse(message);
+  return parsed.success ? parsed.data : null;
+}

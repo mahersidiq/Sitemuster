@@ -111,10 +111,11 @@ select is(
         'invite_org_admin', 'invite_project_staff', 'issue_printed_badge', 'list_my_invitations',
         'list_my_projects', 'list_orientation_sessions', 'list_project_enrollments', 'my_enrollments',
         'my_foreman_projects', 'my_tracking_plan', 'open_visitor_visits', 'operation_context',
-        'preview_orientation', 'project_tracking_health', 'register_kiosk', 'remove_project_staff',
+        'preview_orientation', 'project_dashboard', 'project_map', 'project_tracking_health', 'register_kiosk',
+        'remove_project_staff',
         'revoke_invitation', 'revoke_kiosk', 'revoke_my_device', 'revoke_printed_badge',
         'set_my_language', 'set_project_status', 'start_orientation_session', 'update_my_emergency_contact',
-        'update_project_config', 'worker_attendance_sessions'],
+        'update_project_config', 'worker_attendance_sessions', 'workforce_roster'],
   'client-callable RPCs in public are exactly the reviewed allowlist'
 );
 
