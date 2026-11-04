@@ -241,6 +241,12 @@ export class MemoryBackend implements ServerBackend, AttendanceStore {
     return 'ok';
   }
 
+  async registerDevice(): Promise<void> {}
+
+  async deactivateDevice(): Promise<void> {}
+
+  async registerKiosk(): Promise<void> {}
+
   async insertReceipts(rows: readonly ReceiptRow[]): Promise<void> {
     for (const row of rows) {
       if (containsCoordinateKeys(row)) throw new Error('coordinates in a receipt');

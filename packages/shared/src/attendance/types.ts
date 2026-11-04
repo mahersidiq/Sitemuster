@@ -100,6 +100,8 @@ export interface Candidate {
   firstInsideEvent: string | null;
   lastEvidenceAt: string;
   configVersionId: string;
+  /** Close-out instant of the shift the observation started in (stored, so the sweep needs no calendar logic). */
+  closeoutAt: string;
 }
 
 /** Per (project, worker) attendance state; persisted coordinate-free in `presence_states`. */

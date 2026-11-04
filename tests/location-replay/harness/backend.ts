@@ -46,6 +46,10 @@ export interface ServerBackend {
   setProjectStatus(projectId: string, status: ProjectContext['status']): Promise<void>;
   enrollWorker(projectId: string, workerId: string, eligibility: Eligibility): Promise<void>;
   setEligibility(projectId: string, workerId: string, eligibility: Eligibility): Promise<void>;
+  /** Personal tracking devices and kiosks referenced by receipts and events. */
+  registerDevice(deviceId: string, workerId: string): Promise<void>;
+  deactivateDevice(deviceId: string): Promise<void>;
+  registerKiosk(kioskId: string, projectId: string): Promise<void>;
   /** Terminal receipts decided before the engine (normalizer rejections, proof-of-life). */
   insertReceipts(rows: readonly ReceiptRow[]): Promise<void>;
   /** The scheduled close-out sweep at `now` (time rules only). */

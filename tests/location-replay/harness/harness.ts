@@ -368,8 +368,10 @@ export class ReplayHarness {
       this.reselectRegions();
     }
     for (const id of ['K1', 'K2']) {
+      const kioskId = deriveUuid('replay-kiosk', `${f.id}|${id}`);
+      await this.backend.registerKiosk(kioskId, this.project.id);
       this.kiosks.set(id, {
-        id: deriveUuid('replay-kiosk', `${f.id}|${id}`),
+        id: kioskId,
         online: true,
         offsetMs: 0,
         outbox: [],
@@ -392,6 +394,7 @@ export class ReplayHarness {
       active: true,
       ciphertext: await encryptBadgeSecret(this.badgeKey, secret, deviceId),
     });
+    await this.backend.registerDevice(deviceId, worker.id);
     const token = this.issueToken(deviceId, issuedAt);
     return {
       deviceId,
@@ -971,6 +974,7 @@ export class ReplayHarness {
         const worker = this.workerByKey('A');
         const old = this.devices.get(phone.deviceId);
         if (old) old.active = false;
+        await this.backend.deactivateDevice(phone.deviceId);
         const oldCredential = this.credentials.get(phone.token);
         if (oldCredential) oldCredential.revokedAt = this.now;
         phone.revoked = true;

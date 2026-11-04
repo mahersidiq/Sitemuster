@@ -516,9 +516,9 @@ class Machine {
       const config = this.cfg(s.candidate.configVersionId);
       const lapse = ms(s.candidate.lastEvidenceAt) + this.unknownMs(config);
       if (t >= lapse) {
-        const schedule = scheduleFor(ms(s.candidate.startedAt), config, this.ctx.project.timezone);
+        const closeout = ms(s.candidate.closeoutAt);
         s.candidate = null;
-        s.presenceCloseoutAt = iso(Math.max(schedule.closeoutAt, lapse));
+        s.presenceCloseoutAt = iso(Math.max(closeout, lapse));
         this.setPresence('PRESENCE_UNKNOWN', lapse);
       }
     }
@@ -724,6 +724,7 @@ class Machine {
         firstInsideEvent: null,
         lastEvidenceAt: item.observedAt,
         configVersionId: version.configVersionId,
+        closeoutAt: iso(scheduleFor(t, version, this.ctx.project.timezone).closeoutAt),
       };
     } else if (t > ms(candidate.lastEvidenceAt)) {
       candidate.lastEvidenceAt = item.observedAt;
@@ -915,6 +916,7 @@ class Machine {
         firstInsideEvent: item.eventUuid,
         lastEvidenceAt: item.observedAt,
         configVersionId: config.configVersionId,
+        closeoutAt: iso(scheduleFor(t, config, this.ctx.project.timezone).closeoutAt),
       };
       s.presenceCloseoutAt = null;
       this.setPresence('ARRIVING', t);
@@ -997,10 +999,9 @@ class Machine {
       if (isActive(session) && !session.witnessed && t >= ms(session.startAt)) {
         this.markUnresolved(session, Math.max(t, ms(session.lastSeenAt)), 'MONITORING_STOPPED');
       } else if (!session && s.candidate) {
-        const config = this.cfg(s.candidate.configVersionId);
-        const schedule = scheduleFor(ms(s.candidate.startedAt), config, this.ctx.project.timezone);
+        const closeout = ms(s.candidate.closeoutAt);
         s.candidate = null;
-        s.presenceCloseoutAt = iso(Math.max(schedule.closeoutAt, t));
+        s.presenceCloseoutAt = iso(Math.max(closeout, t));
         this.setPresence('PRESENCE_UNKNOWN', t);
       }
       this.clearPosition();
