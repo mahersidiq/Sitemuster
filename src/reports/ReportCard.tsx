@@ -8,7 +8,7 @@ import { localDateTime } from '../fallbacks/fallbacks';
 import { formatInstant } from '../projects/format';
 import { useLanguage } from '../state/language';
 import { colors, spacing } from '../theme';
-import { formatHours } from './format';
+import { formatHours, formatLocalDateLabel } from './format';
 
 const STATUS_TONE: Record<ReportView['status'], { backgroundColor: string; color: string }> = {
   PENDING_CONFIRMATION: { backgroundColor: colors.warningBackground, color: colors.warningText },
@@ -41,9 +41,12 @@ export function ReportStatusPill({
  */
 export function ReportCard({
   report,
+  showContext = false,
   children,
 }: {
   report: ReportView;
+  /** The project and work date (lists that mix days or projects, e.g. the foreman's). */
+  showContext?: boolean;
   children?: React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -57,6 +60,11 @@ export function ReportCard({
         <Heading>{report.company_name}</Heading>
         <ReportStatusPill status={report.status} testID={`report-status-${report.company_id}`} />
       </View>
+      {showContext ? (
+        <Text style={styles.context} testID={`report-context-${report.report_id}`}>
+          {`${report.project_name} · ${formatLocalDateLabel(report.local_date, activeLocale)}`}
+        </Text>
+      ) : null}
       <Text style={styles.meta}>
         {t('reports.version', { version: report.version })}
         {report.status === 'PENDING_CONFIRMATION'
@@ -162,6 +170,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   meta: { fontSize: 14, color: colors.mutedText },
+  context: { fontSize: 16, fontWeight: '600', color: colors.text },
   total: { fontSize: 17, fontWeight: '600', color: colors.text },
   flag: { fontSize: 15, color: colors.warningText },
   worker: {

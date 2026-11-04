@@ -26,7 +26,11 @@ import { ShellScreen } from '../../src/components/ShellScreen';
 import { TextField } from '../../src/components/TextField';
 import { useNow } from '../../src/components/useNow';
 import { Body, Heading, Title } from '../../src/components/Typography';
-import { correctionTimes, localDateTime } from '../../src/fallbacks/fallbacks';
+import {
+  correctionTimes,
+  localDateTime,
+  visitCorrectionTimes,
+} from '../../src/fallbacks/fallbacks';
 import {
   formatHours,
   formatLocalDateLabel,
@@ -281,7 +285,12 @@ function RequestForm({ data, days }: { data: MyAttendance; days: WorkerDayHours[
   };
   const submit = async () => {
     setError(null);
-    const times = correctionTimes({ date, start, end, timeZone: zone });
+    // An existing visit: times on its own dates (a night shift's departure is the next day). A
+    // missing visit: the typed date, with a departure before the arrival meaning the next day.
+    const visit = sessions.find((s) => s.session_id === target);
+    const times = visit
+      ? visitCorrectionTimes({ visitStartAt: visit.start_at, start, end, timeZone: zone })
+      : correctionTimes({ date, start, end, timeZone: zone });
     if (
       !times ||
       reason.trim().length < 3 ||
@@ -331,13 +340,15 @@ function RequestForm({ data, days }: { data: MyAttendance; days: WorkerDayHours[
         testID="hours-request-target"
       />
       <Text style={styles.hint}>{t('correction.zone', { zone })}</Text>
-      <TextField
-        label={t('correction.date')}
-        value={date}
-        onChangeText={setDate}
-        maxLength={10}
-        testID="hours-request-date"
-      />
+      {target === MISSING ? (
+        <TextField
+          label={t('correction.date')}
+          value={date}
+          onChangeText={setDate}
+          maxLength={10}
+          testID="hours-request-date"
+        />
+      ) : null}
       <View style={styles.times}>
         <View style={styles.time}>
           <TextField

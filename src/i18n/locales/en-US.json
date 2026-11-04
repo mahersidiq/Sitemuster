@@ -238,7 +238,8 @@
     "END_BEFORE_START": "Departure must be after arrival.",
     "TOO_MANY_PENDING": "You have many requests waiting. Wait for a decision first.",
     "RANGE_INVALID": "Choose a shorter period.",
-    "FOREMAN_NOT_FOUND": "This foreman is not verified for this project."
+    "FOREMAN_NOT_FOUND": "This foreman is not verified for this project.",
+    "REASON_TOO_LONG": "The reason is too long (1,000 characters at most)."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Pick at least one day for each shift.",

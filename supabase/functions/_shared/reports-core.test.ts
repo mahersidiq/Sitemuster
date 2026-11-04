@@ -394,6 +394,12 @@ describe('report-confirm', () => {
     const { w, acme } = await setup();
     const noReason = await call(handleReportConfirm, w.confirm, answer(acme, { reason: null }));
     expect([noReason.status, noReason.body.error.code]).toEqual([422, 'REASON_REQUIRED']);
+    const tooLong = await call(
+      handleReportConfirm,
+      w.confirm,
+      answer(acme, { reason: 'x'.repeat(1001) }),
+    );
+    expect([tooLong.status, tooLong.body.error.code]).toEqual([422, 'REASON_TOO_LONG']);
     const noProposal = await call(
       handleReportConfirm,
       w.confirm,

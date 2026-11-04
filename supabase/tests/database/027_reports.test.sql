@@ -4,7 +4,7 @@
 -- the deadline is NOT_CONFIRMED (never approved); only the company's own foreman answers; GC B,
 -- other foremen and workers are refused; approving a request is atomic with the correction.
 begin;
-select plan(80);
+select plan(82);
 select tests.seed_world();
 
 select set_config('t.p', tests.id('p_a1')::text, false), set_config('t.c', tests.id('c_a')::text, false),
@@ -163,6 +163,13 @@ select throws_ok($$select public.edge_confirm_report(pg_temp.report('2026-11-04'
                                      'proposed_start_at', '2026-11-04T13:00:00Z', 'proposed_end_at', '2026-11-04T21:00:00Z')),
                    gen_random_uuid(), current_setting('t.fa')::uuid)$$,
   '22023', 'WORKER_NOT_IN_REPORT', 'a proposal may only name workers of this report');
+select throws_ok($$select public.edge_confirm_report(pg_temp.report('2026-11-04'), 1, 'SUBMIT_CORRECTION', repeat('x', 1001),
+                   jsonb_build_array(jsonb_build_object('worker_id', tests.id('w_a1'), 'session_id', tests.id('s_a1'),
+                                     'proposed_start_at', null, 'proposed_end_at', now() - interval '1 hour')),
+                   gen_random_uuid(), current_setting('t.fa')::uuid)$$,
+  '22023', 'REASON_TOO_LONG', 'a reason longer than the stored correction reason (1,000) is refused up front (review on PR #10)');
+select is((select count(*)::int from public.attendance_corrections where channel = 'FOREMAN_REQUEST'), 0,
+  'and nothing was recorded for it');
 select throws_ok($$select public.edge_confirm_report(pg_temp.report('2026-11-04'), 1, 'SUBMIT_CORRECTION', 'Nothing proposed',
                    '[]'::jsonb, gen_random_uuid(), current_setting('t.fa')::uuid)$$,
   '22023', 'PROPOSAL_REQUIRED', 'a correction needs at least one proposal');

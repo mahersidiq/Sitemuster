@@ -190,6 +190,7 @@ export class MemoryReports {
     }
     if (input.action !== 'CONFIRM' && (input.comment ?? '').trim().length < 3)
       throw new Error('REASON_REQUIRED');
+    if ((input.comment ?? '').trim().length > 1000) throw new Error('REASON_TOO_LONG');
     if (input.action === 'SUBMIT_CORRECTION') {
       if (input.proposed.length === 0) throw new Error('PROPOSAL_REQUIRED');
       for (const item of input.proposed) {

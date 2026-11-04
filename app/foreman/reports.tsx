@@ -15,7 +15,7 @@ import { QueryState } from '../../src/components/QueryState';
 import { Screen } from '../../src/components/Screen';
 import { TextField } from '../../src/components/TextField';
 import { Body, Heading, Title } from '../../src/components/Typography';
-import { correctionTimes, localDateTime } from '../../src/fallbacks/fallbacks';
+import { localDateTime, visitCorrectionTimes } from '../../src/fallbacks/fallbacks';
 import { formatLocalDateLabel } from '../../src/reports/format';
 import { ReportCard } from '../../src/reports/ReportCard';
 import { useApi } from '../../src/state/auth';
@@ -51,7 +51,7 @@ export default function ForemanReportsScreen() {
         <Body>{t('foremanReports.none')}</Body>
       ) : null}
       {pending.data?.reports.map((report) => (
-        <ReportCard key={report.report_id} report={report}>
+        <ReportCard key={report.report_id} report={report} showContext>
           <Answer report={report} onDone={setDone} />
         </ReportCard>
       ))}
@@ -89,7 +89,7 @@ function Answer({ report, onDone }: { report: ReportView; onDone: (text: string)
       return {
         value: `${worker.worker_id}|${session.session_id}`,
         label: `${report.worker_names[worker.worker_id] ?? ''} ${from.time}–${to}`,
-        date: from.date,
+        startAt: session.start_at,
       };
     }),
   );
@@ -109,8 +109,9 @@ function Answer({ report, onDone }: { report: ReportView; onDone: (text: string)
     }
     if (action === 'SUBMIT_CORRECTION') {
       const chosen = options.find((option) => option.value === sessionKey);
+      // Times are on the visit's own dates (a night shift's departure is the next day).
       const times = chosen
-        ? correctionTimes({ date: chosen.date, start, end, timeZone: zone })
+        ? visitCorrectionTimes({ visitStartAt: chosen.startAt, start, end, timeZone: zone })
         : null;
       if (!chosen || !times) {
         setError(t('foremanReports.proposalNeeded'));
@@ -212,7 +213,7 @@ function Answer({ report, onDone }: { report: ReportView; onDone: (text: string)
             label={t('foremanReports.reason')}
             value={reason}
             onChangeText={setReason}
-            maxLength={2000}
+            maxLength={1000}
             testID={`answer-reason-${report.report_id}`}
           />
           <AppButton

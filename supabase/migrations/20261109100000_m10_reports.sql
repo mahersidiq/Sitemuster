@@ -301,8 +301,13 @@ begin
   if v_report.status <> 'PENDING_CONFIRMATION' then
     return jsonb_build_object('ok', false, 'code', 'REPORT_ALREADY_ANSWERED', 'status', v_report.status);
   end if;
-  if p_action <> 'CONFIRM' and (p_comment is null or length(btrim(p_comment)) not between 3 and 2000) then
+  if p_action <> 'CONFIRM' and (p_comment is null or length(btrim(p_comment)) < 3) then
     raise exception 'REASON_REQUIRED' using errcode = '22023';
+  end if;
+  -- One limit for every answer: a correction's reason is also stored on each proposed
+  -- correction (attendance_corrections.reason allows 1,000; review finding on PR #10).
+  if p_comment is not null and length(btrim(p_comment)) > 1000 then
+    raise exception 'REASON_TOO_LONG' using errcode = '22023';
   end if;
 
   if p_action = 'SUBMIT_CORRECTION' then

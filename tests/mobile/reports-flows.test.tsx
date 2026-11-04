@@ -12,7 +12,7 @@ import {
   type ReportView,
 } from '@sitemuster/shared';
 
-import { recentLocalDates, weekStarts } from '../../src/reports/format';
+import { formatLocalDateLabel, recentLocalDates, weekStarts } from '../../src/reports/format';
 import { FakeSiteMusterApi, FakeWorld } from '../support/fake-api';
 import { access, fakeBackend } from '../support/fake-auth';
 
@@ -219,6 +219,10 @@ describe('foreman answers', () => {
     await renderRouter('./app', { initialUrl: '/worker/home' });
     await fireEvent.press(await screen.findByTestId('foreman-reports-open'));
     expect(await screen.findByTestId(`report-${COMPANY}`)).toBeTruthy();
+    // Which project and work day this answer is for (review on PR #10).
+    expect(screen.getByTestId(`report-context-${report.report_id}`).props.children).toBe(
+      `Main Street Tower · ${formatLocalDateLabel(report.local_date, 'en-US')}`,
+    );
     await fireEvent.press(screen.getByTestId(`answer-mode-${report.report_id}-DISPUTE`));
     await fireEvent.press(screen.getByTestId(`answer-send-${report.report_id}`));
     expect(await screen.findByText('Write what is wrong (at least 3 characters).')).toBeTruthy();
@@ -260,6 +264,45 @@ describe('foreman answers', () => {
         proposed: expect.objectContaining({ proposed_end_at: at(report.local_date, '12:00') }),
       }),
     ]);
+  });
+
+  it('a departure-only fix on a night shift lands on the next day (review on PR #10)', async () => {
+    const { owner, projectId } = await site();
+    const report = seedReport(owner, projectId);
+    const next = formatLocalDate(addDays(parseLocalDate(report.local_date), 1));
+    const ben = report.summary.workers[1];
+    if (ben?.sessions[0]) {
+      ben.sessions[0] = {
+        ...ben.sessions[0],
+        start_at: at(report.local_date, '22:00'),
+        end_at: at(next, '06:00'),
+      };
+    }
+    signIn(foremanWorld(owner, projectId), false);
+    await chooseLanguage('en-US');
+    await renderRouter('./app', { initialUrl: '/foreman/reports' });
+    await screen.findByTestId(`report-${COMPANY}`);
+    await fireEvent.press(screen.getByTestId(`answer-mode-${report.report_id}-SUBMIT_CORRECTION`));
+    await fireEvent.press(screen.getByTestId(`answer-visit-${report.report_id}-${BEN}|${S_BEN}`));
+    await fireEvent.changeText(screen.getByTestId(`answer-end-${report.report_id}`), '07:00');
+    await fireEvent.changeText(
+      screen.getByTestId(`answer-reason-${report.report_id}`),
+      'Ben stayed an hour longer',
+    );
+    await fireEvent.press(screen.getByTestId(`answer-send-${report.report_id}`));
+    expect(await screen.findByTestId('answer-done')).toBeTruthy();
+    expect(owner.correctionRequests[0]?.proposed.proposed_end_at).toBe(at(next, '07:00'));
+  });
+
+  it('a reason longer than 1,000 characters cannot be typed', async () => {
+    const { owner, projectId } = await site();
+    const report = seedReport(owner, projectId);
+    signIn(foremanWorld(owner, projectId), false);
+    await chooseLanguage('en-US');
+    await renderRouter('./app', { initialUrl: '/foreman/reports' });
+    await screen.findByTestId(`report-${COMPANY}`);
+    await fireEvent.press(screen.getByTestId(`answer-mode-${report.report_id}-DISPUTE`));
+    expect(screen.getByTestId(`answer-reason-${report.report_id}`).props.maxLength).toBe(1000);
   });
 
   it('after the deadline the answer is refused with a clear message', async () => {
@@ -450,7 +493,8 @@ describe("the worker's own hours", () => {
     await fireEvent.press(
       screen.getByTestId('hours-request-target-5e000000-0000-4000-8000-0000000000a1'),
     );
-    expect(screen.getByTestId('hours-request-date').props.value).toBe(monday);
+    // An existing visit keeps its own date: no date to type (review on PR #10).
+    expect(screen.queryByTestId('hours-request-date')).toBeNull();
     await fireEvent.changeText(screen.getByTestId('hours-request-end'), '16:00');
     await fireEvent.press(screen.getByTestId('hours-request-send'));
     expect(
@@ -466,6 +510,9 @@ describe("the worker's own hours", () => {
         reason: 'I stayed until 4 pm',
       }),
     ]);
+    expect(owner.correctionRequests[0]?.proposed.proposed_end_at).toBe(
+      new Date(Date.parse(at(monday, '16:00'))).toISOString(),
+    );
     expect(await screen.findByText('Waiting · I stayed until 4 pm')).toBeTruthy();
   });
 });

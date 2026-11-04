@@ -51,7 +51,11 @@ export const ReportConfirmRequestSchema = z
     report_id: UuidSchema,
     version: z.number().int().min(1),
     action: ReportActionSchema,
-    reason: z.string().trim().min(3).max(2000).nullable(),
+    /**
+     * One limit for every answer (3–1,000 characters): a correction's reason is also stored on
+     * each proposed correction, whose column allows 1,000 (review finding on PR #10).
+     */
+    reason: z.string().trim().min(3, 'REASON_REQUIRED').max(1000, 'REASON_TOO_LONG').nullable(),
     proposed: z.array(ProposedCorrectionSchema).max(100),
     event_uuid: UuidSchema,
   })

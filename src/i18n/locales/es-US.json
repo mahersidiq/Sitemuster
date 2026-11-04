@@ -238,7 +238,8 @@
     "END_BEFORE_START": "La salida debe ser después de la llegada.",
     "TOO_MANY_PENDING": "Tiene muchas solicitudes en espera. Espere una decisión primero.",
     "RANGE_INVALID": "Elija un período más corto.",
-    "FOREMAN_NOT_FOUND": "Este capataz no está verificado para este proyecto."
+    "FOREMAN_NOT_FOUND": "Este capataz no está verificado para este proyecto.",
+    "REASON_TOO_LONG": "El motivo es demasiado largo (1,000 caracteres como máximo)."
   },
   "scheduleErrors": {
     "SHIFT_NEEDS_DAYS": "Elija al menos un día para cada turno.",

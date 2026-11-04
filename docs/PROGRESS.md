@@ -390,7 +390,7 @@
 - **Replay:** scenario #47 "contractor report disputed" and "report not confirmed by the deadline" run in memory and against Postgres. Every one of the 60 named scenarios now has a fixture.
 
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
-- `supabase test db`: **21 files, 679** pgTAP tests. `027_reports` has 80:
+- `supabase test db`: **21 files, 681** pgTAP tests. `027_reports` has 82:
   - version stored once; a late report is NOT_CONFIRMED; generation audited;
   - staff and own-foreman reads; GC B, other foremen, workers and no-MFA refused; no phones or coordinates;
   - a dispute keeps the issued content; duplicates; one answer per version; staff cannot answer;
@@ -406,15 +406,19 @@
   - another company's foreman and GC B refused; a late answer NOT_CONFIRMED;
   - a worker sees only their own sessions, and a rejection reason reaches them.
   - The database replay runs 83 fixtures (incl. both report fixtures).
-- Vitest unit **359** (report math 11, reports core 11, operations core +1); integration 51, security 78, i18n 18, replay 184.
-- Jest mobile-unit 17, mobile-integration **69**, incl. 11 new flows:
+- Vitest unit **360** (report math 11, reports core 11, operations core +1, visit correction times 1); integration 51, security 78, i18n 18, replay 184.
+- Jest mobile-unit 17, mobile-integration **71**, incl. 13 new flows:
   - staff report and reissue; NOT_CONFIRMED in Spanish;
   - dispute needs a reason and leaves the report unchanged; correction proposal; a late answer;
   - reject with a reason; approve via the manual correction;
   - worker weekly hours; the CSV in English and Spanish holds only own visits; worker correction request;
   - kiosk access needs a reason.
+- Automated review (Codex), three P2 findings fixed with regression tests (each fails on the old code):
+  - A departure-only fix on a night shift landed on the arrival date. Both forms now use `visitCorrectionTimes`: the departure is the first moment at that clock time after the arrival.
+  - A correction reason of 1,001–2,000 characters passed validation but broke the 1,000-character column (a generic 503). Every answer reason is now 3–1,000 characters, checked in the schema, the UI and SQL (`REASON_TOO_LONG`).
+  - The foreman's list did not say which project and day each report covers. Each card now shows "Project · day".
 - typecheck, ESLint + shellcheck, Prettier: pass.
-- GitHub Actions: _recorded in the PR._
+- GitHub Actions: run 41823662075 green on the first head (`45e3f44`). The review-fix push is recorded in the PR.
 
 **NOT VERIFIED (Milestone 10)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the share sheet with a real CSV on iOS and Android (opening it in Numbers / Sheets / Excel with Spanish accents), and the report and answer screens on phones. Checklist: "Real-device reports and CSV share check" (EX for the share sheet).
