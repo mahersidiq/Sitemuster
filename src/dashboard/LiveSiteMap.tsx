@@ -1,4 +1,4 @@
-import { Component, Fragment, useMemo, type ReactNode } from 'react';
+import { Component, Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -37,7 +37,16 @@ export function LiveSiteMap({
       latitudeDelta: span,
       longitudeDelta: span / lngScale,
     };
-  }, [site]);
+  }, [site.center_lat, site.center_lng, site.radius_m, site.exit_hysteresis_m]);
+  // `initialRegion` applies only when the map mounts: a moved site (new configuration version)
+  // must bring the view with it (review finding on PR #9).
+  const mapRef = useRef<MapView>(null);
+  const shownRegion = useRef(region);
+  useEffect(() => {
+    if (shownRegion.current === region) return;
+    shownRegion.current = region;
+    mapRef.current?.animateToRegion(region, 250);
+  }, [region]);
   const center = { latitude: site.center_lat, longitude: site.center_lng };
   return (
     <View
@@ -48,6 +57,7 @@ export function LiveSiteMap({
       testID={testID}
     >
       <MapView
+        ref={mapRef}
         style={styles.map}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : PROVIDER_DEFAULT}
         initialRegion={region}

@@ -10,6 +10,8 @@ type TestGlobals = typeof globalThis & {
   __appEnv?: string;
   /** Milestone 09: the native map fails to render (no map key, provider error). */
   __mapFails?: boolean;
+  /** Milestone 09: regions the native map was moved to (animateToRegion). */
+  __mapAnimations?: { latitude: number; longitude: number }[];
 };
 
 const mockSecureStore = new Map<string, string>();
@@ -38,9 +40,13 @@ jest.mock('react-native-maps', () => {
   const { View } = require('react-native') as typeof import('react-native');
   const MapView = React.forwardRef(function MapView(
     props: { children?: React.ReactNode },
-    ref: React.Ref<{ animateToRegion: () => void }>,
+    ref: React.Ref<{ animateToRegion: (region: { latitude: number; longitude: number }) => void }>,
   ) {
-    React.useImperativeHandle(ref, () => ({ animateToRegion: () => undefined }));
+    React.useImperativeHandle(ref, () => ({
+      animateToRegion: (region: { latitude: number; longitude: number }) => {
+        (globalThis as TestGlobals).__mapAnimations?.push(region);
+      },
+    }));
     if ((globalThis as TestGlobals).__mapFails) throw new Error('map provider failed');
     return React.createElement(View, { testID: 'native-map' }, props.children);
   });
@@ -80,6 +86,7 @@ beforeEach(() => {
   (globalThis as TestGlobals).__deviceLocale = 'en-US';
   (globalThis as TestGlobals).__appEnv = 'development';
   (globalThis as TestGlobals).__mapFails = false;
+  (globalThis as TestGlobals).__mapAnimations = [];
 });
 
 // expo-sqlite / expo-crypto doubles (in-memory; tests never touch a device database).

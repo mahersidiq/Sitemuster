@@ -1494,7 +1494,13 @@ export class FakeSiteMusterApi implements SiteMusterApi {
           }
         : null,
       fresh_seconds: 600,
-      markers: this.world.markers.get(projectId) ?? [],
+      // Like project_map: only workers whose enrollment is still approved.
+      markers: (this.world.markers.get(projectId) ?? []).filter((marker) =>
+        this.world.enrollments.some(
+          (e) =>
+            e.projectId === projectId && e.workerId === marker.worker_id && e.status === 'APPROVED',
+        ),
+      ),
       evaluated_at: new Date().toISOString(),
     });
   }

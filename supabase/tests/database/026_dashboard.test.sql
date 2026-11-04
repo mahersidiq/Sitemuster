@@ -3,7 +3,7 @@
 -- expired markers are gone, only location roles see the map, GC B and foremen are refused, and a
 -- transaction sends ONE minimal message per project and type at commit (no names or positions).
 begin;
-select plan(42);
+select plan(45);
 select tests.seed_world();
 
 select set_config('t.p', tests.id('p_a1')::text, false), set_config('t.pb', tests.id('p_b1')::text, false),
@@ -216,6 +216,25 @@ select is((select array_agg(event || ' ' || replace(topic, tests.id('p_b1')::tex
   array['ENROLLMENT_CHANGED project:' || tests.id('p_a1'), 'PROJECT_CONFIG_CHANGED project:' || tests.id('p_a1'),
         'WORKFORCE_CHANGED project:B'],
   'each type is its own message, and project B''s change is sent only on B''s topic');
+
+-- Revoking an enrollment takes the worker off the map at once (review finding on PR #9).
+select tests.as_postgres();
+set constraints all deferred;
+truncate seen_messages;
+insert into seen_messages select id from realtime.messages;
+update public.worker_enrollments set enrollment_status = 'REVOKED', revoked_at = now(), updated_at = now()
+ where id = tests.id('e_a1');
+select is((select count(*)::int from public.latest_onsite_positions
+            where project_id = tests.id('p_a1') and worker_id = tests.id('w_a1')), 0,
+  'a revoked worker''s latest position is deleted (no direct read can show it)');
+set constraints all immediate;
+select is((select array_agg(event order by event) from realtime.messages
+            where id not in (select id from seen_messages) and topic = 'project:' || tests.id('p_a1')),
+  array['ENROLLMENT_CHANGED', 'WORKFORCE_CHANGED'],
+  'the revocation tells open maps to refetch (enrollment and workforce messages)');
+select tests.authenticate_as(tests.id('u_a_super'));
+select ok(not (public.project_map(current_setting('t.p')::uuid)::text ~ 'Ana Acosta'),
+  'the revoked worker is no longer on the map');
 
 -- Who may receive: roster staff (including attendants) yes; foremen, GC B and workers no.
 select tests.authenticate_as(tests.id('u_a_attendant'));

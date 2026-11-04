@@ -13,7 +13,11 @@ import { access, fakeBackend } from '../support/fake-auth';
  * the real `app/` routes with the typed API double. The same rules run in Postgres (pgTAP 026) and
  * against a real Realtime server (tests/backend/dashboard.test.ts).
  */
-type Globals = typeof globalThis & { __fakeAuthBackend?: unknown; __mapFails?: boolean };
+type Globals = typeof globalThis & {
+  __fakeAuthBackend?: unknown;
+  __mapFails?: boolean;
+  __mapAnimations?: { latitude: number; longitude: number }[];
+};
 
 jest.mock('../../src/auth/create-gateway', () => ({
   createAuthBackend: () => (globalThis as Globals).__fakeAuthBackend ?? null,
@@ -321,6 +325,41 @@ describe('site map', () => {
     );
     expect(world.calls).toContain('projectMap');
     expect(projectId).toBeTruthy();
+  });
+
+  it('a revoked worker leaves an open map, and a moved site brings the view with it', async () => {
+    // Review findings on PR #9: an enrollment change must refetch the map; the native map's
+    // initialRegion applies only on mount, so a moved site must move the view.
+    const { owner, world, projectId, ana } = await site();
+    signIn(world);
+    await chooseLanguage('en-US');
+    await renderRouter('./app', { initialUrl: '/staff/map' });
+    expect(await screen.findByTestId(`marker-${ana.workerId}`)).toBeTruthy();
+    await waitFor(() => expect(world.channels.get(projectId)?.size).toBe(1));
+
+    ana.status = 'REVOKED'; // revoked from another phone: only an enrollment message arrives
+    await act(async () => {
+      world.emitBroadcast(projectId, 'ENROLLMENT_CHANGED');
+    });
+    await waitFor(() => expect(screen.queryByTestId(`marker-${ana.workerId}`)).toBeNull(), {
+      timeout: 5000,
+    });
+
+    const version = owner.projects.find((p) => p.id === projectId)?.versions.at(-1);
+    if (!version) throw new Error('no configuration version');
+    version.centerLat = 29.77;
+    version.centerLng = -95.36;
+    await act(async () => {
+      world.emitBroadcast(projectId, 'PROJECT_CONFIG_CHANGED');
+    });
+    await waitFor(
+      () =>
+        expect((globalThis as Globals).__mapAnimations?.at(-1)).toMatchObject({
+          latitude: 29.77,
+          longitude: -95.36,
+        }),
+      { timeout: 5000 },
+    );
   });
 
   it('a map that cannot render keeps the attendance numbers and the position list', async () => {

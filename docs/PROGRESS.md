@@ -324,12 +324,13 @@
 - Screenshots: `docs/screenshots/m09` (web render against the local stack; the live update arrives through the real Realtime server).
 
 **Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
-- `supabase test db`: **20 files, 596** pgTAP tests. `026_dashboard` has 42:
+- `supabase test db`: **20 files, 599** pgTAP tests. `026_dashboard` has 45:
   - counts equal `attendance_counts` with live staleness and witnessed evidence; repeated evidence adds no one;
   - per company and trade, today in the project's zone, approvals;
   - roster presence, sources and tracking flags (incl. a credential with 2 days left), with no phones, contacts or positions;
   - map: fresh vs stale, expired hidden, rounded, project B never shown; attendant, GC B, foreman, operator and no-MFA refused;
-  - Broadcast: nothing before commit, one message for three changes, exact keys, counts equal the database, changed ids once each, no names or positions, separate types, project B on its own topic, who may receive.
+  - Broadcast: nothing before commit, one message for three changes, exact keys, counts equal the database, changed ids once each, no names or positions, separate types, project B on its own topic, who may receive;
+  - revoking an enrollment deletes the worker's latest position, sends ENROLLMENT_CHANGED and WORKFORCE_CHANGED, and takes the worker off the map.
 - `npm run test:backend`: **117/117**, incl. `dashboard.test.ts` (5) against the real stack:
   - counts match the open sessions and a resent crew batch adds no one;
   - the private channel reaches the superintendent with ids and counts only; GC B is refused the channel (DENIED) and the map;
@@ -337,11 +338,15 @@
   - an immediate re-join gets its own channel; a second simultaneous subscription is told DISCONNECTED instead of hanging (it hung before the fix).
 - The preview found that the navigator kept two copies of the staff tabs, each with its own live provider. Only one heard the join, so the visible copy stayed "connecting". Now there is one provider for the app, and the transport never shares a channel object.
 - Vitest unit **336** (live sync 7, dashboard helpers 4, Broadcast parse 1); integration 51, security 78, i18n 18, replay 180.
-- Jest **70**, incl. 9 new flows:
+- Jest **74**, incl. the live-message scopes (3) and 10 new flows:
   - counts and sources; a Broadcast refetch; pause and resync of a missed change;
   - offline with the data time; revoked access hides data; Spanish;
   - the project picker; the roster with filters; the map (fresh, stale, expired);
-  - a failing map keeps attendance; an attendant sees no map.
+  - a failing map keeps attendance; an attendant sees no map;
+  - a revoked worker leaves an open map, and a moved site moves the view.
+- Automated review (Codex), both fixed with regression tests (each fails on the old code):
+  - P2: the map did not refetch on enrollment changes → added to the map's scopes. The root cause is fixed in the database too: revocation deletes the latest position (spec 03).
+  - P2: a moved site left the native map on the old view → the view follows the site.
 - typecheck, ESLint + shellcheck, Prettier, `expo config`: pass.
 - GitHub Actions: _recorded in the PR._
 

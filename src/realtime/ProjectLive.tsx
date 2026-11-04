@@ -77,7 +77,10 @@ export function queryKeysFor(projectId: string, scopes: ReadonlySet<RefreshScope
     scopes.has('ALL') || wanted.some((scope) => scopes.has(scope));
   if (scopes.size > 0) add(queryKeys.dashboard(projectId));
   if (any('WORKFORCE_CHANGED', 'ENROLLMENT_CHANGED')) add(queryKeys.workforce(projectId));
-  if (any('WORKFORCE_CHANGED', 'PROJECT_CONFIG_CHANGED')) add(queryKeys.projectMap(projectId));
+  // An enrollment that stops being approved takes its worker off the map (review on PR #9).
+  if (any('WORKFORCE_CHANGED', 'ENROLLMENT_CHANGED', 'PROJECT_CONFIG_CHANGED')) {
+    add(queryKeys.projectMap(projectId));
+  }
   if (any('WORKFORCE_CHANGED')) add(queryKeys.openVisits(projectId));
   if (any('ENROLLMENT_CHANGED')) add(queryKeys.roster(projectId));
   if (any('PROJECT_CONFIG_CHANGED')) {

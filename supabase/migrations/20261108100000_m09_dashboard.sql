@@ -276,6 +276,30 @@ begin
 end;
 $$;
 
+-- A worker whose enrollment stops being approved (revoked, rejected) or whose employer is
+-- rejected leaves the map at once: the latest position is deleted, so neither the map nor a
+-- direct read can show it (spec 03 "clear latest worker location visibility after ...
+-- revocation"; review finding on PR #9). The deletion also sends WORKFORCE_CHANGED.
+create function app_private.clear_position_on_enrollment_end()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.latest_onsite_positions
+   where project_id = new.project_id and worker_id = new.worker_id;
+  return null;
+end;
+$$;
+
+create trigger enrollment_end_clears_position
+  after update of enrollment_status, employer_status on public.worker_enrollments
+  for each row
+  when ((old.enrollment_status = 'APPROVED' and new.enrollment_status <> 'APPROVED')
+        or (old.employer_status <> 'REJECTED' and new.employer_status = 'REJECTED'))
+  execute function app_private.clear_position_on_enrollment_end();
+
 -- ---------------------------------------------------------------------------------------------
 -- Private Broadcast (decision #19, #104): the project-wide topic carries counts of every
 -- company, so only staff who may read the whole roster receive it (foremen no longer join).
@@ -419,6 +443,7 @@ create trigger broadcast_project_config after update on public.projects
 -- ---------------------------------------------------------------------------------------------
 revoke all on function
   app_private.live_tracks(uuid), app_private.project_counts(uuid),
+  app_private.clear_position_on_enrollment_end(),
   app_private.queue_project_broadcast(uuid, text, uuid), app_private.send_pending_broadcast(),
   app_private.broadcast_row_change()
   from public, anon, authenticated, service_role;

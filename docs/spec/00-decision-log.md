@@ -320,6 +320,8 @@ Reason: spec 11 "Supabase private Realtime Broadcast contract" and decision #19;
 - **How they are shown.** Each position comes with its time and accuracy and is rounded to 4 decimal places (about 11 m). It is drawn with its accuracy circle and labelled "stale, not live" after `location_fresh_seconds`, judged on server time so a wrong phone clock cannot make it look live. Past its expiry it is hidden on the phone even before a refetch.
 - **Never shown.** The staff member's own location is never requested.
 - **Map failure.** A map that cannot render is replaced by a notice; the attendance numbers and the position list stay.
+- **Revocation.** When an enrollment stops being approved, or the employer is rejected, the worker's latest position is deleted at once (spec 03 "clear latest worker location visibility after … revocation"), so no direct read can show it. The deletion also sends WORKFORCE_CHANGED, and the map also refetches on ENROLLMENT_CHANGED.
+- **Moved site.** When a new configuration moves the site, the open map moves its view with it (review findings on PR #9).
 
 Reason: spec 01 "a stale map marker is not live"; spec 03 "latest_onsite_positions used for map only when fresh, authorized"; spec 09 location visibility; acceptance "maps failure retains attendance".
 
