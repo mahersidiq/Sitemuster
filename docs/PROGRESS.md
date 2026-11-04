@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 01 | Clean repository, locked stack and CI | done (NOT VERIFIED items) | [#1](https://github.com/mahersidiq/Sitemuster/pull/1) | squash-merged under #48 after CI green |
 | 02 | Database, RLS and role matrix | done (NOT VERIFIED items) | [#2](https://github.com/mahersidiq/Sitemuster/pull/2) | squash-merged under #48 after CI green |
-| 03 | Authentication, MFA and English/Spanish | in review | PR #3 | NOT VERIFIED items below |
+| 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
 | 04 | GC organizations, projects, shifts and circles | not started | | |
 | 05 | Orientation sessions, badges, approval | not started | | |
 | 06 | Attendance state machine and deterministic replay | not started | | |
@@ -88,6 +88,7 @@
 - `npm run test:backend` against the real local Auth server: **8/8** — SMS sign-in, wrong code, 60 s cooldown, expired code, single-use code, phone-only user blocked from staff RPC; staff email code → aal1 denied → TOTP enroll → aal2 → org created → next sign-in requires TOTP; email cooldown.
 - Vitest unit **143**, integration 51, security 64, i18n 10, replay 3; Jest mobile-unit 7 + mobile-integration **18** (10 new sign-in flow tests); typecheck/lint/format/expo config/audit pass. Flaky tamper test found and fixed (25 consecutive passes).
 - Web-render screenshots (`docs/screenshots/m03`) captured against the local Auth server.
+- GitHub Actions run 41751877095: `code-quality` success; `database` success — pgTAP 216 pass and `npm run test:backend` 8/8 against the CI Supabase stack.
 
 **NOT VERIFIED (Milestone 03)**
 - Real Twilio SMS delivery, A2P 10DLC and ≥200 sign-ins/hour provider throughput (HUMAN_CHECKLIST §4).
