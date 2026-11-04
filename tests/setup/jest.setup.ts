@@ -180,7 +180,13 @@ jest.mock('react-native-background-geolocation', () => {
       sync: () => Promise.resolve([]),
       getCurrentPosition: () => Promise.reject(new Error('no location in tests')),
       getProviderState: () =>
-        Promise.resolve({ enabled: true, status: 4, gps: true, network: true, accuracyAuthorization: 0 }),
+        Promise.resolve({
+          enabled: true,
+          status: 4,
+          gps: true,
+          network: true,
+          accuracyAuthorization: 0,
+        }),
       requestPermission: () => Promise.resolve(4),
       registerHeadlessTask: () => undefined,
       onGeofence: () => subscription,
