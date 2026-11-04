@@ -64,7 +64,8 @@ export interface TrackingServiceDeps {
   platform: 'ios' | 'android';
   appVersion: string;
   now(): number;
-  notification: { title: string; text: string; channelName: string };
+  /** Localized Android foreground-service notification, read when the SDK starts. */
+  notification(): { title: string; text: string; channelName: string };
   renewWithSecret(token: string): Promise<RenewOutcome>;
   /**
    * Sends one coordinate-free record straight to ingest-location-batch with the device secret
@@ -103,6 +104,7 @@ export class TrackingService {
   private status: TrackingStatus = INITIAL;
   /** Last permission usability the server was told about (null = not reported yet). */
   private reportedUsable: boolean | null = null;
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: TrackingServiceDeps) {
     this.agent = new TrackingAgent(deps.driver, deps.store, {
@@ -132,8 +134,27 @@ export class TrackingService {
     return () => this.listeners.delete(listener);
   }
 
-  /** Sign-in, app start, foreground: re-read everything and (re-)arm. */
-  async start(userId: string): Promise<TrackingStatus> {
+  /**
+   * Sign-in, app start, foreground: re-read everything and (re-)arm. Calls are serialized, so
+   * overlapping triggers (start, foreground, phone set-up) never initialize the SDK twice.
+   */
+  start(userId: string): Promise<TrackingStatus> {
+    const run = this.pending.then(() => this.startNow(userId));
+    this.pending = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  /** Stop listening without touching the SDK or its queue (the service is being replaced). */
+  release(): void {
+    this.detach?.();
+    this.detach = null;
+    this.listeners.clear();
+  }
+
+  private async startNow(userId: string): Promise<TrackingStatus> {
     this.userId = userId;
     if (!this.restored) {
       await this.agent.restore();
@@ -218,7 +239,7 @@ export class TrackingService {
       renewUrl: this.deps.urls.renew,
       token: credential.token,
       renewAfterEpochSeconds: renewAfterEpochSeconds(credential.expiresAt),
-      notification: this.deps.notification,
+      notification: this.deps.notification(),
     };
     if (!this.ready) {
       const onsite =

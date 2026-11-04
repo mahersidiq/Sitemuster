@@ -124,7 +124,7 @@ function setup(
     platform: 'ios',
     appVersion: '0.3.0',
     now: () => NOW,
-    notification: { title: 't', text: 'x', channelName: 'c' },
+    notification: () => ({ title: 't', text: 'x', channelName: 'c' }),
     renewWithSecret:
       options.renew ??
       (async () => {
@@ -291,6 +291,21 @@ describe('tracking service', () => {
     await service.refresh();
     expect(posted).toHaveLength(2);
     expect(posted[1]).toMatchObject({ provider: { status: 3, gps: true } });
+  });
+
+  it('serializes overlapping starts: the SDK is initialized once', async () => {
+    const { service, readyCalls } = setup();
+    await Promise.all([service.start(USER), service.start(USER), service.refresh()]);
+    expect(readyCalls()).toBe(1);
+  });
+
+  it('release (service replaced, e.g. new backend client) keeps the SDK and its queue', async () => {
+    const { service, sdk } = setup();
+    await service.start(USER);
+    await sdk.moveTo('2026-11-04T12:01:00Z', { lat: 29.77, lng: -95.37, accuracy: 10 });
+    const before = await sdk.count();
+    service.release();
+    expect(await sdk.count()).toBe(before);
   });
 
   it('stop (sign-out) disarms, drops the queue and forgets the cached plan', async () => {

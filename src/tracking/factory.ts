@@ -25,8 +25,8 @@ export function trackingUrls(supabaseUrl: string): { ingest: string; renew: stri
 export function createNativeTrackingService(input: {
   api: SiteMusterApi;
   supabaseUrl: string;
-  /** Localized Android foreground-service notification (continuous onsite mode). */
-  notification: { title: string; text: string; channelName: string };
+  /** Localized Android foreground-service notification, read when the SDK starts. */
+  notification: () => { title: string; text: string; channelName: string };
 }): TrackingService {
   const urls = trackingUrls(input.supabaseUrl);
   const appVersion = Constants.expoConfig?.version ?? '0.0.0';

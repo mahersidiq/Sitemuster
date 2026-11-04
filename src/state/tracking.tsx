@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -55,6 +56,9 @@ export function TrackingProvider({
   const serviceRef = useRef<TrackingService | null>(null);
   const userId =
     state.status === 'signed_in' && canOpenWorkerShell(state) ? state.access.user_id : null;
+  // The localized Android notification is read when the SDK starts, so a language switch never
+  // recreates the service (recreating it must not touch the native queue).
+  const tRef = useRef(t);
   const factory = useMemo<TrackingServiceFactory>(
     () =>
       createService ??
@@ -63,15 +67,22 @@ export function TrackingProvider({
           ? createNativeTrackingService({
               api: backendApi,
               supabaseUrl: env.supabaseUrl,
-              notification: {
-                title: t('tracking.notification.title'),
-                text: t('tracking.notification.text'),
-                channelName: t('tracking.notification.channelName'),
-              },
+              notification: () => ({
+                title: tRef.current('tracking.notification.title'),
+                text: tRef.current('tracking.notification.text'),
+                channelName: tRef.current('tracking.notification.channelName'),
+              }),
             })
           : null),
-    [createService, env.supabaseUrl, t],
+    [createService, env.supabaseUrl],
   );
+  // Updated in a layout effect — which runs before the passive cleanup below — so that cleanup
+  // can tell "signed out / other user" (drop this worker's queue) from a mere re-creation.
+  const currentUser = useRef(userId);
+  useLayoutEffect(() => {
+    tRef.current = t;
+    currentUser.current = userId;
+  }, [t, userId]);
 
   useEffect(() => {
     if (!api || !userId) return undefined;
@@ -97,10 +108,15 @@ export function TrackingProvider({
       unsubscribe();
       serviceRef.current = null;
       setStatus(null);
-      // Signed out (or switched user): stop tracking and drop this worker's queue.
-      service.stop().catch((error: unknown) => {
-        console.warn('tracking: stop failed', error instanceof Error ? error.message : 'unknown');
-      });
+      if (currentUser.current !== userId) {
+        // Signed out or another user: stop tracking and drop this worker's queue.
+        service.stop().catch((error: unknown) => {
+          console.warn('tracking: stop failed', error instanceof Error ? error.message : 'unknown');
+        });
+      } else {
+        // Same worker, new backend client: release listeners only; the SDK keeps running.
+        service.release();
+      }
     };
   }, [api, userId, factory]);
 

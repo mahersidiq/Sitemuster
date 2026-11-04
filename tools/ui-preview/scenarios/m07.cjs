@@ -206,7 +206,7 @@ async function main() {
     await shot(worker, '03-tracking-sync-sites-en', 'tracking-monitored');
 
     // Permission-required state, in Spanish: the preview stand-in now reports "While Using"
-    // without Precise; switching the language restarts the tracking service, which re-reads it.
+    // without Precise; opening the details screen re-reads permissions (refresh on open).
     await worker.evaluate(() => {
       window.__previewPermission = 'whenInUse';
     });
@@ -214,11 +214,12 @@ async function main() {
     await openTab(worker, '/worker/profile');
     await byTestId(worker, 'language-switch-es-US').click();
     await openTab(worker, '/worker/home');
-    await worker.getByText('Necesita permiso de ubicación', { exact: false }).first().waitFor();
-    await shot(worker, '04-home-permission-required-es');
     await byTestId(worker, 'tracking-card').click();
     await byTestId(worker, 'tracking-allow').waitFor();
     await shot(worker, '05-tracking-permission-required-es', 'tracking-permissions');
+    await byTestId(worker, 'tracking-back').click();
+    await worker.getByText('Necesita permiso de ubicación', { exact: false }).first().waitFor();
+    await shot(worker, '04-home-permission-required-es');
   } finally {
     await browser.close();
   }
