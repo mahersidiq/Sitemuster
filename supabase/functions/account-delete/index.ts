@@ -7,6 +7,7 @@ import {
   sessionFromClaims,
 } from '../_shared/account-delete-core.ts';
 import { callRpc, postgrestEnvFrom } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). Auth verifies the person's token again here (GET
 // /auth/v1/user) before its claims are read; the request itself runs as the service role through
@@ -47,7 +48,7 @@ Deno.serve((req) =>
     },
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   }),

@@ -81,6 +81,17 @@ describe('device-activate', () => {
     expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
       'WORKER_PROFILE_REQUIRED',
     );
+    const limited = deps({
+      activate: async () => ({ ok: false, status: 400, code: 'RATE_LIMITED' }),
+    });
+    const tooMany = await handleDeviceActivate(request(valid), limited.d);
+    expect(tooMany.status).toBe(429);
+    expect(((await tooMany.json()) as { error: { code: string } }).error.code).toBe('RATE_LIMITED');
+    // Account deletion requested (or an operator account): refused, nothing issued.
+    const refused = deps({ activate: async () => ({ ok: false, status: 403, code: 'FORBIDDEN' }) });
+    const forbidden = await handleDeviceActivate(request(valid), refused.d);
+    expect(forbidden.status).toBe(403);
+    expect(JSON.stringify(await forbidden.json())).not.toContain('upload_token');
   });
 
   it("flags the worker's active sessions for review when a phone is replaced (decision #27)", async () => {

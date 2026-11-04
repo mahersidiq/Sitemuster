@@ -676,8 +676,11 @@ $$;
 -- 4. Privacy maintenance (hourly; every environment)
 -- ---------------------------------------------------------------------------------------------
 -- Raw fixes expire ≤ 24 h after receipt (decision #55): partitions are kept ready and expired ones
--- dropped. Rate-limit buckets older than two days and quarantine rows (coordinate-free) older than
--- 30 days are removed. Due account deletions are processed.
+-- dropped. Subjects that reached a rate limit are flagged BEFORE their buckets (older than two
+-- days) are removed, so the evidence survives (decision #133). Quarantine rows (coordinate-free)
+-- older than 30 days and reviewed flags older than 400 days are removed; open flags never are.
+-- Expired QR/badge/push secrets are deleted (decision #134, file 20261111100200). Due account
+-- deletions are processed.
 create function app_private.privacy_maintenance(p_now timestamptz default now())
 returns jsonb
 language plpgsql
@@ -687,19 +690,28 @@ set timezone = 'UTC'
 as $$
 declare
   v_fixes bigint;
+  v_flags integer;
   v_buckets integer;
   v_quarantine integer;
+  v_reviewed integer;
+  v_secrets jsonb;
   v_deletions integer;
 begin
   perform app_private.ensure_raw_fix_partitions((p_now at time zone 'UTC')::date, 3);
   v_fixes := app_private.purge_expired_raw_fixes(p_now);
+  v_flags := app_private.record_security_flags();
   delete from app_private.rate_limit_buckets where window_start < p_now - interval '2 days';
   get diagnostics v_buckets = row_count;
   delete from app_private.location_ingest_quarantine where received_at < p_now - interval '30 days';
   get diagnostics v_quarantine = row_count;
+  delete from app_private.security_flags where status = 'REVIEWED' and reviewed_at < p_now - interval '400 days';
+  get diagnostics v_reviewed = row_count;
+  v_secrets := app_private.purge_expired_secrets(p_now);
   v_deletions := app_private.process_account_deletions(p_now);
-  return jsonb_build_object('raw_fixes_purged', v_fixes, 'rate_limit_buckets_purged', v_buckets,
-                            'quarantine_purged', v_quarantine, 'accounts_deleted', v_deletions);
+  return jsonb_build_object('raw_fixes_purged', v_fixes, 'security_flags_raised', v_flags,
+                            'rate_limit_buckets_purged', v_buckets, 'quarantine_purged', v_quarantine,
+                            'reviewed_flags_purged', v_reviewed, 'secrets', v_secrets,
+                            'accounts_deleted', v_deletions);
 end;
 $$;
 
@@ -872,6 +884,7 @@ declare
   v_result jsonb;
 begin
   perform app_private.assert_operator(p_reason);
+  perform app_private.record_security_flags();
   v_result := jsonb_build_object(
     'generated_at', now(),
     'environment', app_private.deployment_environment(),
@@ -898,6 +911,19 @@ begin
     'account_deletions', (select jsonb_build_object('pending', count(*),
                                                      'oldest_requested_at', min(requested_at))
                             from app_private.account_deletion_requests where status = 'REQUESTED'),
+    -- Open security flags by limit (counts only; `npm run operator -- flags` lists them).
+    'security_flags_open', coalesce((
+      select jsonb_object_agg(bucket, n) from (
+        select bucket, count(*) as n from app_private.security_flags where status = 'OPEN' group by bucket) x),
+      '{}'::jsonb),
+    -- Should stay 0: the hourly job removes these.
+    'secrets_overdue', jsonb_build_object(
+      'orientation_sessions_past_expiry', (select count(*) from public.orientation_sessions
+                                            where status = 'OPEN' and expires_at < now() - interval '1 hour'),
+      'revoked_badge_keys', (select count(*) from app_private.device_badge_secrets
+                              where revoked_at < now() - interval '25 hours'),
+      'revoked_push_tokens', (select count(*) from app_private.push_tokens
+                               where revoked_at < now() - interval '25 hours')),
     'jobs', coalesce((
       select jsonb_agg(jsonb_build_object('job', j.jobname, 'schedule', j.schedule, 'active', j.active,
                                           'last_status', d.status, 'last_end', d.end_time) order by j.jobname)

@@ -19,6 +19,7 @@ import {
   workerFactsFromJson,
 } from '../_shared/operations-core.ts';
 import { callRpc, postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). The caller's permissions come from
 // `operation_context` called WITH THEIR OWN JWT; the service role is used only for the
@@ -117,7 +118,7 @@ Deno.serve((req) => {
     // Safe structured lines (request id, codes and counts only) for refusals and failures.
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   });

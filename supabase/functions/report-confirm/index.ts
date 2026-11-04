@@ -7,6 +7,7 @@ import {
   ReportsRpcError,
 } from '../_shared/reports-core.ts';
 import { callRpc, postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). The foreman's identity and company come from
 // `report_context` called WITH THEIR OWN JWT; `edge_confirm_report` (service role) re-checks the
@@ -54,7 +55,7 @@ Deno.serve((req) => {
     },
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   });

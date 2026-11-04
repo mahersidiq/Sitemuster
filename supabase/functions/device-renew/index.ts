@@ -1,5 +1,6 @@
 import { handleDeviceRenew } from '../_shared/renew-core.ts';
 import { callRpc, currentUserId, postgrestEnvFrom } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt=false (supabase/config.toml): the SDK presents the device secret, not a JWT; a
 // Supabase session, when used, is confirmed by the Auth server inside the handler.
@@ -13,7 +14,7 @@ Deno.serve((req) =>
     // every invocation's status is already in the platform's function logs.
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   }),

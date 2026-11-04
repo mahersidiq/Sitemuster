@@ -52,6 +52,15 @@ describe('operator CLI arguments', () => {
         'counsel',
       ]).args,
     ).toMatchObject({ p_organization_id: ID, p_project_id: null, p_kind: 'LEGAL_HOLD' });
+    expect(commandFor(['flags', '--reason', 'weekly flag review'])).toEqual({
+      rpc: 'operator_list_security_flags',
+      args: { p_reason: 'weekly flag review' },
+    });
+    expect(
+      commandFor(['flag-review', ID, '--note', 'load test traffic', '--reason', 'flag review'])
+        .args,
+    ).toEqual({ p_flag_id: ID, p_note: 'load test traffic', p_reason: 'flag review' });
+    expect(() => commandFor(['flag-review', ID, '--reason', 'flag review'])).toThrow(/--note/);
   });
 
   it('refuses a missing reason, malformed ids, a bad hash, an unknown kind or command', () => {

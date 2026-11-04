@@ -6,3 +6,5 @@ alter type public.platform_operator_action add value 'LEGAL_NOTICE_RETIRE';
 alter type public.platform_operator_action add value 'RETENTION_HOLD_SET';
 alter type public.platform_operator_action add value 'RETENTION_HOLD_RELEASE';
 alter type public.platform_operator_action add value 'STAFF_MFA_RESET';
+alter type public.platform_operator_action add value 'SECURITY_FLAGS_LIST';
+alter type public.platform_operator_action add value 'SECURITY_FLAG_REVIEW';

@@ -60,6 +60,65 @@ describe('crash report scrubbing', () => {
     expect(scrubbed.event_id).toBe('e1');
   });
 
+  it.each([
+    [
+      'rotating orientation QR',
+      'scan SMO1.33333333-3333-4333-8333-333333333333.29466180.AbCdEfGhIjKlMnOpQrStUv',
+      'AbCdEfGhIjKlMnOpQrStUv',
+    ],
+    [
+      'printed orientation QR',
+      'SMS1.33333333-3333-4333-8333-333333333333.abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ',
+      'abcdefghijklmnopqrstuvwxyz',
+    ],
+    [
+      'Expo push token',
+      'push to ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx] failed',
+      'xxxxxxxxxxxxxxxxxxxxxx',
+    ],
+    [
+      'authenticator link',
+      'otpauth://totp/SiteMuster:pm?secret=JBSWY3DPEHPK3PXP&issuer=SiteMuster',
+      'JBSWY3DPEHPK3PXP',
+    ],
+    [
+      'authenticator secret',
+      'secret is GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+      'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
+    ],
+    [
+      'refresh token in a body',
+      'grant_type=refresh_token&refresh_token=v1.Zm9vYmFy',
+      'v1.Zm9vYmFy',
+    ],
+    ['api key in a query', 'GET /rest/v1/x?apikey=sb_publishable_abc123', 'sb_publishable_abc123'],
+  ])('removes the %s from free text', (_label, text, needle) => {
+    expect(JSON.stringify(scrubEvent({ message: text }))).not.toContain(needle);
+  });
+
+  it('removes one-time codes, QR secrets and installation ids kept under their own keys', () => {
+    const out = JSON.stringify(
+      scrubEvent({
+        extra: {
+          code: '123456',
+          pin: 4321,
+          static_code: 'abcdefghij',
+          rotating_secret: 'q',
+          qr_payload: 'SMx',
+          installation_id: 'inst-123',
+          hardware_installation_hash: 'ff00',
+          totp: { uri: 'x' },
+          error: { code: 'RATE_LIMITED' },
+        },
+      }),
+    );
+    for (const needle of ['123456', '4321', 'abcdefghij', 'SMx', 'inst-123', 'ff00', '"uri"']) {
+      expect(out).not.toContain(needle);
+    }
+    // Error codes stay readable for debugging.
+    expect(out).toContain('RATE_LIMITED');
+  });
+
   it('scrubs breadcrumbs independently', () => {
     const crumb = scrubBreadcrumb({
       message: 'GPS 29.7604, -95.3698',

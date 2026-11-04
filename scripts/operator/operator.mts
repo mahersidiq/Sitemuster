@@ -34,6 +34,9 @@ Commands:
   hold-set <organization id> --kind LEGAL_HOLD|CONTRACT_RETENTION --basis "<documented basis>" [--project <project id>]
   hold-release <hold id>
   mfa-reset <user id>                            After an out-of-band identity check (never an operator)
+  flags                                          Open security flags (a rate limit was reached)
+  flag-review <flag id> --note "<what you found>"
+                                                 Record the review of a flag (flags are never deleted while open)
 
 Environment: SITEMUSTER_SUPABASE_URL, SITEMUSTER_SUPABASE_ANON_KEY (public values) and
 SITEMUSTER_OPERATOR_EMAIL. The e-mail code and authenticator code are asked for each run.`;
@@ -150,6 +153,17 @@ export function commandFor(argv: readonly string[]): OperatorCommand {
       return {
         rpc: 'operator_reset_staff_mfa',
         args: { p_user_id: uuid(positional[0], 'The user id'), p_reason: reason },
+      };
+    case 'flags':
+      return { rpc: 'operator_list_security_flags', args: { p_reason: reason } };
+    case 'flag-review':
+      return {
+        rpc: 'operator_review_security_flag',
+        args: {
+          p_flag_id: uuid(positional[0], 'The flag id'),
+          p_note: required(flags.note, '--note'),
+          p_reason: reason,
+        },
       };
     default:
       throw new UsageError(`Unknown command "${command}".\n\n${USAGE}`);

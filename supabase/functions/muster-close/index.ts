@@ -5,6 +5,7 @@ import {
   MusterRpcError,
 } from '../_shared/muster-core.ts';
 import { callRpc, postgrestEnvFrom } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). `close_muster` runs WITH THE CALLER'S OWN JWT: the
 // designated safety role closes, acknowledges anyone unresolved and freezes the report.
@@ -38,7 +39,7 @@ Deno.serve((req) => {
     push: { name: 'none', kind: 'real', send: async () => [] },
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   });

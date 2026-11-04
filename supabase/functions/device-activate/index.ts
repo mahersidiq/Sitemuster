@@ -4,6 +4,7 @@ import { iso } from '../../../packages/shared/src/attendance/time.ts';
 import { handleDeviceActivate } from '../_shared/device-core.ts';
 import { functionEnvironment } from '../_shared/http.ts';
 import { callRpc, currentUserId, postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 const env = postgrestEnvFrom(Deno.env);
 const rpc = serviceRpc(env);
@@ -25,7 +26,7 @@ Deno.serve((req) =>
     // every invocation's status is already in the platform's function logs.
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   }),

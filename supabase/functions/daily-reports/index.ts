@@ -5,6 +5,7 @@ import {
   ReportsAuthError,
 } from '../_shared/reports-core.ts';
 import { callRpc, postgrestEnvFrom, serviceRpc } from '../_shared/postgrest.ts';
+import { logSafe } from '../_shared/log.ts';
 
 // verify_jwt = true (supabase/config.toml). Permissions come from `report_context`,
 // `report_list` and `my_pending_reports` called WITH THE CALLER'S OWN JWT; the service role only
@@ -25,6 +26,7 @@ Deno.serve((req) => {
   };
   return handleDailyReports(req, {
     now: () => Date.now(),
+    budget: async () => (await asCaller('consume_report_budget', {})) === true,
     context: async (projectId) =>
       reportContextFromJson(await asCaller('report_context', { p_project_id: projectId })),
     foremanProjects: async () => {
@@ -53,7 +55,7 @@ Deno.serve((req) => {
     // Safe structured lines (request id, codes and counts only) for refusals and failures.
     log: (entry) => {
       if (Number(entry.status ?? 200) >= 400 || String(entry.outcome).includes('fail')) {
-        console.warn(JSON.stringify(entry));
+        logSafe(entry);
       }
     },
   });
