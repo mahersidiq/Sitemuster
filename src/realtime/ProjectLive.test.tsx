@@ -42,8 +42,9 @@ describe('which reads a live message makes stale', () => {
   });
 
   it('a full resync refetches every project read; nothing asked, nothing refetched', () => {
-    expect(keys('ALL')).toHaveLength(8);
+    expect(keys('ALL')).toHaveLength(9);
     expect(keys('ALL')).toContain(key('reports', PROJECT));
+    expect(keys('ALL')).toContain(key('muster', PROJECT));
     expect(keys()).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ import { Body, Heading } from '../components/Typography';
 import { installationHash } from '../device/device-store';
 import { useApi } from '../state/auth';
 import { useOutbox } from '../state/outbox';
+import { musterScans } from '../muster/format';
 import { colors, spacing } from '../theme';
 import { classifyBadge, kioskPublicId } from './fallbacks';
 import { loadKioskId, saveKioskId } from './kiosk-store';
@@ -30,14 +31,20 @@ type Direction = 'ENTRY' | 'EXIT';
  * record goes into the outbox with this phone's own time. It shows "waiting to sync" until the
  * server answers per person; the kiosk never checks a badge itself (it holds no secrets).
  * A printed badge is weaker evidence: it needs an explicit face-and-name confirmation.
+ *
+ * Muster mode (`musterId`, docs/spec/12): the same attended scan records "seen at the assembly
+ * point" for that muster (a physical verification) instead of arriving/leaving. The badge alone
+ * is never proof: the attendant looks at the person, and a printed badge needs the same check.
  */
 export function KioskConsole({
   projectId,
   nameOf,
+  musterId,
   testID = 'kiosk',
 }: {
   projectId: string;
   nameOf: (workerId: string) => string | null;
+  musterId?: string;
   testID?: string;
 }) {
   const { t, i18n } = useTranslation();
@@ -76,29 +83,54 @@ export function KioskConsole({
 
   const scans = useMemo(
     () =>
-      outbox.entries
-        .filter(
-          (entry) =>
-            entry.event.project_id === projectId &&
-            (entry.event.operation_type === 'KIOSK_ENTRY' ||
-              entry.event.operation_type === 'KIOSK_EXIT'),
-        )
-        .reverse(),
-    [outbox.entries, projectId],
+      musterId
+        ? musterScans(outbox.entries, musterId)
+        : outbox.entries
+            .filter(
+              (entry) =>
+                entry.event.project_id === projectId &&
+                (entry.event.operation_type === 'KIOSK_ENTRY' ||
+                  entry.event.operation_type === 'KIOSK_EXIT'),
+            )
+            .reverse(),
+    [outbox.entries, projectId, musterId],
   );
 
   const record = async (code: string, kind: 'DYNAMIC_APP' | 'PRINTED') => {
     if (!kioskId) return;
+    const label = {
+      title: kind === 'PRINTED' ? t('kiosk.printedFlag') : t('kiosk.phoneFlag'),
+      badge: kind,
+    };
+    const observedAt = new Date().toISOString();
     try {
-      await outbox.enqueue(
-        {
-          project_id: projectId,
-          operation_type: direction === 'ENTRY' ? 'KIOSK_ENTRY' : 'KIOSK_EXIT',
-          observed_at: new Date().toISOString(),
-          payload: { badge_payload: code, badge_kind: kind, kiosk_device_id: kioskId, direction },
-        },
-        { title: kind === 'PRINTED' ? t('kiosk.printedFlag') : t('kiosk.phoneFlag'), badge: kind },
-      );
+      if (musterId) {
+        await outbox.enqueue(
+          {
+            project_id: projectId,
+            operation_type: 'MUSTER_PHYSICAL_VERIFY',
+            observed_at: observedAt,
+            payload: {
+              muster_id: musterId,
+              action: 'PHYSICAL_VERIFICATION',
+              badge_payload: code,
+              badge_kind: kind,
+              kiosk_device_id: kioskId,
+            },
+          },
+          label,
+        );
+      } else {
+        await outbox.enqueue(
+          {
+            project_id: projectId,
+            operation_type: direction === 'ENTRY' ? 'KIOSK_ENTRY' : 'KIOSK_EXIT',
+            observed_at: observedAt,
+            payload: { badge_payload: code, badge_kind: kind, kiosk_device_id: kioskId, direction },
+          },
+          label,
+        );
+      }
       setMessage({ tone: 'info', text: t('kiosk.recorded') });
     } catch (error) {
       setMessage({ tone: 'danger', text: t(errorMessageKey(error)) });
@@ -136,17 +168,23 @@ export function KioskConsole({
   }
   return (
     <View style={styles.stack} testID={testID}>
-      <Banner tone="info" text={t('kiosk.attended')} />
-      <ChipGroup
-        label={t('kiosk.direction')}
-        options={[
-          { value: 'ENTRY' as const, label: t('kiosk.ENTRY') },
-          { value: 'EXIT' as const, label: t('kiosk.EXIT') },
-        ]}
-        selected={[direction]}
-        onToggle={setDirection}
-        testID={`${testID}-direction`}
-      />
+      {musterId ? (
+        <Banner tone="danger" text={t('muster.kioskBanner')} testID={`${testID}-muster`} />
+      ) : (
+        <>
+          <Banner tone="info" text={t('kiosk.attended')} />
+          <ChipGroup
+            label={t('kiosk.direction')}
+            options={[
+              { value: 'ENTRY' as const, label: t('kiosk.ENTRY') },
+              { value: 'EXIT' as const, label: t('kiosk.EXIT') },
+            ]}
+            selected={[direction]}
+            onToggle={setDirection}
+            testID={`${testID}-direction`}
+          />
+        </>
+      )}
       <Text style={styles.hint}>{t('kiosk.scanHelp')}</Text>
       {permission?.granted ? (
         <View style={styles.camera}>
@@ -213,9 +251,11 @@ export function KioskConsole({
         {scans.map((entry) => (
           <View key={entry.event.event_uuid} style={styles.row} testID={`${testID}-scan`}>
             <Text style={styles.line}>
-              {`${time(entry.event.observed_at)} · ${t(
-                `kiosk.${entry.event.operation_type === 'KIOSK_ENTRY' ? 'ENTRY' : 'EXIT'}`,
-              )} · ${entry.label.badge === 'PRINTED' ? t('kiosk.printedFlag') : t('kiosk.phoneFlag')}`}
+              {`${time(entry.event.observed_at)} · ${
+                entry.event.operation_type === 'MUSTER_PHYSICAL_VERIFY'
+                  ? t('muster.kioskSeen')
+                  : t(`kiosk.${entry.event.operation_type === 'KIOSK_ENTRY' ? 'ENTRY' : 'EXIT'}`)
+              } · ${entry.label.badge === 'PRINTED' ? t('kiosk.printedFlag') : t('kiosk.phoneFlag')}`}
             </Text>
             <OutcomeLine entry={entry} nameOf={nameOf} />
           </View>

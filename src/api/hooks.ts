@@ -40,6 +40,16 @@ export const queryKeys = {
   myAttendance: (projectId: string, from: string) => ['my-attendance', projectId, from] as const,
   correctionRequests: (projectId: string) => ['correction-requests', projectId] as const,
   kioskGrants: (projectId: string) => ['kiosk-grants', projectId] as const,
+  // Milestone 11 (everything under ['muster', projectId] refetches on MUSTER_CHANGED)
+  musterOf: (projectId: string) => ['muster', projectId] as const,
+  projectMusters: (projectId: string) => ['muster', projectId, 'list'] as const,
+  musterBoard: (projectId: string, musterId: string) =>
+    ['muster', projectId, 'board', musterId] as const,
+  musterReport: (projectId: string, musterId: string) =>
+    ['muster', projectId, 'report', musterId] as const,
+  myMusters: ['my-musters'] as const,
+  foremanMusters: ['foreman-musters'] as const,
+  foremanMuster: (musterId: string) => ['foreman-muster', musterId] as const,
 };
 
 export function useOrganizations() {
@@ -216,6 +226,79 @@ export function useKioskGrants(projectId: string) {
     useQuery({
       queryKey: queryKeys.kioskGrants(projectId),
       queryFn: () => api.foremanKioskGrants(projectId),
+    }),
+  );
+}
+
+// Milestone 11: Active Muster Mode. Time-critical reads refetch often while a screen is open;
+// the private project channel also invalidates staff reads. Never location polling.
+
+/** How often an open muster screen refreshes (seconds matter in an emergency). */
+export const MUSTER_REFRESH_MS = 10_000;
+
+export function useProjectMusters(projectId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.projectMusters(projectId),
+      queryFn: () => api.projectMusters(projectId),
+      refetchInterval: MUSTER_REFRESH_MS,
+    }),
+  );
+}
+
+export function useMusterBoard(projectId: string, musterId: string | null) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.musterBoard(projectId, musterId ?? ''),
+      queryFn: () => api.musterBoard(musterId ?? ''),
+      enabled: Boolean(musterId),
+      refetchInterval: MUSTER_REFRESH_MS,
+    }),
+  );
+}
+
+export function useMusterReport(projectId: string, musterId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.musterReport(projectId, musterId),
+      queryFn: () => api.musterReport(musterId),
+    }),
+  );
+}
+
+export function useMyMusters(enabled = true) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.myMusters,
+      queryFn: () => api.myActiveMusters(),
+      enabled,
+      refetchInterval: 20_000,
+    }),
+  );
+}
+
+export function useForemanMusters() {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.foremanMusters,
+      queryFn: () => api.foremanActiveMusters(),
+      refetchInterval: 20_000,
+    }),
+  );
+}
+
+export function useForemanMuster(musterId: string) {
+  const api = useApi();
+  return hideOnAuthError(
+    useQuery({
+      queryKey: queryKeys.foremanMuster(musterId),
+      queryFn: () => api.foremanMuster(musterId),
+      refetchInterval: MUSTER_REFRESH_MS,
     }),
   );
 }

@@ -6,7 +6,7 @@
 -- are signed append-only amendments; push delivery is metadata only; GC B, the operator, workers
 -- and foremen of other companies are refused.
 begin;
-select plan(69);
+select plan(70);
 select tests.seed_world();
 
 select set_config('t.p', tests.id('p_a1')::text, false), set_config('t.seed', tests.id('m_a')::text, false);
@@ -221,6 +221,11 @@ select is((select jsonb_build_object(
 select ok((select bool_and(jsonb_array_length(m -> 'responses') > 0) from public.muster_reports r, jsonb_array_elements(r.report -> 'members') m
             where r.muster_id = current_setting('t.m')::uuid and m ->> 'final_status' = 'VERIFIED_ACCOUNTED'),
   'every verified person shows who verified them and how');
+select ok((select bool_and(exists (select 1 from public.muster_snapshot_members sm
+                                    where sm.id = (m ->> 'member_id')::uuid and sm.muster_id = r.muster_id))
+             from public.muster_reports r, jsonb_array_elements(r.report -> 'members') m
+            where r.muster_id = current_setting('t.m')::uuid),
+  'each report row names its frozen-list entry, so a correction can point at one person');
 select tests.as_postgres();
 select is(public.edge_muster_respond(current_setting('t.m')::uuid, current_setting('t.diego')::uuid, 'PHYSICAL_VERIFICATION', 'KIOSK',
             tests.id('u_a_attendant'), tests.id('k_a'), now() - interval '1 second', 'b0000000-0000-4000-8000-000000000007', null) - 'status',

@@ -6,6 +6,8 @@ import {
   BulkApproveResultSchema,
   DailyReportsResponseSchema,
   DeviceActivateResponseSchema,
+  MusterCloseResponseSchema,
+  MusterStartResponseSchema,
   DeviceRenewResponseSchema,
   IngestOperationsResponseSchema,
   OrientationSessionSchema,
@@ -29,7 +31,12 @@ import {
   type CorrectionRequestRow,
   type CrewMember,
   type ForemanKioskGrant,
+  type ForemanMusterSummary,
+  type MusterBoard,
+  type MusterReportView,
   type MyAttendance,
+  type MyMuster,
+  type ProjectMusters,
   type ForemanProject,
   type KioskRegistration,
   type OpenVisit,
@@ -557,6 +564,90 @@ export class SupabaseSiteMusterApi implements SiteMusterApi {
 
   async foremanKioskGrants(projectId: string) {
     return this.rpc<ForemanKioskGrant[]>('foreman_kiosk_grants', { p_project_id: projectId });
+  }
+
+  // ---------------------------------------------------------------- Milestone 11
+
+  async startMuster(input: {
+    projectId: string;
+    label: string;
+    idempotencyKey: string;
+    separate?: boolean;
+  }) {
+    return MusterStartResponseSchema.parse(
+      await this.invoke('muster-start', {
+        schema_version: 1,
+        project_id: input.projectId,
+        incident_label: input.label,
+        idempotency_key: input.idempotencyKey,
+        ...(input.separate ? { separate: true } : {}),
+      }),
+    );
+  }
+
+  async closeMuster(input: { musterId: string; note: string; acknowledgeIncomplete: boolean }) {
+    return MusterCloseResponseSchema.parse(
+      await this.invoke('muster-close', {
+        schema_version: 1,
+        muster_id: input.musterId,
+        closure_note: input.note,
+        acknowledge_incomplete: input.acknowledgeIncomplete,
+      }),
+    );
+  }
+
+  async projectMusters(projectId: string) {
+    return this.rpc<ProjectMusters>('project_musters', { p_project_id: projectId });
+  }
+
+  async musterBoard(musterId: string) {
+    return this.rpc<MusterBoard>('muster_board', { p_muster_id: musterId });
+  }
+
+  async myActiveMusters() {
+    return this.rpc<MyMuster[]>('my_active_musters');
+  }
+
+  async foremanActiveMusters() {
+    return this.rpc<ForemanMusterSummary[]>('foreman_active_musters');
+  }
+
+  async foremanMuster(musterId: string) {
+    return this.rpc<MusterBoard>('foreman_muster', { p_muster_id: musterId });
+  }
+
+  async musterReport(musterId: string) {
+    return this.rpc<MusterReportView>('muster_report', { p_muster_id: musterId });
+  }
+
+  async amendMuster(input: {
+    musterId: string;
+    memberId: string | null;
+    note: string;
+    eventUuid: string;
+  }) {
+    await this.rpc('amend_muster', {
+      p_muster_id: input.musterId,
+      p_member_id: input.memberId,
+      p_note: input.note,
+      p_event_uuid: input.eventUuid,
+    });
+  }
+
+  async registerPushToken(input: {
+    installationId: string;
+    token: string;
+    platform: 'IOS' | 'ANDROID';
+  }) {
+    await this.rpc('register_push_token', {
+      p_installation_id: input.installationId,
+      p_expo_token: input.token,
+      p_platform: input.platform,
+    });
+  }
+
+  async revokeMyPushTokens(installationId: string) {
+    await this.rpc('revoke_my_push_tokens', { p_installation_id: installationId });
   }
 
   async setForemanKioskGrant(input: {

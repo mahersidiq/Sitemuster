@@ -23,10 +23,11 @@ export default function ForemanKioskRoute() {
 /** Crew kiosk for a foreman the GC granted kiosk use: own crew only (the server checks). */
 function ForemanKiosk() {
   const { t } = useTranslation();
-  const { projectId, companyId, projectName } = useLocalSearchParams<{
+  const { projectId, companyId, projectName, musterId } = useLocalSearchParams<{
     projectId: string;
     companyId: string;
     projectName?: string;
+    musterId?: string;
   }>();
   const crew = useCrew(projectId, companyId);
   const nameOf = (workerId: string) =>
@@ -38,9 +39,9 @@ function ForemanKiosk() {
   useRefreshForUnknownWorkers(known, crew.data !== undefined, crew.refetch);
   return (
     <Screen testID="foreman-kiosk-screen">
-      <Title>{t('crew.kiosk')}</Title>
+      <Title>{musterId ? t('muster.kioskTitle') : t('crew.kiosk')}</Title>
       {projectName ? <Body>{projectName}</Body> : null}
-      <KioskConsole projectId={projectId} nameOf={nameOf} testID="kiosk" />
+      <KioskConsole projectId={projectId} nameOf={nameOf} musterId={musterId} testID="kiosk" />
       <AppButton
         variant="secondary"
         label={t('common.back')}

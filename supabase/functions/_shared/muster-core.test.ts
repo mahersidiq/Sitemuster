@@ -108,7 +108,12 @@ describe('muster-start', () => {
       ["Emergency muster — tap I'M SAFE", 'MUSTER', 'high'],
       ['Reunión de emergencia — toque ESTOY A SALVO', 'MUSTER', 'high'],
     ]);
-    expect(w.push.sent[0]?.data).toEqual({ type: 'MUSTER', muster_id: MUSTER, member_id: 'm1' });
+    expect(w.push.sent[0]?.data).toEqual({
+      type: 'MUSTER',
+      muster_id: MUSTER,
+      project_id: PROJECT,
+      member_id: 'm1',
+    });
     expect(w.recorded.map((r) => r.status)).toEqual(['ok', 'ok']);
     // A second tap joins the same muster and sends nothing again.
     const second = await call(handleMusterStart, w.deps, start());

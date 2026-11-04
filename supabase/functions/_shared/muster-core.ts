@@ -123,6 +123,7 @@ function firstIssue(issues: { message: string }[]): ApiErrorCode {
 async function notify(
   deps: MusterDeps,
   musterId: string,
+  projectId: string,
   log: (entry: Record<string, unknown>) => void,
 ): Promise<MusterPushSummary> {
   const provider = deps.push.kind === 'fake' ? 'development-fake' : 'expo';
@@ -136,7 +137,13 @@ async function notify(
             targets.map((target) => ({
               to: target.token,
               ...musterNotificationText(target.locale),
-              data: { type: 'MUSTER', muster_id: musterId, member_id: target.memberId },
+              // Opaque ids only (no names, no location): enough for the phone to queue I'M SAFE.
+              data: {
+                type: 'MUSTER',
+                muster_id: musterId,
+                project_id: projectId,
+                member_id: target.memberId,
+              },
               categoryId: MUSTER_NOTIFICATION_CATEGORY,
               channelId: MUSTER_ANDROID_CHANNEL,
               priority: 'high' as const,
@@ -181,7 +188,9 @@ export async function handleMusterStart(req: Request, deps: MusterDeps): Promise
       idempotencyKey: parsed.data.idempotency_key,
       separate: parsed.data.separate ?? false,
     });
-    const push = row.created ? await notify(deps, row.muster_id, log) : null;
+    const push = row.created
+      ? await notify(deps, row.muster_id, parsed.data.project_id, log)
+      : null;
     log({ outcome: 'ok', action: 'start', created: row.created, push_targets: push?.targets ?? 0 });
     return json(200, {
       schema_version: 1,

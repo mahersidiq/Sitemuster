@@ -22,7 +22,7 @@ export default function KioskRoute() {
 /** Staff kiosk (assigned attendant with MFA): workers by badge, visitors at the desk. */
 function Kiosk() {
   const { t } = useTranslation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, musterId } = useLocalSearchParams<{ id: string; musterId?: string }>();
   const project = useProject(id);
   const roster = useRoster(id);
   const nameOf = (workerId: string) =>
@@ -34,15 +34,15 @@ function Kiosk() {
   useRefreshForUnknownWorkers(known, roster.data !== undefined, roster.refetch);
   return (
     <Screen testID="kiosk-screen">
-      <Title>{t('kiosk.title')}</Title>
+      <Title>{musterId ? t('muster.kioskTitle') : t('kiosk.title')}</Title>
       {project.data ? <Body>{project.data.project.name}</Body> : null}
       <QueryState
         isLoading={project.isLoading}
         error={project.error}
         onRetry={() => void project.refetch()}
       />
-      <KioskConsole projectId={id} nameOf={nameOf} />
-      {project.data?.permissions.can_run_visitor_desk ? (
+      <KioskConsole projectId={id} nameOf={nameOf} musterId={musterId} />
+      {project.data?.permissions.can_run_visitor_desk && !musterId ? (
         <AppButton
           variant="secondary"
           label={t('kiosk.visitors')}

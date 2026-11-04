@@ -189,6 +189,8 @@ export default function expoConfig({ config }: ConfigContext): ExpoConfig {
         'react-native-background-geolocation',
         process.env.TS_ANDROID_LICENSE_KEY ? { license: process.env.TS_ANDROID_LICENSE_KEY } : {},
       ],
+      // Muster alerts (Milestone 11): Expo push; APNs/FCM credentials live in EAS, never here.
+      'expo-notifications',
       [
         '@sentry/react-native/expo',
         {

@@ -97,6 +97,15 @@ function WorkforceCard({ detail }: { detail: ProjectDetail }) {
   return (
     <Card testID="workforce-card">
       <Heading>{t('project.workforceTitle')}</Heading>
+      {permissions.can_view_roster ? (
+        <AppButton
+          label={t('muster.open')}
+          onPress={() =>
+            router.push({ pathname: '/project/[id]/muster', params: { id: project.id } })
+          }
+          testID="open-muster"
+        />
+      ) : null}
       {permissions.can_run_orientation && project.status === 'ACTIVE' ? (
         <AppButton
           label={t('project.runOrientation')}

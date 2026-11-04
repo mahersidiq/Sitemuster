@@ -9,6 +9,9 @@ import type {
   Locale,
   ProjectStaffRole,
   ProjectStatus,
+  MusterCloseResponse,
+  MusterCounts,
+  MusterStartResponse,
   ReportConfirmRequest,
   ReportConfirmResponse,
   SessionRecord,
@@ -404,6 +407,162 @@ export interface SiteMusterApi {
     enabled: boolean;
     reason: string;
   }): Promise<void>;
+  // Milestone 11: Active Muster Mode (supplemental, not a certified life-safety system).
+  /** The designated safety role; push never blocks the start. */
+  startMuster(input: {
+    projectId: string;
+    label: string;
+    idempotencyKey: string;
+    separate?: boolean;
+  }): Promise<MusterStartResponse>;
+  closeMuster(input: {
+    musterId: string;
+    note: string;
+    acknowledgeIncomplete: boolean;
+  }): Promise<MusterCloseResponse>;
+  projectMusters(projectId: string): Promise<ProjectMusters>;
+  musterBoard(musterId: string): Promise<MusterBoard>;
+  /** The signed-in worker's own rows in active musters. */
+  myActiveMusters(): Promise<MyMuster[]>;
+  foremanActiveMusters(): Promise<ForemanMusterSummary[]>;
+  /** The foreman's own companies' workers only. */
+  foremanMuster(musterId: string): Promise<MusterBoard>;
+  musterReport(musterId: string): Promise<MusterReportView>;
+  amendMuster(input: {
+    musterId: string;
+    memberId: string | null;
+    note: string;
+    eventUuid: string;
+  }): Promise<void>;
+  /** This phone's Expo push token for muster alerts (own account only). */
+  registerPushToken(input: {
+    installationId: string;
+    token: string;
+    platform: 'IOS' | 'ANDROID';
+  }): Promise<void>;
+  /** Sign-out: this person's alerts stop on this phone. */
+  revokeMyPushTokens(installationId: string): Promise<void>;
+}
+
+// Milestone 11 — Active Muster Mode.
+
+export type MusterMemberStatus =
+  'UNACCOUNTED' | 'SELF_REPORTED_SAFE' | 'VERIFIED_ACCOUNTED' | 'STATUS_UNKNOWN';
+
+export interface MusterMemberRow {
+  member_id: string;
+  kind: 'WORKER' | 'VISITOR';
+  worker_id: string | null;
+  visitor_id: string | null;
+  name: string;
+  company_id: string | null;
+  company_name: string | null;
+  organization: string | null;
+  /** Where the person was at the start: ONSITE_*, PRESENCE_UNKNOWN, ROSTER_NOT_DETECTED, VISITOR… */
+  source: string;
+  last_detection_at: string | null;
+  initial_status: MusterMemberStatus;
+  status: MusterMemberStatus;
+  push: 'SENT' | 'FAILED' | 'NO_DEVICE' | null;
+  last_response: { action: string; channel: string; at: string } | null;
+}
+
+export interface MusterBoard {
+  muster_id: string;
+  project_id: string;
+  project_name: string;
+  incident_label: string;
+  status: 'ACTIVE' | 'CLOSED';
+  started_at: string;
+  ended_at?: string | null;
+  evaluated_at: string;
+  can_command?: boolean;
+  can_verify_visitors?: boolean;
+  counts?: MusterCounts;
+  companies?: {
+    company_id: string | null;
+    company_name: string | null;
+    total: number;
+    verified: number;
+    self_reported: number;
+    unknown: number;
+    unaccounted: number;
+  }[];
+  push?: { sent: number; failed: number; no_device: number };
+  members: MusterMemberRow[];
+}
+
+export interface ProjectMusters {
+  can_command: boolean;
+  musters: {
+    muster_id: string;
+    incident_label: string;
+    status: 'ACTIVE' | 'CLOSED';
+    started_at: string;
+    ended_at: string | null;
+    counts: MusterCounts;
+  }[];
+}
+
+export interface MyMuster {
+  muster_id: string;
+  project_id: string;
+  project_name: string;
+  incident_label: string;
+  started_at: string;
+  member_id: string;
+  status: MusterMemberStatus;
+  self_reported: boolean;
+}
+
+export interface ForemanMusterSummary {
+  muster_id: string;
+  project_id: string;
+  project_name: string;
+  incident_label: string;
+  started_at: string;
+}
+
+export interface MusterReportView {
+  report: {
+    notice: string;
+    incident_label: string;
+    project_name: string;
+    started_at: string;
+    started_by: string | null;
+    ended_at: string;
+    ended_by: string | null;
+    closing_note: string;
+    acknowledged_incomplete: boolean;
+    snapshot_digest: string | null;
+    counts: MusterCounts;
+    members: {
+      /** The person's row on the frozen list (a correction can name it). */
+      member_id: string;
+      kind: 'WORKER' | 'VISITOR';
+      name: string;
+      company_name: string | null;
+      organization: string | null;
+      source: string;
+      initial_status: MusterMemberStatus;
+      final_status: MusterMemberStatus;
+      push: string | null;
+      responses: { action: string; channel: string; at: string; responder: string | null }[];
+    }[];
+    push: { sent: number; failed: number; no_device: number; not_attempted: number };
+  };
+  digest: string;
+  can_amend: boolean;
+  amendments: {
+    kind: 'LATE_RESPONSE' | 'CORRECTION';
+    action: string | null;
+    channel: string | null;
+    observed_at: string;
+    note: string | null;
+    member_name: string | null;
+    actor: string | null;
+    digest: string;
+  }[];
 }
 
 // Milestone 10 — reports are ESTIMATES of onsite presence: never payroll or a guaranteed headcount.

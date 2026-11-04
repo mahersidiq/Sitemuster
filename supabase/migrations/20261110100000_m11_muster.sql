@@ -438,6 +438,7 @@ as $$
                 from members where worker_id is not null group by company_name) x), '[]'::jsonb),
     'members', coalesce((
       select jsonb_agg(jsonb_build_object(
+               'member_id', m.id,
                'kind', case when m.worker_id is not null then 'WORKER' else 'VISITOR' end,
                'name', m.name, 'company_name', m.company_name, 'organization', m.organization, 'host', m.host,
                'source', m.source, 'last_detection_at', m.last_detection_at,

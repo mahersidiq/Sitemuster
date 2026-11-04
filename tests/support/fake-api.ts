@@ -63,7 +63,13 @@ import {
   type CorrectionRequestInput,
   type CorrectionRequestRow,
   type ForemanKioskGrant,
+  type ForemanMusterSummary,
+  type MusterBoard,
+  type MusterMemberRow,
+  type MusterReportView,
   type MyAttendance,
+  type MyMuster,
+  type ProjectMusters,
 } from '../../src/api/types';
 import { isValidTimeZone } from '../../src/projects/format';
 import type { TrackingPlan } from '../../src/tracking/plan';
@@ -172,6 +178,20 @@ export const FAKE_NOTICES: Record<Locale, Notice> = {
   },
 };
 
+/** One muster of the fake server (Milestone 11). */
+export interface FakeMuster {
+  id: string;
+  projectId: string;
+  label: string;
+  status: 'ACTIVE' | 'CLOSED';
+  startedAt: string;
+  endedAt: string | null;
+  note: string | null;
+  members: MusterMemberRow[];
+  amendments: MusterReportView['amendments'];
+  idempotencyKeys: Set<string>;
+}
+
 /** 32-byte rotating secret used by fake sessions (base64url). */
 export const FAKE_ROTATING_SECRET = 'AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA';
 export const FAKE_BADGE_SECRET = 'ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8';
@@ -222,6 +242,12 @@ export class FakeWorld {
   readonly attendance: Map<string, MyAttendance>;
   readonly correctionRequests: CorrectionRequestRow[];
   readonly kioskGrants: Map<string, ForemanKioskGrant[]>;
+  /** Milestone 11: musters of the fake server (board rows as the server returns them). */
+  readonly musters: FakeMuster[];
+  /** Phones registered for muster alerts (Expo tokens). */
+  readonly pushTokens: { userId: string; token: string }[];
+  /** Simulated push outage: starting a muster still works, alerts fail. */
+  pushOutage = false;
   /** The fake server clock for report deadlines. */
   now = Date.parse('2026-11-04T15:00:00Z');
   private broadcastVersion = 0;
@@ -246,6 +272,8 @@ export class FakeWorld {
     this.attendance = shared?.attendance ?? new Map();
     this.correctionRequests = shared?.correctionRequests ?? [];
     this.kioskGrants = shared?.kioskGrants ?? new Map();
+    this.musters = shared?.musters ?? [];
+    this.pushTokens = shared?.pushTokens ?? [];
   }
 
   /** Test helper: a worker (with or without an app account) enrolled in a project. */
@@ -1375,6 +1403,9 @@ export class FakeSiteMusterApi implements SiteMusterApi {
         this.world.visits.splice(index, 1);
         return { ...base, status: 'accepted', reason: null };
       }
+      case 'MUSTER_SELF_REPORT':
+      case 'MUSTER_PHYSICAL_VERIFY':
+        return this.fakeMusterOperation(event);
       default:
         return { ...base, status: 'rejected', reason: 'OPERATION_NOT_SUPPORTED' };
     }
@@ -1813,6 +1844,460 @@ export class FakeSiteMusterApi implements SiteMusterApi {
     );
     if (!grant) throw new ApiError('FOREMAN_NOT_FOUND');
     grant.can_operate_kiosk = input.enabled;
+    this.after(undefined);
+  }
+
+  // ---------------------------------------------------------------- Milestone 11
+
+  /** Mirrors can_command_muster: an assigned SAFETY role (emergency designation, decision #53). */
+  private canCommandMuster(projectId: string) {
+    return this.projectRole(projectId) === 'SAFETY';
+  }
+
+  private muster(musterId: string): FakeMuster {
+    const muster = this.world.musters.find((m) => m.id === musterId);
+    if (!muster) throw new ApiError('FORBIDDEN');
+    return muster;
+  }
+
+  private musterCounts(muster: FakeMuster) {
+    const workers = muster.members.filter((m) => m.kind === 'WORKER');
+    const visitors = muster.members.filter((m) => m.kind === 'VISITOR');
+    const count = (rows: MusterMemberRow[], status: string) =>
+      rows.filter((m) => m.status === status).length;
+    return {
+      workers: {
+        total: workers.length,
+        verified: count(workers, 'VERIFIED_ACCOUNTED'),
+        self_reported: count(workers, 'SELF_REPORTED_SAFE'),
+        unknown: count(workers, 'STATUS_UNKNOWN'),
+        unaccounted: count(workers, 'UNACCOUNTED'),
+        detected_at_start: workers.filter((m) => m.source.startsWith('ONSITE')).length,
+      },
+      visitors: {
+        total: visitors.length,
+        verified: count(visitors, 'VERIFIED_ACCOUNTED'),
+        unaccounted: visitors.length - count(visitors, 'VERIFIED_ACCOUNTED'),
+      },
+    };
+  }
+
+  private fakeMusterOperation(event: IngestOperationsRequest['events'][number]): OperationResult {
+    const base = { event_uuid: event.event_uuid };
+    if (
+      event.operation_type !== 'MUSTER_SELF_REPORT' &&
+      event.operation_type !== 'MUSTER_PHYSICAL_VERIFY'
+    ) {
+      return { ...base, status: 'rejected', reason: 'OPERATION_NOT_SUPPORTED' };
+    }
+    const payload = event.payload;
+    const muster = this.world.musters.find((m) => m.id === payload.muster_id);
+    if (!muster) return { ...base, status: 'rejected', reason: 'NOT_IN_MUSTER' };
+    if (muster.status === 'CLOSED') return { ...base, status: 'rejected', reason: 'MUSTER_CLOSED' };
+    let member: MusterMemberRow | undefined;
+    if (event.operation_type === 'MUSTER_SELF_REPORT') {
+      const me = this.myWorker();
+      member = muster.members.find((m) => m.worker_id === me?.id);
+      if (!member) return { ...base, status: 'rejected', reason: 'FORBIDDEN' };
+      if (member.status !== 'VERIFIED_ACCOUNTED') member.status = 'SELF_REPORTED_SAFE';
+      member.last_response = {
+        action: 'SELF_REPORT',
+        channel: payload.channel ?? 'APP',
+        at: event.observed_at,
+      };
+      return {
+        ...base,
+        status: 'accepted',
+        reason: null,
+        ...(member.worker_id ? { worker_id: member.worker_id } : {}),
+      };
+    }
+    if (payload.badge_payload) {
+      const workerId = this.world.badgeWorkers.get(payload.badge_payload);
+      member = muster.members.find((m) => m.worker_id === workerId);
+    } else {
+      member = muster.members.find((m) => m.member_id === payload.snapshot_member_id);
+      const foreman = this.world.foremanProjects.some(
+        (p) => p.project_id === muster.projectId && p.company_id === member?.company_id,
+      );
+      const allowed =
+        this.canCommandMuster(muster.projectId) ||
+        foreman ||
+        (member?.kind === 'VISITOR' && this.projectRole(muster.projectId) === 'ATTENDANT');
+      if (member && !allowed) return { ...base, status: 'rejected', reason: 'FORBIDDEN' };
+    }
+    if (!member) return { ...base, status: 'rejected', reason: 'NOT_IN_MUSTER' };
+    member.status = 'VERIFIED_ACCOUNTED';
+    member.last_response = {
+      action: 'PHYSICAL_VERIFICATION',
+      channel: payload.badge_payload ? 'KIOSK' : 'SAFETY_STAFF',
+      at: event.observed_at,
+    };
+    return {
+      ...base,
+      status: 'accepted',
+      reason: null,
+      ...(member.worker_id ? { worker_id: member.worker_id } : {}),
+    };
+  }
+
+  /** Test helper: a muster as the server would freeze it (approved roster + open visits). */
+  seedMuster(projectId: string, label = 'Fire alarm'): FakeMuster {
+    const members: MusterMemberRow[] = this.world.enrollments
+      .filter((e) => e.projectId === projectId && e.status === 'APPROVED')
+      .map((e) => {
+        const worker = this.world.workers.find((w) => w.id === e.workerId);
+        return {
+          member_id: randomUUID(),
+          kind: 'WORKER' as const,
+          worker_id: e.workerId,
+          visitor_id: null,
+          name: worker?.legalName ?? '',
+          company_id: e.companyId,
+          company_name: this.world.companies.find((c) => c.id === e.companyId)?.name ?? null,
+          organization: null,
+          source: this.world.presence.get(e.id)?.counted
+            ? 'ONSITE_GEOFENCE'
+            : 'ROSTER_NOT_DETECTED',
+          last_detection_at: null,
+          initial_status: 'UNACCOUNTED' as const,
+          status: 'UNACCOUNTED' as const,
+          push: this.world.pushTokens.some((t) => t.userId === worker?.userId)
+            ? ('SENT' as const)
+            : ('NO_DEVICE' as const),
+          last_response: null,
+        };
+      });
+    for (const visit of this.world.visits) {
+      members.push({
+        member_id: randomUUID(),
+        kind: 'VISITOR',
+        worker_id: null,
+        visitor_id: visit.visitor_id,
+        name: visit.name,
+        company_id: null,
+        company_name: null,
+        organization: visit.organization,
+        source: 'VISITOR',
+        last_detection_at: visit.checked_in_at,
+        initial_status: 'UNACCOUNTED',
+        status: 'UNACCOUNTED',
+        push: null,
+        last_response: null,
+      });
+    }
+    const muster: FakeMuster = {
+      id: randomUUID(),
+      projectId,
+      label,
+      status: 'ACTIVE',
+      startedAt: new Date(this.world.now).toISOString(),
+      endedAt: null,
+      note: null,
+      members,
+      amendments: [],
+      idempotencyKeys: new Set(),
+    };
+    this.world.musters.push(muster);
+    return muster;
+  }
+
+  async startMuster(input: {
+    projectId: string;
+    label: string;
+    idempotencyKey: string;
+    separate?: boolean;
+  }) {
+    this.before('startMuster');
+    if (!this.canCommandMuster(input.projectId)) throw new ApiError('FORBIDDEN');
+    if (!input.label.trim()) throw new ApiError('LABEL_REQUIRED');
+    const byKey = this.world.musters.find((m) => m.idempotencyKeys.has(input.idempotencyKey));
+    const active = this.world.musters.find(
+      (m) => m.projectId === input.projectId && m.status === 'ACTIVE',
+    );
+    const reused = byKey ?? (input.separate ? undefined : active);
+    if (reused) {
+      return {
+        schema_version: 1 as const,
+        request_id: randomUUID(),
+        muster_id: reused.id,
+        created: false,
+        duplicate: Boolean(byKey),
+        already_active: !byKey,
+        push: null,
+      };
+    }
+    const muster = this.seedMuster(input.projectId, input.label.trim());
+    muster.idempotencyKeys.add(input.idempotencyKey);
+    const targets = muster.members.filter((m) => m.push === 'SENT').length;
+    if (this.world.pushOutage) {
+      for (const m of muster.members) if (m.push === 'SENT') m.push = 'FAILED';
+    }
+    return this.after({
+      schema_version: 1 as const,
+      request_id: randomUUID(),
+      muster_id: muster.id,
+      created: true,
+      duplicate: false,
+      already_active: false,
+      push: {
+        provider: 'development-fake' as const,
+        targets,
+        sent: this.world.pushOutage ? 0 : targets,
+        failed: this.world.pushOutage ? targets : 0,
+      },
+    });
+  }
+
+  async closeMuster(input: { musterId: string; note: string; acknowledgeIncomplete: boolean }) {
+    this.before('closeMuster');
+    const muster = this.muster(input.musterId);
+    if (!this.canCommandMuster(muster.projectId)) throw new ApiError('FORBIDDEN');
+    const digest = 'd'.repeat(64);
+    if (muster.status === 'CLOSED') {
+      return {
+        schema_version: 1 as const,
+        request_id: randomUUID(),
+        muster_id: muster.id,
+        duplicate: true,
+        digest,
+        counts: this.musterCounts(muster),
+      };
+    }
+    if (input.note.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    const unresolved = muster.members.some(
+      (m) => m.status === 'UNACCOUNTED' || m.status === 'STATUS_UNKNOWN',
+    );
+    if (unresolved && !input.acknowledgeIncomplete)
+      throw new ApiError('ACKNOWLEDGE_INCOMPLETE_REQUIRED');
+    muster.status = 'CLOSED';
+    muster.endedAt = new Date(this.world.now).toISOString();
+    muster.note = input.note.trim();
+    return this.after({
+      schema_version: 1 as const,
+      request_id: randomUUID(),
+      muster_id: muster.id,
+      duplicate: false,
+      digest,
+      counts: this.musterCounts(muster),
+    });
+  }
+
+  async projectMusters(projectId: string): Promise<ProjectMusters> {
+    this.before('projectMusters');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    if (!this.canViewRoster(projectId)) throw new ApiError('FORBIDDEN');
+    return {
+      can_command: this.canCommandMuster(projectId),
+      musters: this.world.musters
+        .filter((m) => m.projectId === projectId)
+        .map((m) => ({
+          muster_id: m.id,
+          incident_label: m.label,
+          status: m.status,
+          started_at: m.startedAt,
+          ended_at: m.endedAt,
+          counts: this.musterCounts(m),
+        })),
+    };
+  }
+
+  private boardOf(muster: FakeMuster, members: MusterMemberRow[]): MusterBoard {
+    const companies = new Map<string, MusterMemberRow[]>();
+    for (const m of muster.members.filter((x) => x.kind === 'WORKER')) {
+      companies.set(m.company_id ?? '', [...(companies.get(m.company_id ?? '') ?? []), m]);
+    }
+    return {
+      muster_id: muster.id,
+      project_id: muster.projectId,
+      project_name: this.world.projects.find((p) => p.id === muster.projectId)?.name ?? '',
+      incident_label: muster.label,
+      status: muster.status,
+      started_at: muster.startedAt,
+      ended_at: muster.endedAt,
+      evaluated_at: new Date(this.world.now).toISOString(),
+      can_command: this.canCommandMuster(muster.projectId),
+      can_verify_visitors:
+        this.canCommandMuster(muster.projectId) ||
+        this.projectRole(muster.projectId) === 'ATTENDANT',
+      counts: this.musterCounts(muster),
+      companies: [...companies.entries()].map(([id, rows]) => ({
+        company_id: id || null,
+        company_name: rows[0]?.company_name ?? null,
+        total: rows.length,
+        verified: rows.filter((r) => r.status === 'VERIFIED_ACCOUNTED').length,
+        self_reported: rows.filter((r) => r.status === 'SELF_REPORTED_SAFE').length,
+        unknown: rows.filter((r) => r.status === 'STATUS_UNKNOWN').length,
+        unaccounted: rows.filter((r) => r.status === 'UNACCOUNTED').length,
+      })),
+      push: {
+        sent: muster.members.filter((m) => m.push === 'SENT').length,
+        failed: muster.members.filter((m) => m.push === 'FAILED').length,
+        no_device: muster.members.filter((m) => m.push === 'NO_DEVICE').length,
+      },
+      members: members.map((m) => ({ ...m })),
+    };
+  }
+
+  async musterBoard(musterId: string): Promise<MusterBoard> {
+    this.before('musterBoard');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    const muster = this.muster(musterId);
+    if (!this.canViewRoster(muster.projectId)) throw new ApiError('FORBIDDEN');
+    return this.boardOf(muster, muster.members);
+  }
+
+  async myActiveMusters(): Promise<MyMuster[]> {
+    this.before('myActiveMusters');
+    if (this.world.readsOffline) throw new ApiError('NETWORK');
+    const me = this.myWorker();
+    return this.world.musters.flatMap((m) => {
+      const member =
+        m.status === 'ACTIVE' ? m.members.find((x) => x.worker_id === me?.id) : undefined;
+      return member
+        ? [
+            {
+              muster_id: m.id,
+              project_id: m.projectId,
+              project_name: this.world.projects.find((p) => p.id === m.projectId)?.name ?? '',
+              incident_label: m.label,
+              started_at: m.startedAt,
+              member_id: member.member_id,
+              status: member.status,
+              self_reported:
+                member.last_response?.action === 'SELF_REPORT' ||
+                member.status === 'SELF_REPORTED_SAFE',
+            },
+          ]
+        : [];
+    });
+  }
+
+  async foremanActiveMusters(): Promise<ForemanMusterSummary[]> {
+    this.before('foremanActiveMusters');
+    return this.world.musters
+      .filter(
+        (m) =>
+          m.status === 'ACTIVE' &&
+          this.world.foremanProjects.some((p) => p.project_id === m.projectId),
+      )
+      .map((m) => ({
+        muster_id: m.id,
+        project_id: m.projectId,
+        project_name: this.world.projects.find((p) => p.id === m.projectId)?.name ?? '',
+        incident_label: m.label,
+        started_at: m.startedAt,
+      }));
+  }
+
+  async foremanMuster(musterId: string): Promise<MusterBoard> {
+    this.before('foremanMuster');
+    const muster = this.muster(musterId);
+    const companies = this.world.foremanProjects
+      .filter((p) => p.project_id === muster.projectId)
+      .map((p) => p.company_id);
+    if (companies.length === 0) throw new ApiError('FORBIDDEN');
+    const board = this.boardOf(
+      muster,
+      muster.members.filter((m) => m.kind === 'WORKER' && companies.includes(m.company_id ?? '')),
+    );
+    return {
+      ...board,
+      counts: undefined,
+      companies: undefined,
+      push: undefined,
+      can_command: undefined,
+      can_verify_visitors: undefined,
+    };
+  }
+
+  async musterReport(musterId: string): Promise<MusterReportView> {
+    this.before('musterReport');
+    const muster = this.muster(musterId);
+    if (!this.canViewRoster(muster.projectId)) throw new ApiError('FORBIDDEN');
+    if (muster.status !== 'CLOSED') throw new ApiError('MUSTER_NOT_CLOSED');
+    return {
+      report: {
+        notice: 'SUPPLEMENTAL_NOT_LIFE_SAFETY',
+        incident_label: muster.label,
+        project_name: this.world.projects.find((p) => p.id === muster.projectId)?.name ?? '',
+        started_at: muster.startedAt,
+        started_by: 'safety@example.test',
+        ended_at: muster.endedAt ?? '',
+        ended_by: 'safety@example.test',
+        closing_note: muster.note ?? '',
+        acknowledged_incomplete: true,
+        snapshot_digest: 'e'.repeat(64),
+        counts: this.musterCounts(muster),
+        members: muster.members.map((m) => ({
+          member_id: m.member_id,
+          kind: m.kind,
+          name: m.name,
+          company_name: m.company_name,
+          organization: m.organization,
+          source: m.source,
+          initial_status: m.initial_status,
+          final_status: m.status,
+          push: m.push,
+          responses: m.last_response ? [{ ...m.last_response, responder: null }] : [],
+        })),
+        push: {
+          sent: muster.members.filter((m) => m.push === 'SENT').length,
+          failed: muster.members.filter((m) => m.push === 'FAILED').length,
+          no_device: muster.members.filter((m) => m.push === 'NO_DEVICE').length,
+          not_attempted: 0,
+        },
+      },
+      digest: 'd'.repeat(64),
+      can_amend: this.canCommandMuster(muster.projectId),
+      amendments: muster.amendments.map((a) => ({ ...a })),
+    };
+  }
+
+  async amendMuster(input: {
+    musterId: string;
+    memberId: string | null;
+    note: string;
+    eventUuid: string;
+  }) {
+    this.before('amendMuster');
+    const muster = this.muster(input.musterId);
+    if (!this.canCommandMuster(muster.projectId)) throw new ApiError('FORBIDDEN');
+    if (muster.status !== 'CLOSED') throw new ApiError('MUSTER_NOT_CLOSED');
+    if (input.note.trim().length < 3) throw new ApiError('REASON_REQUIRED');
+    muster.amendments.push({
+      kind: 'CORRECTION',
+      action: null,
+      channel: null,
+      observed_at: new Date(this.world.now).toISOString(),
+      note: input.note.trim(),
+      member_name: muster.members.find((m) => m.member_id === input.memberId)?.name ?? null,
+      actor: 'safety@example.test',
+      digest: 'f'.repeat(64),
+    });
+    this.after(undefined);
+  }
+
+  async registerPushToken(input: {
+    installationId: string;
+    token: string;
+    platform: 'IOS' | 'ANDROID';
+  }) {
+    this.before('registerPushToken');
+    if (!/^Expo(nent)?PushToken\[/.test(input.token)) throw new ApiError('PUSH_TOKEN_INVALID');
+    const userId = this.world.access.user_id;
+    const index = this.world.pushTokens.findIndex((t) => t.userId === userId);
+    if (index >= 0) this.world.pushTokens.splice(index, 1);
+    this.world.pushTokens.push({ userId, token: input.token });
+    this.after(undefined);
+  }
+
+  async revokeMyPushTokens(_installationId: string) {
+    this.before('revokeMyPushTokens');
+    const userId = this.world.access.user_id;
+    for (let i = this.world.pushTokens.length - 1; i >= 0; i -= 1) {
+      if (this.world.pushTokens[i]?.userId === userId) this.world.pushTokens.splice(i, 1);
+    }
     this.after(undefined);
   }
 

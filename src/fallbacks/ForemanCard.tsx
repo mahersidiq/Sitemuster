@@ -3,8 +3,9 @@ import { useCallback } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { useForemanProjects } from '../api/hooks';
+import { useForemanMusters, useForemanProjects } from '../api/hooks';
 import { AppButton } from '../components/AppButton';
+import { Banner } from '../components/Banner';
 import { Card } from '../components/Card';
 import { Heading } from '../components/Typography';
 import { colors } from '../theme';
@@ -23,6 +24,7 @@ export function ForemanCard() {
   if (!projects.data || projects.data.length === 0) return null;
   return (
     <Card testID="foreman-card">
+      <ForemanMusters />
       <Heading>{t('crew.open')}</Heading>
       <AppButton
         label={t('foremanReports.open')}
@@ -67,6 +69,38 @@ export function ForemanCard() {
         </Card>
       ))}
     </Card>
+  );
+}
+
+/** Active musters on the foreman's projects: check the crew at the assembly point. */
+function ForemanMusters() {
+  const { t } = useTranslation();
+  const musters = useForemanMusters();
+  if (!musters.data || musters.data.length === 0) return null;
+  return (
+    <>
+      {musters.data.map((muster) => (
+        <Card key={muster.muster_id} testID={`foreman-muster-${muster.muster_id}`}>
+          <Banner
+            tone="danger"
+            text={t('muster.worker.alert', {
+              project: muster.project_name,
+              label: muster.incident_label,
+            })}
+          />
+          <AppButton
+            label={t('muster.foreman.open')}
+            onPress={() =>
+              router.push({
+                pathname: '/foreman/muster',
+                params: { musterId: muster.muster_id, projectId: muster.project_id },
+              })
+            }
+            testID={`foreman-muster-open-${muster.muster_id}`}
+          />
+        </Card>
+      ))}
+    </>
   );
 }
 
