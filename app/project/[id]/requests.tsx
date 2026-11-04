@@ -67,10 +67,43 @@ function Requests() {
   );
 }
 
-function when(value: string | null | undefined, zone: string): string | null {
-  if (!value) return null;
-  const local = localDateTime(value, zone);
-  return `${local.date} ${local.time}`;
+type Translate = ReturnType<typeof useTranslation>['t'];
+
+/** "2026-10-26 06:45 – 15:15" (dates repeated only when the visit crosses midnight). */
+function span(
+  t: Translate,
+  start: string | undefined,
+  end: string | null | undefined,
+  zone: string,
+) {
+  if (!start) return null;
+  const from = localDateTime(start, zone);
+  if (!end)
+    return t('requests.span', { date: from.date, start: from.time, end: t('correction.onSite') });
+  const to = localDateTime(end, zone);
+  return to.date === from.date
+    ? t('requests.span', { date: from.date, start: from.time, end: to.time })
+    : t('requests.spanDays', { date: from.date, start: from.time, endDate: to.date, end: to.time });
+}
+
+/** What the request asks for: arrival, departure or both, in the project time zone. */
+function asked(t: Translate, request: CorrectionRequestRow, zone: string): string {
+  const start = request.proposed.proposed_start_at;
+  const end = request.proposed.proposed_end_at;
+  if (start && end) {
+    const from = localDateTime(start, zone);
+    return t('requests.proposedBoth', {
+      date: from.date,
+      start: from.time,
+      end: localDateTime(end, zone).time,
+    });
+  }
+  if (start) {
+    const from = localDateTime(start, zone);
+    return t('requests.proposedStart', { date: from.date, start: from.time });
+  }
+  const to = localDateTime(end ?? '', zone);
+  return t('requests.proposedEnd', { date: to.date, end: to.time });
 }
 
 function RequestCard({
@@ -88,15 +121,7 @@ function RequestCard({
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const original = [when(request.original.start_at, zone), when(request.original.end_at, zone)]
-    .filter(Boolean)
-    .join(' – ');
-  const proposed = [
-    when(request.proposed.proposed_start_at, zone),
-    when(request.proposed.proposed_end_at, zone),
-  ]
-    .filter(Boolean)
-    .join(' – ');
+  const original = span(t, request.original.start_at, request.original.end_at, zone);
   const reject = async () => {
     if (reason.trim().length < 3) {
       setError(t('requests.reasonNeeded'));
@@ -122,7 +147,7 @@ function RequestCard({
       {original ? (
         <Text style={styles.line}>{t('requests.original', { times: original })}</Text>
       ) : null}
-      <Text style={styles.line}>{t('requests.proposed', { times: proposed || '—' })}</Text>
+      <Text style={styles.line}>{asked(t, request, zone)}</Text>
       <Text style={styles.line}>{t('requests.reason', { reason: request.reason })}</Text>
       {request.status !== 'PENDING' ? (
         <Banner

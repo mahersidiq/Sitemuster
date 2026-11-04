@@ -307,7 +307,8 @@ describe('correction requests (staff)', () => {
     await renderRouter('./app', { initialUrl: `/project/${projectId}/requests` });
     const id = 'ce000000-0000-4000-8000-000000000001';
     expect(await screen.findByTestId(`request-${id}`)).toBeTruthy();
-    expect(screen.getByText('Asked for: 2026-11-03 12:00')).toBeTruthy();
+    expect(screen.getByText('Asked for: departure 2026-11-03 12:00')).toBeTruthy();
+    expect(screen.getByText('Recorded: 2026-11-03 07:00 – 16:00')).toBeTruthy();
     await fireEvent.press(screen.getByTestId(`reject-${id}`));
     await fireEvent.press(screen.getByTestId(`reject-confirm-${id}`));
     expect(await screen.findByText('Write a reason (at least 3 characters).')).toBeTruthy();

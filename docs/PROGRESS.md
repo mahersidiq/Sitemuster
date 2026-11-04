@@ -14,8 +14,8 @@
 | 06 | Attendance state machine and deterministic replay | done (NOT VERIFIED items) | [#6](https://github.com/mahersidiq/Sitemuster/pull/6) | squash-merged under #48 after CI green and the automated review (`edbe76f`) |
 | 07 | Native tracking and custom device ingestion | done (NOT VERIFIED items) | [#7](https://github.com/mahersidiq/Sitemuster/pull/7) | squash-merged under #48 after CI green and the automated review (`d509baf`) |
 | 08 | Kiosk, foreman, manual and visitor fallbacks | done (NOT VERIFIED items) | [#8](https://github.com/mahersidiq/Sitemuster/pull/8) | squash-merged under #48 after CI green and the automated review (`41a0307`) |
-| 09 | Mobile superintendent dashboard and map | in review | (PR pending) | |
-| 10 | Daily reports, foreman confirmation and worker CSV | not started | | |
+| 09 | Mobile superintendent dashboard and map | done (NOT VERIFIED items) | [#9](https://github.com/mahersidiq/Sitemuster/pull/9) | squash-merged under #48 after CI green and the automated review (`1016894`) |
+| 10 | Daily reports, foreman confirmation and worker CSV | in review | (PR pending) | |
 | 11 | Active Muster Mode | not started | | |
 | 12 | Security, privacy, resilience and operator CLI | not started | | |
 | 13 | Native release preparation, review demo and field pilot | not started | | |
@@ -348,7 +348,7 @@
   - P2: the map did not refetch on enrollment changes → added to the map's scopes. The root cause is fixed in the database too: revocation deletes the latest position (spec 03).
   - P2: a moved site left the native map on the old view → the view follows the site.
 - typecheck, ESLint + shellcheck, Prettier, `expo config`: pass.
-- GitHub Actions: _recorded in the PR._
+- GitHub Actions: CI runs 41812347679 and 41814269351 (final head `bc3cd5f`): code-quality and database jobs green; merged as `1016894`.
 
 **NOT VERIFIED (Milestone 09)**
 - **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the native map (Apple Maps; Google Maps needs the restricted Android key, checklist §5), live updates and offline behaviour on real phones, and EN/ES screen recordings on a phone. The checklist has "Real-device dashboard and map check". No EAS build yet (checklist §2).
@@ -357,7 +357,73 @@
 
 **Decisions added:** #104 private Broadcast (staff-only topic, one message per transaction), #105 worker map, #106 live updates on the phone, #107 dashboard and roster rules.
 
-**Next step:** open the Milestone 09 PR, watch CI, address the automated review, merge, then start Milestone 10 (daily reports, foreman confirmation and worker CSV) on `milestone-10-reports`.
+**Next step:** done — merged. Milestone 10 below.
+
+## Milestone 10 — Daily reports, foreman confirmation and worker CSV
+
+**What was built**
+- **Shared rules** (`packages/shared/src/reports`):
+  - company day reports split on the project's local midnight (overnight shifts on both days, 23/25-hour DST days), with uncertain and waiting-for-approval time shown but never counted;
+  - 12:00 next-workday deadline from the work windows;
+  - a worker's own hours per day and week;
+  - the personal CSV (RFC 4180, BOM, formula-safe, "not payroll" header);
+  - one generator (`generateDayReports` / `reissueDayReport`) used by the Edge Function and both replay backends.
+- **Server** (`20261109100000_m10_reports.sql`):
+  - immutable report versions with forward-only status;
+  - `edge_store_reports` (version 1 once; late reports stored NOT_CONFIRMED);
+  - `edge_confirm_report` (own-company foreman only, one answer per version, deadline, proposals become FOREMAN_REQUEST corrections);
+  - `edge_reissue_report` (new version, old one SUPERSEDED, audited);
+  - `report_list` / `my_pending_reports` (status as readers see it);
+  - the deadline sweep (every 5 minutes on hosted projects);
+  - `my_attendance` and `request_attendance_correction` (own sessions only);
+  - `correction_requests` / `reject_correction_request`;
+  - atomic approval through the manual correction (`request_id` → trigger);
+  - foreman kiosk grants;
+  - REPORT_CHANGED Broadcast.
+- **Edge Functions:** `daily-reports` (list, pending, reissue) and `report-confirm`, both `verify_jwt = true`. Permissions come from the caller's own JWT; the service role is used only for `edge_*` storage.
+- **Phone (EN/ES):**
+  - staff daily reports by day and company, with "issue a corrected version";
+  - correction requests (approve opens the manual correction filled in; reject needs a reason);
+  - foreman kiosk access;
+  - the foreman's "Daily reports to answer" (confirm, dispute, correction);
+  - the worker's Time History (daily and weekly estimated hours, CSV share, correction requests and their status).
+- **Replay:** scenario #47 "contractor report disputed" and "report not confirmed by the deadline" run in memory and against Postgres. Every one of the 60 named scenarios now has a fixture.
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `supabase test db`: **21 files, 679** pgTAP tests. `027_reports` has 80:
+  - version stored once; a late report is NOT_CONFIRMED; generation audited;
+  - staff and own-foreman reads; GC B, other foremen, workers and no-MFA refused; no phones or coordinates;
+  - a dispute keeps the issued content; duplicates; one answer per version; staff cannot answer;
+  - reissue supersedes, is audited and keeps the history; a stale version is refused;
+  - corrections become pending requests; the deadline; the sweep; the pending list;
+  - forward-only status and immutable content, deadline and rows;
+  - own hours only; request validation; staff decisions; atomic approval (rejected or mismatched requests fail the commit);
+  - kiosk grants on and off (the operation context follows), audited;
+  - one REPORT_CHANGED message.
+- `npm run test:backend`: **122/122**, incl. `reports.test.ts` (3) on the real stack:
+  - generation of yesterday from foreman crew operations; dispute with unchanged content; reissue v2;
+  - a foreman correction approved through `ingest-operations` with `request_id`, then v3 showing 7 h + 4 h and the corrected flag; approving again refused;
+  - another company's foreman and GC B refused; a late answer NOT_CONFIRMED;
+  - a worker sees only their own sessions, and a rejection reason reaches them.
+  - The database replay runs 83 fixtures (incl. both report fixtures).
+- Vitest unit **359** (report math 11, reports core 11, operations core +1); integration 51, security 78, i18n 18, replay 184.
+- Jest mobile-unit 17, mobile-integration **69**, incl. 11 new flows:
+  - staff report and reissue; NOT_CONFIRMED in Spanish;
+  - dispute needs a reason and leaves the report unchanged; correction proposal; a late answer;
+  - reject with a reason; approve via the manual correction;
+  - worker weekly hours; the CSV in English and Spanish holds only own visits; worker correction request;
+  - kiosk access needs a reason.
+- typecheck, ESLint + shellcheck, Prettier: pass.
+- GitHub Actions: _recorded in the PR._
+
+**NOT VERIFIED (Milestone 10)**
+- **Physical devices** (`NOT_EXECUTED_PHYSICAL_DEVICE`): the share sheet with a real CSV on iOS and Android (opening it in Numbers / Sheets / Excel with Spanish accents), and the report and answer screens on phones. Checklist: "Real-device reports and CSV share check" (EX for the share sheet).
+- **Hosted staging (SB):** the migration, the two Edge Functions and the deadline sweep on a hosted project.
+- **Legal:** the report and CSV wording ("estimated onsite time, not payroll") is product copy, not a legal notice. It still needs counsel's read before production (spec 09 / TRANSLATION_REVIEW).
+
+**Decisions added:** #108 daily company reports, #109 foreman answers, #110 reissue, #111 correction requests, #112 personal CSV, #113 foreman kiosk grants.
+
+**Next step:** open the Milestone 10 PR, watch CI, address the automated review, merge, then start Milestone 11 (Active Muster Mode) on `milestone-11-muster`.
 
 ## Environment notes for future sessions (Linux build agent)
 

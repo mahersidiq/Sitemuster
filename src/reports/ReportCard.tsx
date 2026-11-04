@@ -83,34 +83,40 @@ export function ReportCard({
           {t('reports.needsReview', { count: totals.sessions_needing_review })}
         </Text>
       ) : null}
-      {report.summary.workers.map((worker) => (
-        <View
-          key={worker.worker_id}
-          style={styles.worker}
-          testID={`report-worker-${worker.worker_id}`}
-        >
-          <Text style={styles.workerName}>
-            {`${report.worker_names[worker.worker_id] ?? t('reports.unknownWorker')} · ${t('reports.hours', { hours: hours(worker.definite_seconds) })}`}
-          </Text>
-          {worker.sessions.map((session) => {
-            const from = localDateTime(session.start_at, zone);
-            const end = session.end_at ?? session.end_latest_at;
-            const to = end ? localDateTime(end, zone).time : t('correction.onSite');
-            const notes = [
-              t(`source.${session.start_source}`, { defaultValue: session.start_source }),
-              session.end_at === null && session.end_latest_at ? t('reports.endUncertain') : null,
-              session.witnessed ? t('reports.witnessed') : null,
-              session.corrected ? t('reports.corrected') : null,
-              session.needs_review ? t('reports.review') : null,
-            ].filter(Boolean);
-            return (
-              <Text key={session.session_id} style={styles.session}>
-                {`${from.time} – ${to} · ${notes.join(' · ')}`}
-              </Text>
-            );
-          })}
-        </View>
-      ))}
+      {[...report.summary.workers]
+        .sort((a, b) =>
+          (report.worker_names[a.worker_id] ?? '').localeCompare(
+            report.worker_names[b.worker_id] ?? '',
+          ),
+        )
+        .map((worker) => (
+          <View
+            key={worker.worker_id}
+            style={styles.worker}
+            testID={`report-worker-${worker.worker_id}`}
+          >
+            <Text style={styles.workerName}>
+              {`${report.worker_names[worker.worker_id] ?? t('reports.unknownWorker')} · ${t('reports.hours', { hours: hours(worker.definite_seconds) })}`}
+            </Text>
+            {worker.sessions.map((session) => {
+              const from = localDateTime(session.start_at, zone);
+              const end = session.end_at ?? session.end_latest_at;
+              const to = end ? localDateTime(end, zone).time : t('correction.onSite');
+              const notes = [
+                t(`source.${session.start_source}`, { defaultValue: session.start_source }),
+                session.end_at === null && session.end_latest_at ? t('reports.endUncertain') : null,
+                session.witnessed ? t('reports.witnessed') : null,
+                session.corrected ? t('reports.corrected') : null,
+                session.needs_review ? t('reports.review') : null,
+              ].filter(Boolean);
+              return (
+                <Text key={session.session_id} style={styles.session}>
+                  {`${from.time} – ${to} · ${notes.join(' · ')}`}
+                </Text>
+              );
+            })}
+          </View>
+        ))}
       {report.earlier_versions.length > 0 ? (
         <Text style={styles.meta} testID={`report-earlier-${report.company_id}`}>
           {t('reports.earlier', {
@@ -122,11 +128,16 @@ export function ReportCard({
       ) : null}
       {report.answers.map((answer) => (
         <Text key={`${answer.version}-${answer.created_at}`} style={styles.answer}>
-          {t('reports.answerLine', {
-            version: answer.version,
-            action: t(`reportAction.${answer.action}`),
-            comment: answer.comment ?? '',
-          })}
+          {answer.comment
+            ? t('reports.answerLine', {
+                version: answer.version,
+                action: t(`reportAction.${answer.action}`),
+                comment: answer.comment,
+              })
+            : t('reports.answerLineShort', {
+                version: answer.version,
+                action: t(`reportAction.${answer.action}`),
+              })}
         </Text>
       ))}
       {children}

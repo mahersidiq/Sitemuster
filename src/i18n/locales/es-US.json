@@ -964,12 +964,13 @@
     "corrected": "corregido",
     "review": "por revisar",
     "earlier": "Versiones anteriores: {{list}}",
-    "answerLine": "Capataz, versión {{version}}: {{action}} {{comment}}",
+    "answerLine": "Capataz, versión {{version}}: {{action}} — “{{comment}}”",
     "reissue": "Emitir una versión corregida",
     "reissueHelp": "Úselo después de aprobar correcciones. La versión actual queda en el historial con sus respuestas.",
     "reissueReason": "¿Por qué una nueva versión?",
     "reissueConfirm": "Emitir nueva versión",
-    "reasonNeeded": "Escriba un motivo (al menos 3 caracteres)."
+    "reasonNeeded": "Escriba un motivo (al menos 3 caracteres).",
+    "answerLineShort": "Capataz, versión {{version}}: {{action}}"
   },
   "reportStatus": {
     "PENDING_CONFIRMATION": "Esperando al capataz",
@@ -995,7 +996,6 @@
       "FOREMAN_REQUEST": "Del capataz"
     },
     "original": "Registrado: {{times}}",
-    "proposed": "Solicitado: {{times}}",
     "reason": "Motivo: {{reason}}",
     "approved": "Aprobada y aplicada.",
     "rejected": "Rechazada: {{reason}}",
@@ -1003,7 +1003,12 @@
     "reject": "Rechazar",
     "rejectReason": "¿Por qué se rechaza? El trabajador lo verá.",
     "rejectConfirm": "Rechazar solicitud",
-    "reasonNeeded": "Escriba un motivo (al menos 3 caracteres)."
+    "reasonNeeded": "Escriba un motivo (al menos 3 caracteres).",
+    "proposedBoth": "Solicitado: {{date}} {{start}} – {{end}}",
+    "proposedStart": "Solicitado: llegada {{date}} {{start}}",
+    "proposedEnd": "Solicitado: salida {{date}} {{end}}",
+    "span": "{{date}} {{start}} – {{end}}",
+    "spanDays": "{{date}} {{start}} – {{endDate}} {{end}}"
   },
   "kioskGrants": {
     "open": "Acceso del capataz al quiosco",

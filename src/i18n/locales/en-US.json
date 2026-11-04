@@ -964,12 +964,13 @@
     "corrected": "corrected",
     "review": "needs review",
     "earlier": "Earlier versions: {{list}}",
-    "answerLine": "Foreman, version {{version}}: {{action}} {{comment}}",
+    "answerLine": "Foreman, version {{version}}: {{action}} — “{{comment}}”",
     "reissue": "Issue a corrected version",
     "reissueHelp": "Use this after approving corrections. The current version stays in the history with its answers.",
     "reissueReason": "Why a new version?",
     "reissueConfirm": "Issue new version",
-    "reasonNeeded": "Write a reason (at least 3 characters)."
+    "reasonNeeded": "Write a reason (at least 3 characters).",
+    "answerLineShort": "Foreman, version {{version}}: {{action}}"
   },
   "reportStatus": {
     "PENDING_CONFIRMATION": "Waiting for foreman",
@@ -995,7 +996,6 @@
       "FOREMAN_REQUEST": "From the foreman"
     },
     "original": "Recorded: {{times}}",
-    "proposed": "Asked for: {{times}}",
     "reason": "Reason: {{reason}}",
     "approved": "Approved and applied.",
     "rejected": "Rejected: {{reason}}",
@@ -1003,7 +1003,12 @@
     "reject": "Reject",
     "rejectReason": "Why is it rejected? The worker sees this.",
     "rejectConfirm": "Reject request",
-    "reasonNeeded": "Write a reason (at least 3 characters)."
+    "reasonNeeded": "Write a reason (at least 3 characters).",
+    "proposedBoth": "Asked for: {{date}} {{start}} – {{end}}",
+    "proposedStart": "Asked for: arrival {{date}} {{start}}",
+    "proposedEnd": "Asked for: departure {{date}} {{end}}",
+    "span": "{{date}} {{start}} – {{end}}",
+    "spanDays": "{{date}} {{start}} – {{endDate}} {{end}}"
   },
   "kioskGrants": {
     "open": "Foreman kiosk access",
