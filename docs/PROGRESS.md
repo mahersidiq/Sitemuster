@@ -11,7 +11,7 @@
 | 03 | Authentication, MFA and English/Spanish | done (NOT VERIFIED items) | [#3](https://github.com/mahersidiq/Sitemuster/pull/3) | squash-merged under #48 after CI green |
 | 04 | GC organizations, projects, shifts and circles | done (NOT VERIFIED items) | [#4](https://github.com/mahersidiq/Sitemuster/pull/4) | squash-merged under #48 after CI green |
 | 05 | Orientation sessions, badges, approval | done (NOT VERIFIED items) | [#5](https://github.com/mahersidiq/Sitemuster/pull/5) | squash-merged under #48 after CI green and the automated review |
-| 06 | Attendance state machine and deterministic replay | not started | | |
+| 06 | Attendance state machine and deterministic replay | in review | (PR pending) | |
 | 07 | Native tracking and custom device ingestion | not started | | |
 | 08 | Kiosk, foreman, manual and visitor fallbacks | not started | | |
 | 09 | Mobile superintendent dashboard and map | not started | | |
@@ -145,7 +145,7 @@
 - typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
 - Web-render screenshots `docs/screenshots/m05` (13, EN + ES) against the local stack.
 - Found and fixed while testing: the printable-QR export updated state on every render (endless re-render on real devices); the Jest QR stand-in now behaves like the real component so this cannot regress.
-- GitHub Actions run 41765693418 (head `47cf2ca`): `code-quality` success (unit 190 + 7, integration 51 + 39, security 75 incl. the iOS/Android bundle canary scan, i18n 18, replay 3, expo config, audit: 0 high/critical); `database` success (pgTAP Files=16, Tests=373, PASS; `npm run test:backend` 20/20 incl. Edge Functions and the race test in the CI Supabase stack). The fixes for PR #5's own review (decision #77) were verified again by the CI run on the final head before merging (linked in the PR).
+- GitHub Actions run 41765693418 (head `47cf2ca`): `code-quality` success (unit 190 + 7, integration 51 + 39, security 75 incl. the iOS/Android bundle canary scan, i18n 18, replay 3, expo config, audit: 0 high/critical); `database` success (pgTAP Files=16, Tests=373, PASS; `npm run test:backend` 20/20 incl. Edge Functions and the race test in the CI Supabase stack). The fixes for PR #5's own review (decision #77) were verified again by GitHub Actions run 41768698989 on the final head `dbb44d4` (`code-quality` success; `database` success: pgTAP Files=16, Tests=382, backend 21/21) before the squash merge (`6605965`).
 
 **NOT VERIFIED (Milestone 05)**
 - Camera QR scanning, AFTER_FIRST_UNLOCK keystore behaviour and the share sheet/printing on real phones (`NOT_EXECUTED_PHYSICAL_DEVICE`); screenshots are web renders.
@@ -162,6 +162,33 @@
 **Decisions added:** #69 orientation/approval authority and session secrets, #70 environment marker (unmarked = production), #71 service-role-only device activation/redemption + installation hash, #72 rate limits count failed code attempts, #73 QR formats and join data rules, #74 on-phone credential storage, printed badges and PNG sharing (`expo-file-system`), #75 consent supersession and supervised acknowledgements, #76 review-finding fixes, #77 join pass and orientation/badge race fixes.
 
 **Next step:** done — Milestone 06 (attendance state machine and deterministic replay, ≥ 55 fixtures) starts on `milestone-06-attendance-engine`.
+
+## Milestone 06 — Attendance state machine and deterministic replay
+
+**What was built**
+- `packages/shared/src/attendance` — the single implementation of the attendance rules (pure: no clocks, randomness or I/O): 10-minute dwell from two qualified fixes (≤ 75 m, inside the site circle, continuity), arrival = first qualified fix, ARRIVING never counted, definite departure only from an accurate and timely EXIT (otherwise DEPARTURE_PENDING bounds), PRESENCE_UNKNOWN after 20 min of silence (never a departure), DST-aware shift windows with 60-min grace and chained split shifts, UNSCHEDULED_PENDING + overtime approval + automatic authorization at the next window, end-of-shift close-out to UNRESOLVED, 24/7 16 h review, 72 h late-record review, clock-skew review, configuration snapshots per session (old fences never start new arrivals), witnessed kiosk/foreman/manual evidence (no double counting; phone-left-on-site guard), audited manual corrections, visitors kept apart, evidence gaps excluded from hours, basic counts and per-local-day summaries; SDK-record normalizer with the privacy gate (offsite or misplaced coordinates discarded, unbound fences refused, overlap → ambiguous), native region-budget selection, optimistic reconciler.
+- Database (`20261105100000_m06_enums.sql`, `20261105100100_m06_attendance_reconciler.sql`): `ENDED_UNVERIFIED` status; track/session columns; **no-overlap exclusion constraint**; ownership foreign keys tying sessions, events and tracks to one project and worker; immutable session identity; service-role-only `edge_attendance_load` / `edge_attendance_commit` (advisory lock + optimistic revision, idempotent event uuids, coordinate-free state, latest map position in the same transaction), `edge_insert_location_receipts`, SQL sweep for the time rules only, visitor load/commit, staff `attendance_counts` (live staleness), `pg_cron` job every minute (no-op on development databases).
+- `tests/location-replay`: LocationTraceReplayHarness — simulated phone (native queue, privacy egress gate, region budget, credential expiry/renewal/revocation, silent push, lost replies), kiosks (offline outbox, wrong clocks, replays verified with the real badge verifier) and foreman, over the production modules; in-memory backend enforcing the database invariants; trace-permutation tests.
+- `tests/location-traces`: **80 fixtures** — 59 of the 60 named scenarios of docs/spec/10 (scenario 47, report dispute, belongs to Milestone 10), 20 edge cases from docs/spec/07 and the spec example.
+
+**Test results (local, Linux container, Docker, Supabase CLI 2.122.1)**
+- `npm run test:location-replay`: **178/178** — 80 fixtures, the suite-size check (≥ 55 named, none missing except #47) and 97 permutation tests (any upload order inside a batch gives the same result; record-by-record reversed arrival never creates a contradictory state).
+- `npm run test:backend`: **102/102** — the 21 earlier tests, **all 80 fixtures replayed against the real database** through the service-role reconciler RPCs with time advanced only by the SQL sweep (TypeScript ↔ SQL parity, each in a rolled-back transaction), and a duplicate race (the same batch reconciled concurrently on two connections is applied exactly once; 6 consecutive passes).
+- `supabase test db`: **17 files, 430** pgTAP tests (`023_attendance_reconciler`: 48 — service-role-only access, eligibility reasons, duplicates, first write/stale revision/duplicate uuid, coordinate-free state, foreign-worker sessions refused, second open session refused, overlap refused, bounded hand-over accepted, CLOSED/ENDED_UNVERIFIED constraints, cross-project configuration and cross-worker events refused, immutable identity, no deletes, sweep: authorization, unknown, arrival lapse, expired positions, close-out UNRESOLVED, reset, visitor close-out, live counts and their authorization, schedule).
+- Vitest unit **231** (41 new attendance unit tests: DST conversion and 23/24/25 h days, window snapshots incl. overnight, split shifts, fall-back and 24/7, zones and jumps, region budget, SDK normalization, counts and day summaries, configuration versions, engine ordering/idempotency/eligibility/refusals), integration 51, security 75, i18n 18; Jest mobile-unit 7 + mobile-integration 39.
+- typecheck, ESLint + shellcheck, Prettier, `expo config`, `npm audit --audit-level=high`: pass.
+- GitHub Actions: _pending — recorded after the run._
+
+**NOT VERIFIED (Milestone 06)**
+- No production endpoint feeds the engine yet: native location ingestion is Milestone 07, kiosk/foreman/manual/visitor operations are Milestone 08. The rules are verified through the replay harness and the database replay only.
+- The phone and kiosk behaviour inside the harness is a model of the spec (native SDK queue, geofence delivery, egress gate, region budget, background renewal); the real behaviour needs physical iOS/Android tests (`NOT_EXECUTED_PHYSICAL_DEVICE`).
+- Hosted `pg_cron` job and extensions (no hosted Supabase yet; checklist §3 step added).
+- Load/performance targets (100 / 1,000 / 10,000 workers) not run yet.
+- Scenario 47 (contractor report disputed) arrives with reports in Milestone 10; muster scenarios 49–50 assert only separation from attendance (muster semantics: Milestone 11).
+
+**Decisions added:** #78 single rules engine + transactional reconciler, #79 ENDED_UNVERIFIED and bounded hand-over, #80 time rules + SQL sweep parity + pg_cron, #81 arrival/departure details, #82 witnessed evidence, #83 late and skewed records, #84 kiosk clock offset, #85 device-record privacy and normalization, #86 replay contract and scope, #87 basic counts.
+
+**Next step:** after Milestone 06 merges, start Milestone 07 (native tracking and custom device ingestion) on `milestone-07-native-tracking`.
 
 ## Environment notes for future sessions (Linux build agent)
 

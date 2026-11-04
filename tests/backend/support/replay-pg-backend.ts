@@ -108,6 +108,8 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
   constructor(
     private readonly db: Client,
     private readonly seed: string,
+    /** false = every call commits on its own, like PostgREST (used by the race test). */
+    private readonly transactional = true,
   ) {}
 
   get store(): AttendanceStore {
@@ -120,7 +122,9 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
   }
 
   private async service<T>(sql: string, params: unknown[]): Promise<T> {
-    await this.db.query('set local role service_role');
+    await this.db.query(
+      this.transactional ? 'set local role service_role' : 'set role service_role',
+    );
     try {
       const result = await this.db.query<{ value: T }>(sql, params);
       return result.rows[0]?.value as T;
@@ -130,7 +134,7 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
   }
 
   async begin(): Promise<void> {
-    await this.db.query('begin');
+    if (this.transactional) await this.db.query('begin');
     this.ownerId = this.id('owner');
     this.orgId = this.id('org');
     this.companyId = this.id('company');
@@ -158,7 +162,14 @@ export class PgReplayBackend implements ServerBackend, AttendanceStore {
   }
 
   async close(): Promise<void> {
-    await this.db.query('rollback');
+    if (this.transactional) await this.db.query('rollback');
+  }
+
+  /** A second connection acting on the same committed world (autocommit mode only). */
+  sharing(db: Client): PgReplayBackend {
+    const twin = new PgReplayBackend(db, this.seed, false);
+    twin.ownerId = this.ownerId;
+    return twin;
   }
 
   async createProject(project: ProjectContext, first: AttendanceConfig): Promise<void> {

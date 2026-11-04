@@ -5,7 +5,6 @@ import type { AttendanceSource, PresenceState, ProjectStatus, SessionStatus } fr
  * Presence, sessions, monitoring and enrollment are separate facts — never one `is_on_site` flag.
  */
 
-export type { SessionStatus };
 export type Confidence = 'LOW' | 'MEDIUM' | 'HIGH';
 export type Verification =
   'PROVISIONAL' | 'SYSTEM_CONFIRMED' | 'WITNESSED' | 'REVIEW_REQUIRED' | 'DISPUTED' | 'CORRECTED';
